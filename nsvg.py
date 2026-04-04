@@ -16,9 +16,9 @@ st.markdown("""
         color: #002366 !important; font-weight: bold !important;
     }
     .stButton > button {
-        background-color: transparent !important; color: #0000FF !important; border: 2px solid #0000FF !important; border-radius: 8px; transition: 0.3s;
+        background-color: transparent !important; color: #002366 !important; border: 2px solid #002366 !important; border-radius: 8px; transition: 0.3s;
     }
-    .stButton > button:hover { background-color: #0000FF !important; color: white !important; }
+    .stButton > button:hover { background-color: #002366 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -68,10 +68,10 @@ def last_data():
         return df
     return pd.read_csv(DB_FILE)
 
-# --- 3. LOGIN SYSTEM (NORSK) ---
+# --- 3. LOGIN SYSTEM ---
 if not st.session_state.get('logged_in'):
     st.title("🛡️ NSVG - Sikker Digital Portal")
-    st.info("⚠️ **Sikkerhetsoppdatering:** For å beskytte systemet er 'Stedstilgang' obligatorisk. Vennligst klikk 'Tillat' (Allow) når du blir bedt om det.")
+    st.info("⚠️ **Sikkerhetsoppdatering:** For å beskytte systemet er 'Stedstilgang' obligatorisk. Vennligst klikk 'Tillat' (Allow).")
     
     loc = get_geolocation()
     input_user = st.text_input("Brukernavn").lower().strip()
@@ -106,7 +106,7 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- SECTION: ADMIN CONTROL ---
+# --- SECTION: ADMIN ---
 if valg == "🚨 Admin Kontroll":
     st.header("🕵️ Master Kontrollpanel")
     t1, t2 = st.tabs(["Brukeradministrasjon", "Sikkerhetslogger"])
@@ -149,4 +149,78 @@ elif valg == "➕ Registrer ny søknad":
             tlf = st.text_input("Telefonnummer")
         with c2:
             sivil = st.selectbox("Sivilstatus", ["Gift", "Samboer", "Enslig", "Skilt/Separert"])
-            jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "
+            jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "Uføretrygd", "Arbeidsledig", "Selvstendig næringsdrivende"])
+            sektor = st.selectbox("Arbeidssektor", ["Privat sektor", "Offentlig/Statlig", "Kommunal"])
+            firma = st.text_input("Navn på arbeidsgiver / Firma")
+            ansatt_tid = st.text_input("Hvor lenge har du jobbet der?")
+            lonn = st.number_input("Årslønn før skatt (Brutto)", min_value=0)
+
+        st.divider()
+        if "Boliglån" in prod or "Mellomfinansiering" in prod:
+            k1, k2 = st.columns(2)
+            with k1:
+                barn = st.number_input("Antall barn under 18 år", min_value=0)
+                sfo = st.selectbox("Går barn i SFO/Barnehage?", ["Nei", "Ja"])
+                ek = st.number_input("Egenkapital (kr)", min_value=0)
+                ek_kilde = st.text_input("Kilde til egenkapital")
+                omrade = st.text_input("Ønsket område")
+            with k2:
+                gjeld = st.number_input("Annen gjeld", min_value=0)
+                ramme = st.number_input("Samlet kredittramme", min_value=0)
+                biler = st.number_input("Antall biler", min_value=0)
+                billan = st.number_input("Restgjeld billån", min_value=0)
+                utleie = st.selectbox("Skal boligen ha utleiedel?", ["Nei", "Ja"])
+            if "Refinansiering" in prod:
+                takst = st.number_input("Siste verdivurdering / E-takst", min_value=0)
+
+        elif is_bedrift:
+            st.warning("Firmadetaljer (Bedrift)")
+            orgnr = st.text_input("Organisasjonsnummer")
+            plan = st.text_area("Formål / Investeringsplan")
+
+        if has_medsoker:
+            st.divider()
+            st.subheader("👥 Med-søker")
+            m1, m2 = st.columns(2)
+            with m1: m_navn = st.text_input("Medsøker Navn"); m_fnr = st.text_input("Medsøker Fnr")
+            with m2: m_lonn = st.number_input("Medsøker Årslønn", min_value=0); m_gjeld = st.number_input("Medsøker gjeld", min_value=0)
+
+        st.divider()
+        notater_input = st.text_area("Interne notater / Kommentarer")
+        opplastede_filer = st.file_uploader("Last opp dokumenter", accept_multiple_files=True)
+        total_belop = st.number_input("Endelig søknadsbeløp (kr)", min_value=0)
+
+        if st.form_submit_button("SEND INN SØKNAD TIL VAULT"):
+            fil_liste = []
+            if opplastede_filer:
+                for fil in opplastede_filer:
+                    ren_filnavn = f"{fnr}_{fil.name}".replace(" ", "_")
+                    with open(os.path.join(DOCS_DIR, ren_filnavn), "wb") as f: f.write(fil.getbuffer())
+                    fil_liste.append(ren_filnavn)
+            
+            ny_kunde = {
+                "ID": len(df) + 1, "Dato": datetime.now().strftime("%d-%m-%Y"),
+                "Produkt": prod, "Hovedsøker": navn, "Fnr": fnr, "Beløp": total_belop,
+                "Status": "Til vurdering", "Notater": notater_input, 
+                "Vedlegg_Sti": ",".join(fil_liste), "Registrert_Av": current_user
+            }
+            df = pd.concat([df, pd.DataFrame([ny_kunde])], ignore_index=True)
+            df.to_csv(DB_FILE, index=False)
+            st.success(f"✅ Søknad arkivert av {current_user}!")
+
+# --- SECTION: ARKIV ---
+elif valg == "📂 Kunde Arkiv":
+    st.header(f"📂 Arkiv - {current_user}")
+    sok = st.text_input("Søk i arkivet (Navn eller Fnr)")
+    res_df = display_df[display_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)] if sok else display_df
+    for i, rad in res_df.iterrows():
+        with st.expander(f"📁 {rad['Hovedsøker']} - {rad['Produkt']}"):
+            st.write(f"**Beløp:** {rad['Beløp']:,} kr | **Dato:** {rad['Dato']} | **Status:** {rad['Status']}")
+            st.info(f"**Notater:** {rad['Notater']}")
+            vedlegg = str(rad['Vedlegg_Sti'])
+            if vedlegg and vedlegg != "nan" and vedlegg != "":
+                for f_name in vedlegg.split(","):
+                    f_path = os.path.join(DOCS_DIR, f_name)
+                    if os.path.exists(f_path):
+                        with open(f_path, "rb") as d_file:
+                            st.download_button(f"📥 {f_name}", d_file, file_name=f_name, key=f"{f_name}_{i}")

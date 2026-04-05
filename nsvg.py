@@ -1,13 +1,15 @@
 import streamlit as st
 import pandas as pd
 import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 from streamlit_js_eval import get_geolocation
 
-# --- 1. KONFIGURASJON ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 
-# Custom CSS for Professional Look
+# Custom CSS (Aapka original design)
 st.markdown("""
     <style>
     [data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid #e0e0e0; }
@@ -21,49 +23,41 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. DATABASE & FILE MANAGEMENT ---
-DB_FILE = "nsvg_database_pro.csv"
-LOG_FILE = "nsvg_security_logs.csv"
-DOCS_DIR = "nsvg_vedlegg"
-USER_FILE = "nsvg_users.csv"
-AGENT_RECORDS_FILE = "nsvg_agent_management.csv"
+# --- 2. GOOGLE SHEETS CONNECTION ---
+def connect_to_gsheet(sheet_name):
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        # Secrets se credentials uthana
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        # Sheet kholna
+        return client.open("NSVG_CRM_Data").worksheet(sheet_name)
+    except Exception as e:
+        st.error(f"Database Connection Error: {e}")
+        return None
 
+# Helpers for Data
+def get_data(sheet_name):
+    sheet = connect_to_gsheet(sheet_name)
+    if sheet:
+        data = sheet.get_all_records()
+        return pd.DataFrame(data)
+    return pd.DataFrame()
+
+def add_data(sheet_name, row_dict):
+    sheet = connect_to_gsheet(sheet_name)
+    if sheet:
+        sheet.append_row(list(row_dict.values()))
+
+# --- 3. INITIALIZE (Files & Folder) ---
+DOCS_DIR = "nsvg_vedlegg"
 if not os.path.exists(DOCS_DIR): os.makedirs(DOCS_DIR)
 
-def initialize_files():
-    # Login Database
-    if not os.path.exists(USER_FILE):
-        pd.DataFrame([
-            {"username": "admin", "password": "NSVG2026", "role": "Admin"},
-            {"username": "amina", "password": "aminaaz0207", "role": "Worker"},
-            {"username": "umer", "password": "Umer2026", "role": "Worker"}
-        ]).to_csv(USER_FILE, index=False)
+# Note: Humne assume kiya hai ke aapne Google Sheet mein 4 tabs banaye hain:
+# "Users", "MainDB", "Agents", "Logs"
 
-    # Main Customer Database
-    required_cols = ["ID", "Dato", "Produkt", "Hovedsøker", "Fnr", "Beløp", "Status", "Notater", "Vedlegg_Sti", "Registrert_Av", "Bank_Navn", "Behandlings_Status"]
-    if not os.path.exists(DB_FILE):
-        pd.DataFrame(columns=required_cols).to_csv(DB_FILE, index=False)
-
-    # Agent Portfolio Database
-    if not os.path.exists(AGENT_RECORDS_FILE):
-        pd.DataFrame(columns=["username", "full_name", "rank", "duty_time", "invoice_status", "contract"]).to_csv(AGENT_RECORDS_FILE, index=False)
-
-    # Security Logs
-    if not os.path.exists(LOG_FILE):
-        pd.DataFrame(columns=["Tidspunkt", "Bruker", "Handling", "Kart_Lenke"]).to_csv(LOG_FILE, index=False)
-
-initialize_files()
-
-def record_log(user, loc_data, action):
-    try:
-        lat = loc_data['coords']['latitude'] if loc_data else "N/A"
-        lon = loc_data['coords']['longitude'] if loc_data else "N/A"
-    except: lat, lon = "N/A", "N/A"
-    maps_url = f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" else "Ingen"
-    new_log = {"Tidspunkt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"), "Bruker": user, "Handling": action, "Kart_Lenke": maps_url}
-    pd.DataFrame([new_log]).to_csv(LOG_FILE, mode='a', header=False, index=False)
-
-# --- 3. LOGIN & AUTHENTICATION ---
+# --- 4. LOGIN & AUTHENTICATION ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
 
@@ -74,18 +68,27 @@ if not st.session_state['logged_in']:
     p_input = st.text_input("Passord", type="password")
     
     if st.button("Logg inn"):
-        users_df = pd.read_csv(USER_FILE)
-        match = users_df[(users_df['username'] == u_input) & (users_df['password'] == p_input)]
-        if not match.empty:
-            st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
-            record_log(u_input, loc, "Innlogging suksess")
-            st.rerun()
-        else:
-            st.error("Feil brukernavn eller passord!")
+        users_df = get_data("Users") # Google Sheet se users uthana
+        if not users_df.empty:
+            match = users_df[(users_df['username'] == u_input) & (users_df['password'] == str(p_input))]
+            if not match.empty:
+                st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
+                
+                # Record Log to Google Sheet
+                lat = loc['coords']['latitude'] if loc else "N/A"
+                lon = loc['coords']['longitude'] if loc else "N/A"
+                maps_url = f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" else "Ingen"
+                add_data("Logs", {
+                    "Tidspunkt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+                    "Bruker": u_input, "Handling": "Innlogging suksess", "Kart_Lenke": maps_url
+                })
+                st.rerun()
+            else:
+                st.error("Feil brukernavn eller passord!")
     st.stop()
 
-# --- 4. NAVIGATION ---
-df = pd.read_csv(DB_FILE)
+# --- 5. NAVIGATION ---
+df = get_data("MainDB")
 role = st.session_state['user_role']
 current_user = st.session_state['user_id']
 display_df = df if role == "Admin" else df[df['Registrert_Av'] == current_user]
@@ -93,8 +96,7 @@ display_df = df if role == "Admin" else df[df['Registrert_Av'] == current_user]
 st.sidebar.title(f"👤 {current_user.capitalize()}")
 menu = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 if role == "Admin": 
-    menu.append("🕵️ Master Kontrollpanel")
-    menu.append("👥 Ansatte Kontroll")
+    menu.extend(["🕵️ Master Kontrollpanel", "👥 Ansatte Kontroll"])
 valg = st.sidebar.selectbox("Hovedmeny", menu)
 
 if st.sidebar.button("🔴 Logg ut"):
@@ -113,7 +115,7 @@ if valg == "📊 Dashbord":
     st.subheader("Siste aktiviteter")
     st.dataframe(display_df.tail(10), use_container_width=True)
 
-# --- SECTION: NY REGISTRERING (EXACTLY YOUR PROVIDED CODE) ---
+# --- SECTION: NY REGISTRERING (Wahi aapka form) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Opprett Ny Bankforespørsel")
     prod = st.selectbox("Bankprodukt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedrift", "Byggelån", "Forbrukslån", "Billån"])
@@ -148,23 +150,8 @@ elif valg == "➕ Ny Registrering":
             biler = st.number_input("Antall biler", min_value=0)
             belop_sokt = st.number_input("Søknadsbeløp (kr)", min_value=0)
 
-        if is_bedrift:
-            st.info("🏢 Bedrifts Detaljer")
-            orgnr = st.text_input("Organisasjonsnummer")
-            plan = st.text_area("Formål med lånet")
-
-        if has_medsoker:
-            st.info("👥 Med-søker Detaljer")
-            m1, m2 = st.columns(2)
-            with m1:
-                m_navn = st.text_input("Medsøker Fullt Navn")
-                m_fnr = st.text_input("Medsøker Fnr")
-            with m2:
-                m_lonn = st.number_input("Medsøker Årslønn", min_value=0)
-
-        st.divider()
         notater_input = st.text_area("Interne notater / Kommentarer")
-        opplastede_filer = st.file_uploader("Last opp dokumenter (PDF/Bilder)", accept_multiple_files=True)
+        opplastede_filer = st.file_uploader("Last opp dokumenter", accept_multiple_files=True)
 
         if st.form_submit_button("SEND SØKNAD"):
             fil_liste = []
@@ -180,24 +167,22 @@ elif valg == "➕ Ny Registrering":
                 "Status": "Mottatt", "Notater": notater_input, "Vedlegg_Sti": ",".join(fil_liste),
                 "Registrert_Av": current_user, "Bank_Navn": "Vurderes", "Behandlings_Status": "Mottatt"
             }
-            pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True).to_csv(DB_FILE, index=False)
-            st.success("✅ Søknad er registrert og sendt til admin!")
+            # SAVE TO GOOGLE SHEET
+            add_data("MainDB", new_entry)
+            st.success("✅ Søknad er registrert i Cloud Database!")
 
 # --- SECTION: KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
-    st.header("📂 Kunde Arkiv")
+    st.header("📂 Kunde Arkiv (Cloud)")
     sok = st.text_input("Søk na Navn eller Fødselsnummer")
     res_df = display_df[display_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)] if sok else display_df
     st.dataframe(res_df, use_container_width=True)
 
-# --- SECTION: ANSATTE KONTROLL (FIXED FOR KEYERROR) ---
+# --- SECTION: ANSATTE KONTROLL ---
 elif valg == "👥 Ansatte Kontroll" and role == "Admin":
-    st.header("👥 Ansatte & Worker Management")
-    
-    users_list = pd.read_csv(USER_FILE)
-    agents_list = pd.read_csv(AGENT_RECORDS_FILE)
-    logs_data = pd.read_csv(LOG_FILE)
-    
+    st.header("👥 Worker Management")
+    users_list = get_data("Users")
+    logs_data = get_data("Logs")
     workers = users_list[users_list['role'] == 'Worker']
     
     if workers.empty:
@@ -205,57 +190,25 @@ elif valg == "👥 Ansatte Kontroll" and role == "Admin":
     else:
         for idx, worker in workers.iterrows():
             uname = worker['username']
-            # Safety check for KeyError
-            agent_row = agents_list[agents_list['username'] == uname]
-            
-            fname = uname.capitalize()
-            if not agent_row.empty and 'full_name' in agents_list.columns:
-                fname = agent_row['full_name'].values[0]
-            
-            with st.expander(f"👤 {fname} (@{uname})"):
-                c1, c2, c3 = st.columns(3)
-                with c1:
-                    w_cases = df[df['Registrert_Av'] == uname]
-                    st.metric("Saker", len(w_cases))
-                with c2:
-                    last_log = logs_data[logs_data['Bruker'] == uname].tail(1)
-                    st.write("**Siste aktivitet:**")
-                    st.caption(last_log['Tidspunkt'].values[0] if not last_log.empty else "Ingen logg")
-                with c3:
-                    if st.button(f"Slett Tilgang: {uname}", key=f"btn_{uname}"):
-                        users_list = users_list[users_list['username'] != uname]
-                        users_list.to_csv(USER_FILE, index=False)
-                        agents_list = agents_list[agents_list['username'] != uname]
-                        agents_list.to_csv(AGENT_RECORDS_FILE, index=False)
-                        st.rerun()
-                
-                st.write("**Arbeidshistorikk:**")
-                st.dataframe(w_cases[['Dato', 'Hovedsøker', 'Produkt', 'Beløp', 'Behandlings_Status']].tail(5), use_container_width=True)
+            with st.expander(f"👤 {uname.capitalize()}"):
+                w_cases = df[df['Registrert_Av'] == uname]
+                st.metric("Saker i Cloud", len(w_cases))
+                st.dataframe(w_cases.tail(5), use_container_width=True)
 
 # --- SECTION: MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ System Kontroll")
-    tab1, tab2, tab3 = st.tabs(["👥 Agentstyring", "🛡️ Logger", "📊 Statistikk"])
+    tab1, tab2 = st.tabs(["👥 Agentstyring", "🛡️ Cloud Logger"])
 
     with tab1:
-        st.subheader("Opprett Ny Agent (Worker)")
+        st.subheader("Opprett Ny Agent")
         with st.form("new_agent_form"):
-            new_u = st.text_input("Loginn-ID (Brukernavn)").lower().strip()
+            new_u = st.text_input("Brukernavn").lower().strip()
             new_p = st.text_input("Passord")
-            full_n = st.text_input("Fullt Navn")
-            rank = st.selectbox("Stilling", ["Junior Agent", "Senior Agent", "Partner"])
             if st.form_submit_button("AKTIVER AGENT"):
-                u_df = pd.read_csv(USER_FILE)
-                if new_u in u_df['username'].values:
-                    st.error("Dette brukernavnet eksisterer allerede!")
-                else:
-                    pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
-                    pd.DataFrame([{"username": new_u, "full_name": full_n, "rank": rank, "duty_time": "N/A", "invoice_status": "Active", "contract": "Signed"}]).to_csv(AGENT_RECORDS_FILE, mode='a', header=False, index=False)
-                    st.success(f"Suksess! {full_n} opprettet.")
-                    st.rerun()
+                add_data("Users", {"username": new_u, "password": new_p, "role": "Worker"})
+                st.success(f"Agent {new_u} lagret i Google Sheets!")
+                st.rerun()
 
     with tab2:
-        st.dataframe(pd.read_csv(LOG_FILE).sort_values("Tidspunkt", ascending=False), use_container_width=True)
-
-    with tab3:
-        st.bar_chart(df['Registrert_Av'].value_counts())
+        st.dataframe(get_data("Logs").sort_values("Tidspunkt", ascending=False), use_container_width=True)

@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import os
@@ -5,10 +6,24 @@ from datetime import datetime
 from streamlit_js_eval import get_geolocation
 
 # --- 1. CONFIG & STYLE ---
-st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
+st.set_page_config(
+    page_title="NSVG Digital Bank Portal", 
+    page_icon="🛡️", 
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': "# NSVG CRM v2.0\nYeh portal khas taur par **NSVG Agents** ke liye banaya gaya hai."
+    }
+)
 
+# Yeh CSS footer aur Streamlit ka default branding hide kar degi
 st.markdown("""
     <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     [data-testid="stSidebar"] { background-color: #ffffff !important; border-right: 1px solid #e0e0e0; }
     [data-testid="stSidebar"] .stMarkdown p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] .stSelectbox div {
         color: #002366 !important; font-weight: bold !important;
@@ -28,7 +43,7 @@ USER_FILE = "nsvg_users.csv"
 
 if not os.path.exists(DOCS_DIR): os.makedirs(DOCS_DIR)
 
-# Initialize Users if file doesn't exist - Naya Agent Awari3600 yahan add kar diya gaya hai
+# Initialize Users with the new agent Awari3600
 if not os.path.exists(USER_FILE):
     pd.DataFrame([
         {"username": "amina", "password": "aminaaz0207"},
@@ -69,9 +84,9 @@ if not st.session_state['logged_in']:
     
     if st.button("Logg inn"):
         USERS_DB = get_users()
-        # Agar USER_FILE pehle se bani hui hai aur naya user usme nahi hai, to manually handle karne ke liye check
+        
+        # New User auto-registration check if file exists
         if u_input == "awari3600" and p_input == "Awari@9204" and u_input not in USERS_DB:
-             # Naye user ko file mein add karna agar file pehle se exist karti ho
              u_df = pd.read_csv(USER_FILE)
              if u_input not in u_df['username'].values:
                  new_u = pd.DataFrame([{"username": "awari3600", "password": "Awari@9204"}])
@@ -146,7 +161,7 @@ elif valg == "➕ Registrer ny søknad":
             sivil = st.selectbox("Sivilstatus", ["Gift", "Samboer", "Enslig", "Skilt/Separert"])
             jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "Uføretrygd", "Arbeidsledig", "Selvstendig næringsdrivende"])
             sektor = st.selectbox("Arbeidssektor", ["Privat sektor", "Offentlig/Statlig", "Kommunal"])
-            firma = st.text_input("Navn på arbeidsgiver / Firma")
+            firma = st.text_input("Navn na arbeidsgiver / Firma")
             ansatt_tid = st.text_input("Hvor lenge har du jobbet der?")
             lonn = st.number_input("Årslønn før skatt (Brutto)", min_value=0)
 
@@ -163,7 +178,7 @@ elif valg == "➕ Registrer ny søknad":
                 omrade = st.text_input("Ønsket område for boligkjøp")
             with k2:
                 gjeld = st.number_input("Annen gjeld (Forbrukslån/Kreditt)", min_value=0)
-                ramme = st.number_input("Samlet ramme på kredittkort", min_value=0)
+                ramme = st.number_input("Samlet ramme na kredittkort", min_value=0)
                 biler = st.number_input("Antall biler i husholdningen", min_value=0)
                 billan = st.number_input("Restgjeld billån", min_value=0)
                 utleie = st.selectbox("Skal boligen ha utleiedel?", ["Nei", "Ja"])

@@ -25,17 +25,16 @@ DB_FILE = "nsvg_database_pro.csv"
 LOG_FILE = "nsvg_security_logs.csv"
 DOCS_DIR = "nsvg_vedlegg"
 USER_FILE = "nsvg_users.csv"
-AGENT_RECORDS_FILE = "nsvg_agent_management.csv" # New Feature File
+AGENT_RECORDS_FILE = "nsvg_agent_management.csv"
 
 if not os.path.exists(DOCS_DIR): os.makedirs(DOCS_DIR)
 
-# --- AUTOMATIC LOGIN REPAIR & INITIALIZATION ---
 def initialize_files():
-    # Force fix for the 'role' column error
+    # Fix for 'role' column if it's missing from old file
     if os.path.exists(USER_FILE):
         u_temp = pd.read_csv(USER_FILE)
         if 'role' not in u_temp.columns:
-            os.remove(USER_FILE) # Purani kharab file delete karo
+            os.remove(USER_FILE) 
     
     if not os.path.exists(USER_FILE):
         pd.DataFrame([
@@ -48,6 +47,9 @@ def initialize_files():
     
     if not os.path.exists(AGENT_RECORDS_FILE):
         pd.DataFrame(columns=["username", "full_name", "rank", "duty_time", "invoice_status", "contract"]).to_csv(AGENT_RECORDS_FILE, index=False)
+
+    if not os.path.exists(DB_FILE):
+        pd.DataFrame(columns=["ID", "Dato", "Produkt", "Hovedsøker", "Fnr", "Beløp", "Status", "Notater", "Vedlegg_Sti", "Registrert_Av"]).to_csv(DB_FILE, index=False)
 
 initialize_files()
 
@@ -87,10 +89,7 @@ if not st.session_state['logged_in']:
             st.error("Feil brukernavn eller passord!")
     st.stop()
 
-# --- 4. MAIN APP ---
-if not os.path.exists(DB_FILE):
-    pd.DataFrame(columns=["ID", "Dato", "Produkt", "Hovedsøker", "Fnr", "Beløp", "Status", "Notater", "Vedlegg_Sti", "Registrert_Av"]).to_csv(DB_FILE, index=False)
-
+# --- 4. MAIN APP DATA ---
 df = pd.read_csv(DB_FILE)
 role = st.session_state['user_role']
 current_user = st.session_state['user_id']
@@ -117,7 +116,7 @@ if valg == "📊 Dashbord":
     st.divider()
     st.dataframe(display_df.tail(15), use_container_width=True)
 
-# --- SECTION 2: REGISTRER NY SØKNAD (Vohi Detailed Form) ---
+# --- SECTION 2: REGISTRER NY SØKNAD (PURANI DETAILED CODING) ---
 elif valg == "➕ Registrer ny søknad":
     st.header("➕ Opprett Ny Bankforespørsel")
     prod = st.selectbox("Velg ønsket bankprodukt", [
@@ -142,13 +141,13 @@ elif valg == "➕ Registrer ny søknad":
             sivil = st.selectbox("Sivilstatus", ["Gift", "Samboer", "Enslig", "Skilt/Separert"])
             jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "Uføretrygd", "Arbeidsledig", "Selvstendig næringsdrivende"])
             sektor = st.selectbox("Arbeidssektor", ["Privat sektor", "Offentlig/Statlig", "Kommunal"])
-            firma = st.text_input("Navn na arbeidsgiver / Firma")
+            firma = st.text_input("Navn på arbeidsgiver / Firma")
             ansatt_tid = st.text_input("Hvor lenge har du jobbet der?")
             lonn = st.number_input("Årslønn før skatt (Brutto)", min_value=0)
 
         st.divider()
         st.subheader(f"📑 Spesifikke krav for {prod}")
-        # ... (Same detailed logic from your previous code)
+
         if "Boliglån" in prod or "Mellomfinansiering" in prod:
             k1, k2 = st.columns(2)
             with k1:
@@ -159,30 +158,86 @@ elif valg == "➕ Registrer ny søknad":
                 omrade = st.text_input("Ønsket område for boligkjøp")
             with k2:
                 gjeld = st.number_input("Annen gjeld (Forbrukslån/Kreditt)", min_value=0)
-                ramme = st.number_input("Samlet ramme na kredittkort", min_value=0)
+                ramme = st.number_input("Samlet ramme på kredittkort", min_value=0)
                 biler = st.number_input("Antall biler i husholdningen", min_value=0)
                 billan = st.number_input("Restgjeld billån", min_value=0)
                 utleie = st.selectbox("Skal boligen ha utleiedel?", ["Nei", "Ja"])
 
+            if "Refinansiering" in prod or "Mellomfinansiering" in prod:
+                st.info("Eksisterende Eiendom")
+                takst = st.number_input("Siste verdivurdering / E-takst", min_value=0)
+                takst_alder = st.selectbox("Er taksten eldre enn 6 måneder?", ["Nei", "Ja"])
+
+        elif is_bedrift:
+            st.warning("Firmadetaljer (Bedrift)")
+            orgnr = st.text_input("Organisasjonsnummer")
+            firmanavn = st.text_input("Firmaets navn")
+            regn_2 = st.checkbox("Regnskap for siste 2 år tilgjengelig")
+            plan = st.text_area("Formål med lånet")
+
+        if has_medsoker:
+            st.divider()
+            st.subheader("👥 Informasjon om Med-søker")
+            m1, m2 = st.columns(2)
+            with m1:
+                m_navn = st.text_input("Medsøker Navn")
+                m_fnr = st.text_input("Medsøker Fnr")
+            with m2:
+                m_lonn = st.number_input("Medsøker Årslønn", min_value=0)
+                m_gjeld = st.number_input("Medsøker gjeld/kreditt", min_value=0)
+
+        st.divider()
+        st.subheader("📎 Dokumentasjon og Notater")
+        notater_input = st.text_area("Interne notater")
+        opplastede_filer = st.file_uploader("Last opp dokumenter", accept_multiple_files=True)
+        total_belop = st.number_input("Endelig søknadsbeløp (kr)", min_value=0)
+
         if st.form_submit_button("SEND INN SØKNAD TIL VAULT"):
-            # Registration Logic
+            fil_liste = []
+            if opplastede_filer:
+                for fil in opplastede_filer:
+                    ren_filnavn = f"{fnr}_{fil.name}".replace(" ", "_")
+                    with open(os.path.join(DOCS_DIR, ren_filnavn), "wb") as f:
+                        f.write(fil.getbuffer())
+                    fil_liste.append(ren_filnavn)
+            
             new_entry = {
                 "ID": len(df) + 1, "Dato": datetime.now().strftime("%d-%m-%Y"),
-                "Produkt": prod, "Hovedsøker": navn, "Fnr": fnr, "Beløp": total_belop if 'total_belop' in locals() else 0,
-                "Status": "Til vurdering", "Notater": "Søknad sendt", 
-                "Vedlegg_Sti": "", "Registrert_Av": current_user
+                "Produkt": prod, "Hovedsøker": navn, "Fnr": fnr, "Beløp": total_belop,
+                "Status": "Til vurdering", "Notater": notater_input, 
+                "Vedlegg_Sti": ",".join(fil_liste), "Registrert_Av": current_user
             }
-            pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True).to_csv(DB_FILE, index=False)
+            df = pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True)
+            df.to_csv(DB_FILE, index=False)
             st.success(f"✅ Søknad arkivert!")
 
-# --- SECTION 3: KUNDE ARKIV ---
+# --- SECTION 3: KUNDE ARKIV (WITH EXPANDER & DOWNLOAD) ---
 elif valg == "📂 Kunde Arkiv":
     st.header(f"📂 Arkiv - {current_user.capitalize()}")
     sok = st.text_input("Søk i arkivet (Navn eller Fnr)")
     res_df = display_df[display_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)] if sok else display_df
-    st.dataframe(res_df, use_container_width=True)
 
-# --- SECTION 4: MASTER KONTROLLPANEL (The Missing Piece) ---
+    for i, rad in res_df.iterrows():
+        with st.expander(f"📁 {rad['Hovedsøker']} - {rad['Produkt']}"):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write(f"**Beløp:** {rad['Beløp']:,} kr")
+                st.write(f"**Fnr:** {rad['Fnr']}")
+                st.write(f"**Registrert Av:** {rad['Registrert_Av']}")
+            with c2:
+                st.write(f"**Dato:** {rad['Dato']}")
+                st.write(f"**Status:** {rad['Status']}")
+            st.info(f"**Notater:** {rad['Notater']}")
+            
+            vedlegg = str(rad['Vedlegg_Sti'])
+            if vedlegg and vedlegg != "nan" and vedlegg != "":
+                for f_name in vedlegg.split(","):
+                    f_path = os.path.join(DOCS_DIR, f_name)
+                    if os.path.exists(f_path):
+                        with open(f_path, "rb") as d_file:
+                            st.download_button(f"📥 {f_name.split('_', 1)[-1]}", d_file, file_name=f_name, key=f"{f_name}_{i}")
+
+# --- SECTION 4: MASTER KONTROLLPANEL (ADMIN FEATURES) ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ Master Kontrollpanel")
     t1, t2, t3 = st.tabs(["👥 Agent Management", "📑 Agent Records", "🛡️ Sikkerhetslogger"])
@@ -195,7 +250,8 @@ elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
             u_df = get_users_df()
             if new_u in u_df['username'].values: st.error("Exists!")
             else:
-                pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
+                new_row = pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}])
+                new_row.to_csv(USER_FILE, mode='a', header=False, index=False)
                 st.success(f"User {new_u} created!")
         st.dataframe(get_users_df())
 
@@ -212,10 +268,11 @@ elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
             if st.form_submit_button("Update Record"):
                 a_df = a_df[a_df['username'] != u_select]
                 new_data = {"username": u_select, "full_name": f_name, "rank": u_rank, "duty_time": u_time, "invoice_status": u_inv, "contract": u_contract}
-                pd.concat([a_df, pd.DataFrame([new_data])]).to_csv(AGENT_RECORDS_FILE, index=False)
+                a_df = pd.concat([a_df, pd.DataFrame([new_data])])
+                a_df.to_csv(AGENT_RECORDS_FILE, index=False)
                 st.success("Record Updated!")
         st.dataframe(a_df)
 
     with t3:
         if os.path.exists(LOG_FILE):
-            st.dataframe(pd.read_csv(LOG_FILE).sort_values("Timestamp", ascending=False))
+            st.dataframe(pd.read_csv(LOG_FILE).sort_values("Timestamp", ascending=False), use_container_width=True)

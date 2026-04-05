@@ -74,7 +74,6 @@ if not st.session_state['logged_in']:
     p_input = st.text_input("Passord", type="password")
     
     if st.button("Logg inn"):
-        # Always read fresh user data to ensure newly created agents can log in immediately
         users_df = pd.read_csv(USER_FILE)
         match = users_df[(users_df['username'] == u_input) & (users_df['password'] == p_input)]
         if not match.empty:
@@ -112,7 +111,7 @@ if valg == "📊 Dashbord":
     st.subheader("Siste aktiviteter")
     st.dataframe(display_df.tail(10), use_container_width=True)
 
-# --- SECTION: NY REGISTRERING (COMPLETE FORM) ---
+# --- SECTION: NY REGISTRERING ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Opprett Ny Bankforespørsel")
     prod = st.selectbox("Bankprodukt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedrift", "Byggelån", "Forbrukslån", "Billån"])
@@ -163,7 +162,7 @@ elif valg == "➕ Ny Registrering":
 
         st.divider()
         notater_input = st.text_area("Interne notater / Kommentarer")
-        opplastede_filer = st.file_uploader("Last opp dokumenter (PDF/Bilder)", accept_multiple_files=True)
+        opplastede_filer = st.file_uploader("Last opp dokumenter", accept_multiple_files=True)
 
         if st.form_submit_button("SEND SØKNAD"):
             fil_liste = []
@@ -180,7 +179,7 @@ elif valg == "➕ Ny Registrering":
                 "Registrert_Av": current_user, "Bank_Navn": "Vurderes", "Behandlings_Status": "Mottatt"
             }
             pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True).to_csv(DB_FILE, index=False)
-            st.success("✅ Søknad er registrert og sendt til admin!")
+            st.success("✅ Søknad er registrert!")
 
 # --- SECTION: KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
@@ -206,10 +205,11 @@ elif valg == "📂 Kunde Arkiv":
 # --- SECTION: MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ System Kontroll")
-    tab1, tab2, tab3 = st.tabs(["👥 Agentstyring", "🛡️ Logger", "📊 Statistikk"])
+    tab1, tab2, tab3 = st.tabs(["👥 Agent & Profil Styring", "🛡️ Logger", "📊 Statistikk"])
 
     with tab1:
-        st.subheader("Opprett Ny Agent (Worker)")
+        # --- PART A: CREATE NEW AGENT ---
+        st.subheader("Opprett Ny Agent")
         with st.form("new_agent_form"):
             new_u = st.text_input("Loginn-ID (Brukernavn)").lower().strip()
             new_p = st.text_input("Passord")
@@ -220,16 +220,41 @@ elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
                 if new_u in u_df['username'].values:
                     st.error("Dette brukernavnet eksisterer allerede!")
                 else:
-                    # 1. Add to login file
                     pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
-                    # 2. Add to management file
                     pd.DataFrame([{"username": new_u, "full_name": full_n, "rank": rank, "duty_time": "N/A", "invoice_status": "Active", "contract": "Signed"}]).to_csv(AGENT_RECORDS_FILE, mode='a', header=False, index=False)
-                    st.success(f"Suksess! {full_n} kan nå logge inn.")
-                    st.rerun() # Forces Streamlit to reload the user file for the new login
+                    st.success(f"Agent {full_n} opprettet!")
+                    st.rerun()
 
         st.divider()
-        st.subheader("Oversikt over alle agenter")
-        st.dataframe(pd.read_csv(AGENT_RECORDS_FILE), use_container_width=True)
+        
+        # --- PART B: FULL WORKER CONTROL & DELETE ---
+        st.subheader("👥 Worker Profiler & Kontroll")
+        agents_df = pd.read_csv(AGENT_RECORDS_FILE)
+        
+        for idx, agent in agents_df.iterrows():
+            with st.expander(f"👤 Profil: {agent['full_name']} ({agent['username']})"):
+                st.write(f"**Stilling:** {agent['rank']}")
+                st.write(f"**Kontrakt Status:** {agent['contract']}")
+                st.write(f"**Fakturering:** {agent['invoice_status']}")
+                
+                # Saker registrert av denne agenten
+                agent_cases = df[df['Registrert_Av'] == agent['username']]
+                st.write(f"**Antall saker registrert:** {len(agent_cases)}")
+                
+                # Delete Agent Button
+                if st.button(f"Slett Agent: {agent['username']}", key=f"del_{agent['username']}"):
+                    # Remove from User File
+                    u_df = pd.read_csv(USER_FILE)
+                    u_df = u_df[u_df['username'] != agent['username']]
+                    u_df.to_csv(USER_FILE, index=False)
+                    
+                    # Remove from Agent Records
+                    a_df = pd.read_csv(AGENT_RECORDS_FILE)
+                    a_df = a_df[a_df['username'] != agent['username']]
+                    a_df.to_csv(AGENT_RECORDS_FILE, index=False)
+                    
+                    st.warning(f"Agent {agent['username']} er slettet fra systemet.")
+                    st.rerun()
 
     with tab2:
         st.subheader("Geolokasjon og Sikkerhetslogger")

@@ -28,12 +28,13 @@ USER_FILE = "nsvg_users.csv"
 
 if not os.path.exists(DOCS_DIR): os.makedirs(DOCS_DIR)
 
-# Initialize Users if file doesn't exist
+# Initialize Users if file doesn't exist - Naya Agent Awari3600 yahan add kar diya gaya hai
 if not os.path.exists(USER_FILE):
     pd.DataFrame([
         {"username": "amina", "password": "aminaaz0207"},
         {"username": "umer", "password": "Umer2026"},
-        {"username": "ali", "password": "AliPass123"}
+        {"username": "ali", "password": "AliPass123"},
+        {"username": "awari3600", "password": "Awari@9204"}
     ]).to_csv(USER_FILE, index=False)
 
 def get_users():
@@ -68,6 +69,16 @@ if not st.session_state['logged_in']:
     
     if st.button("Logg inn"):
         USERS_DB = get_users()
+        # Agar USER_FILE pehle se bani hui hai aur naya user usme nahi hai, to manually handle karne ke liye check
+        if u_input == "awari3600" and p_input == "Awari@9204" and u_input not in USERS_DB:
+             # Naye user ko file mein add karna agar file pehle se exist karti ho
+             u_df = pd.read_csv(USER_FILE)
+             if u_input not in u_df['username'].values:
+                 new_u = pd.DataFrame([{"username": "awari3600", "password": "Awari@9204"}])
+                 u_df = pd.concat([u_df, new_u], ignore_index=True)
+                 u_df.to_csv(USER_FILE, index=False)
+                 USERS_DB = get_users()
+
         if u_input == "admin" and p_input == "NSVG2026":
             st.session_state.update({'logged_in': True, 'user_role': "Admin", 'user_id': "Admin"})
             record_log("Admin", loc, "Innlogging suksess")

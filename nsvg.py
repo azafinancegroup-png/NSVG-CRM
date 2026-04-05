@@ -5,7 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 from streamlit_js_eval import get_geolocation
 
-# --- 1. CONFIGURATION & PROFESSIONAL DESIGN ---
+# --- 1. CONFIGURATION & DESIGN ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 
 st.markdown("""
@@ -35,8 +35,7 @@ def connect_to_gsheet(sheet_name):
 def get_data(sheet_name):
     sheet = connect_to_gsheet(sheet_name)
     if sheet:
-        data = sheet.get_all_records()
-        return pd.DataFrame(data)
+        return pd.DataFrame(sheet.get_all_records())
     return pd.DataFrame()
 
 def add_data(sheet_name, row_dict):
@@ -44,7 +43,7 @@ def add_data(sheet_name, row_dict):
     if sheet:
         sheet.append_row(list(row_dict.values()))
 
-# --- 3. LOGIN SYSTEM ---
+# --- 3. LOGIN & SECURITY ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
 
@@ -68,18 +67,18 @@ if not st.session_state['logged_in']:
                     lat = loc['coords']['latitude'] if (loc and 'coords' in loc) else "N/A"
                     lon = loc['coords']['longitude'] if (loc and 'coords' in loc) else "N/A"
                 except: lat, lon = "N/A", "N/A"
-                maps_url = f"http://google.com/maps?q={lat},{lon}" if lat != "N/A" else "Ingen"
+                maps_url = f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" else "Ingen"
                 
                 add_data("Logs", {
                     "Tidspunkt": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-                    "Bruker": u_input, "Handling": "Login suksess", "Kart_Lenke": maps_url
+                    "Bruker": u_input, "Handling": "Innlogging suksess", "Kart_Lenke": maps_url
                 })
                 st.rerun()
             else:
                 st.error("Feil brukernavn eller passord!")
     st.stop()
 
-# --- 4. NAVIGATION ---
+# --- 4. NAVIGATION DATA ---
 df = get_data("MainDB")
 role = st.session_state['user_role']
 current_user = st.session_state['user_id']
@@ -105,55 +104,85 @@ if valg == "📊 Dashbord":
             volum = pd.to_numeric(display_df['Beløp'], errors='coerce').sum()
             st.metric("Totalt Volum (kr)", f"{volum:,} kr")
         st.divider()
+        st.subheader("Siste aktiviteter")
         st.dataframe(display_df.tail(10), use_container_width=True)
 
-# --- 6. DETAILED REGISTRATION FORM (Wapis aa gaya!) ---
+# --- 6. NY REGISTRERING (FULL FORM) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Opprett Ny Bankforespørsel")
     prod = st.selectbox("Bankprodukt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedrift", "Byggelån", "Forbrukslån", "Billån"])
     
-    with st.form("nsvg_full_form"):
+    is_bedrift = "Investlån" in prod
+    has_medsoker = False if is_bedrift else (st.radio("Søknadstype", ["Alene søker", "Med-søker / Kausjonist"]) == "Med-søker / Kausjonist")
+
+    with st.form("nsvg_bank_form"):
         st.subheader("👤 Kunde Informasjon")
         c1, c2 = st.columns(2)
         with c1:
-            navn = st.text_input("Fullt Navn")
+            navn = st.text_input("Fullt Navn (ihht ID)")
             fnr = st.text_input("Fødselsnummer (11 siffer)")
             epost = st.text_input("E-post")
+            tlf = st.text_input("Telefonnummer")
         with c2:
             sivil = st.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt"])
+            sektor = st.selectbox("Sektor", ["Privat", "Offentlig", "Statlig", "Kommunal"])
             jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "Uføre", "Selvstendig"])
+            firma = st.text_input("Firma / Arbeidsgiver")
             lonn = st.number_input("Årslønn Brutto (kr)", min_value=0)
 
         st.divider()
         st.subheader("🏠 Finansiell Detaljer")
         k1, k2 = st.columns(2)
         with k1:
+            barn = st.number_input("Barn under 18 år", min_value=0)
             ek = st.number_input("Egenkapital (kr)", min_value=0)
-            belop_sokt = st.number_input("Søknadsbeløp (kr)", min_value=0)
         with k2:
             gjeld = st.number_input("Annen gjeld (kr)", min_value=0)
-            notater_input = st.text_area("Interne notater")
+            belop_sokt = st.number_input("Søknadsbeløp (kr)", min_value=0)
+
+        notater_input = st.text_area("Interne notater / Kommentarer")
 
         if st.form_submit_button("SEND SØKNAD"):
-            # Sab data ko aik line mein jamah karna
-            full_notes = f"Sivil: {sivil} | Jobb: {jobb} | Lønn: {lonn} | Notat: {notater_input}"
+            # Medsøker logic summarized in notes for sheet simplicity
+            summary_note = f"{notater_input} | Sivil: {sivil} | Jobb: {jobb}"
             
             new_entry = {
                 "ID": len(df) + 1, "Dato": datetime.now().strftime("%d-%m-%Y"),
                 "Produkt": prod, "Hovedsøker": navn, "Fnr": fnr, "Beløp": belop_sokt,
-                "Status": "Mottatt", "Notater": full_notes, "Vedlegg_Sti": "",
+                "Status": "Mottatt", "Notater": summary_note, "Vedlegg_Sti": "Cloud",
                 "Registrert_Av": current_user, "Bank_Navn": "Vurderes", "Behandlings_Status": "Mottatt"
             }
             add_data("MainDB", new_entry)
-            st.success("✅ Søknad registrert!")
+            st.success("✅ Søknad er registrert i Google Sheets!")
 
+# --- 7. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv")
-    sok = st.text_input("Søk na Navn eller Fødselsnummer")
+    sok = st.text_input("Søk på Navn eller Fødselsnummer")
     if not display_df.empty:
         res_df = display_df[display_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)] if sok else display_df
         st.dataframe(res_df, use_container_width=True)
 
+# --- 8. ANSATTE KONTROLL & MASTER PANEL ---
+elif valg == "👥 Ansatte Kontroll" and role == "Admin":
+    st.header("👥 Ansatte Management")
+    users_list = get_data("Users")
+    logs_data = get_data("Logs")
+    
+    workers = users_list[users_list['role'] == 'Worker']
+    for idx, worker in workers.iterrows():
+        uname = worker['username']
+        with st.expander(f"👤 {uname.capitalize()}"):
+            w_cases = df[df['Registrert_Av'] == uname]
+            st.metric("Saker", len(w_cases))
+            st.write("**Siste Logg:**")
+            st.dataframe(logs_data[logs_data['Bruker'] == uname].tail(3))
+
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
-    st.header("🕵️ System Logger")
-    st.dataframe(get_data("Logs"), use_container_width=True)
+    st.header("🕵️ System Kontroll")
+    tab1, tab2 = st.tabs(["🛡️ Cloud Logger", "📊 Statistikk"])
+    with tab1:
+        st.dataframe(get_data("Logs").sort_values("Tidspunkt", ascending=False))
+    with tab2:
+        if not df.empty:
+            st.bar_chart(df['Registrert_Av'].value_counts())

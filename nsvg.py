@@ -31,7 +31,6 @@ AGENT_RECORDS_FILE = "nsvg_agent_management.csv"
 if not os.path.exists(DOCS_DIR): os.makedirs(DOCS_DIR)
 
 def initialize_files():
-    # Login Database
     if not os.path.exists(USER_FILE):
         pd.DataFrame([
             {"username": "admin", "password": "NSVG2026", "role": "Admin"},
@@ -39,16 +38,13 @@ def initialize_files():
             {"username": "umer", "password": "Umer2026", "role": "Worker"}
         ]).to_csv(USER_FILE, index=False)
 
-    # Main Customer Database
     required_cols = ["ID", "Dato", "Produkt", "Hovedsøker", "Fnr", "Beløp", "Status", "Notater", "Vedlegg_Sti", "Registrert_Av", "Bank_Navn", "Behandlings_Status"]
     if not os.path.exists(DB_FILE):
         pd.DataFrame(columns=required_cols).to_csv(DB_FILE, index=False)
 
-    # Agent Portfolio Database
     if not os.path.exists(AGENT_RECORDS_FILE):
         pd.DataFrame(columns=["username", "full_name", "rank", "duty_time", "invoice_status", "contract"]).to_csv(AGENT_RECORDS_FILE, index=False)
 
-    # Security Logs
     if not os.path.exists(LOG_FILE):
         pd.DataFrame(columns=["Tidspunkt", "Bruker", "Handling", "Kart_Lenke"]).to_csv(LOG_FILE, index=False)
 
@@ -162,7 +158,7 @@ elif valg == "➕ Ny Registrering":
 
         st.divider()
         notater_input = st.text_area("Interne notater / Kommentarer")
-        opplastede_filer = st.file_uploader("Last opp dokumenter", accept_multiple_files=True)
+        opplastede_filer = st.file_uploader("Last opp dokumenter (PDF/Bilder)", accept_multiple_files=True)
 
         if st.form_submit_button("SEND SØKNAD"):
             fil_liste = []
@@ -202,14 +198,13 @@ elif valg == "📂 Kunde Arkiv":
                         df.to_csv(DB_FILE, index=False)
                         st.rerun()
 
-# --- SECTION: MASTER KONTROLLPANEL ---
+# --- SECTION: MASTER KONTROLLPANEL (FIXED TAB1) ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ System Kontroll")
-    tab1, tab2, tab3 = st.tabs(["👥 Agent & Profil Styring", "🛡️ Logger", "📊 Statistikk"])
+    tab1, tab2, tab3 = st.tabs(["👥 Agentstyring", "🛡️ Logger", "📊 Statistikk"])
 
     with tab1:
-        # --- PART A: CREATE NEW AGENT ---
-        st.subheader("Opprett Ny Agent")
+        st.subheader("Opprett Ny Agent (Worker)")
         with st.form("new_agent_form"):
             new_u = st.text_input("Loginn-ID (Brukernavn)").lower().strip()
             new_p = st.text_input("Passord")
@@ -222,39 +217,40 @@ elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
                 else:
                     pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
                     pd.DataFrame([{"username": new_u, "full_name": full_n, "rank": rank, "duty_time": "N/A", "invoice_status": "Active", "contract": "Signed"}]).to_csv(AGENT_RECORDS_FILE, mode='a', header=False, index=False)
-                    st.success(f"Agent {full_n} opprettet!")
+                    st.success(f"Suksess! {full_n} opprettet.")
                     st.rerun()
 
         st.divider()
-        
-        # --- PART B: FULL WORKER CONTROL & DELETE ---
         st.subheader("👥 Worker Profiler & Kontroll")
-        agents_df = pd.read_csv(AGENT_RECORDS_FILE)
         
-        for idx, agent in agents_df.iterrows():
-            with st.expander(f"👤 Profil: {agent['full_name']} ({agent['username']})"):
-                st.write(f"**Stilling:** {agent['rank']}")
-                st.write(f"**Kontrakt Status:** {agent['contract']}")
-                st.write(f"**Fakturering:** {agent['invoice_status']}")
-                
-                # Saker registrert av denne agenten
-                agent_cases = df[df['Registrert_Av'] == agent['username']]
-                st.write(f"**Antall saker registrert:** {len(agent_cases)}")
-                
-                # Delete Agent Button
-                if st.button(f"Slett Agent: {agent['username']}", key=f"del_{agent['username']}"):
-                    # Remove from User File
-                    u_df = pd.read_csv(USER_FILE)
-                    u_df = u_df[u_df['username'] != agent['username']]
-                    u_df.to_csv(USER_FILE, index=False)
+        # Fresh read agents
+        agents_data = pd.read_csv(AGENT_RECORDS_FILE)
+        
+        if agents_data.empty:
+            st.info("Ingen agenter registrert.")
+        else:
+            for idx, agent in agents_data.iterrows():
+                with st.expander(f"👤 {agent['full_name']} (@{agent['username']})"):
+                    st.write(f"**Stilling:** {agent['rank']}")
+                    st.write(f"**Faktura Status:** {agent['invoice_status']}")
                     
-                    # Remove from Agent Records
-                    a_df = pd.read_csv(AGENT_RECORDS_FILE)
-                    a_df = a_df[a_df['username'] != agent['username']]
-                    a_df.to_csv(AGENT_RECORDS_FILE, index=False)
+                    # Check worker's cases
+                    w_cases = df[df['Registrert_Av'] == agent['username']]
+                    st.write(f"**Saker Registrert:** {len(w_cases)}")
                     
-                    st.warning(f"Agent {agent['username']} er slettet fra systemet.")
-                    st.rerun()
+                    if st.button(f"Slett Agent {agent['username']}", key=f"del_{agent['username']}"):
+                        # 1. Remove from Login File
+                        u_df = pd.read_csv(USER_FILE)
+                        u_df = u_df[u_df['username'] != agent['username']]
+                        u_df.to_csv(USER_FILE, index=False)
+                        
+                        # 2. Remove from Management File
+                        a_df = pd.read_csv(AGENT_RECORDS_FILE)
+                        a_df = a_df[a_df['username'] != agent['username']]
+                        a_df.to_csv(AGENT_RECORDS_FILE, index=False)
+                        
+                        st.warning(f"Agent {agent['username']} slettet.")
+                        st.rerun()
 
     with tab2:
         st.subheader("Geolokasjon og Sikkerhetslogger")

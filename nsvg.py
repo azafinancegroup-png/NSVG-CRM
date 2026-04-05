@@ -88,7 +88,9 @@ display_df = df if role == "Admin" else df[df['Registrert_Av'] == current_user]
 
 st.sidebar.title(f"👤 {current_user.capitalize()}")
 menu = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
-if role == "Admin": menu.append("🕵️ Master Kontrollpanel")
+if role == "Admin": 
+    menu.append("🕵️ Master Kontrollpanel")
+    menu.append("👥 Ansatte Kontroll") # Naya Section
 valg = st.sidebar.selectbox("Hovedmeny", menu)
 
 if st.sidebar.button("🔴 Logg ut"):
@@ -111,7 +113,6 @@ if valg == "📊 Dashbord":
 elif valg == "➕ Ny Registrering":
     st.header("➕ Opprett Ny Bankforespørsel")
     prod = st.selectbox("Bankprodukt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedrift", "Byggelån", "Forbrukslån", "Billån"])
-    
     is_bedrift = "Investlån" in prod
     has_medsoker = False if is_bedrift else (st.radio("Søknadstype", ["Alene søker", "Med-søker / Kausjonist"]) == "Med-søker / Kausjonist")
 
@@ -119,143 +120,110 @@ elif valg == "➕ Ny Registrering":
         st.subheader("👤 Kunde Informasjon")
         c1, c2 = st.columns(2)
         with c1:
-            navn = st.text_input("Fullt Navn (ihht ID)")
-            fnr = st.text_input("Fødselsnummer (11 siffer)")
+            navn = st.text_input("Fullt Navn")
+            fnr = st.text_input("Fødselsnummer")
             epost = st.text_input("E-post")
-            tlf = st.text_input("Telefonnummer")
         with c2:
-            sivil = st.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt"])
-            sektor = st.selectbox("Sektor", ["Privat", "Offentlig", "Statlig", "Kommunal"])
-            jobb = st.selectbox("Arbeidsstatus", ["Fast ansatt", "Midlertidig", "AAP", "Uføre", "Selvstendig"])
-            firma = st.text_input("Firma / Arbeidsgiver")
             lonn = st.number_input("Årslønn Brutto (kr)", min_value=0)
-
-        st.divider()
-        st.subheader("🏠 Finansiell Detaljer")
-        k1, k2 = st.columns(2)
-        with k1:
-            barn = st.number_input("Barn under 18 år", min_value=0)
-            sfo = st.selectbox("SFO/Barnehage?", ["Nei", "Ja"])
-            ek = st.number_input("Egenkapital (kr)", min_value=0)
-        with k2:
-            gjeld = st.number_input("Annen gjeld (kr)", min_value=0)
-            biler = st.number_input("Antall biler", min_value=0)
             belop_sokt = st.number_input("Søknadsbeløp (kr)", min_value=0)
-
-        if is_bedrift:
-            st.info("🏢 Bedrifts Detaljer")
-            orgnr = st.text_input("Organisasjonsnummer")
-            plan = st.text_area("Formål med lånet")
-
-        if has_medsoker:
-            st.info("👥 Med-søker Detaljer")
-            m1, m2 = st.columns(2)
-            with m1:
-                m_navn = st.text_input("Medsøker Fullt Navn")
-                m_fnr = st.text_input("Medsøker Fnr")
-            with m2:
-                m_lonn = st.number_input("Medsøker Årslønn", min_value=0)
-
-        st.divider()
-        notater_input = st.text_area("Interne notater / Kommentarer")
-        opplastede_filer = st.file_uploader("Last opp dokumenter (PDF/Bilder)", accept_multiple_files=True)
-
+        
+        notater_input = st.text_area("Interne notater")
         if st.form_submit_button("SEND SØKNAD"):
-            fil_liste = []
-            if opplastede_filer:
-                for fil in opplastede_filer:
-                    fn = f"{fnr}_{fil.name}".replace(" ", "_")
-                    with open(os.path.join(DOCS_DIR, fn), "wb") as f: f.write(fil.getbuffer())
-                    fil_liste.append(fn)
-            
             new_entry = {
                 "ID": len(df) + 1, "Dato": datetime.now().strftime("%d-%m-%Y"),
                 "Produkt": prod, "Hovedsøker": navn, "Fnr": fnr, "Beløp": belop_sokt,
-                "Status": "Mottatt", "Notater": notater_input, "Vedlegg_Sti": ",".join(fil_liste),
+                "Status": "Mottatt", "Notater": notater_input, "Vedlegg_Sti": "",
                 "Registrert_Av": current_user, "Bank_Navn": "Vurderes", "Behandlings_Status": "Mottatt"
             }
             pd.concat([df, pd.DataFrame([new_entry])], ignore_index=True).to_csv(DB_FILE, index=False)
-            st.success("✅ Søknad er registrert!")
+            st.success("✅ Søknad registrert!")
 
 # --- SECTION: KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv")
-    sok = st.text_input("Søk på Navn eller Fødselsnummer")
-    res_df = display_df[display_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)] if sok else display_df
+    sok = st.text_input("Søk på Navn")
+    res_df = display_df[display_df['Hovedsøker'].str.contains(sok, case=False)] if sok else display_df
+    st.dataframe(res_df, use_container_width=True)
 
-    for i, rad in res_df.iterrows():
-        with st.expander(f"📁 {rad['Hovedsøker']} - {rad['Produkt']}"):
-            st.write(f"**Status:** {rad['Behandlings_Status']} | **Bank:** {rad['Bank_Navn']}")
-            st.write(f"**Beløp:** {rad['Beløp']:,} kr")
-            st.info(f"Notater: {rad['Notater']}")
-            if role == "Admin":
-                with st.form(f"admin_mod_{i}"):
-                    nb = st.text_input("Bank", value=rad['Bank_Navn'])
-                    ns = st.selectbox("Status", ["Sendt til Bank", "Behandles", "Godkjent", "Avslag", "Utbetalt"])
-                    if st.form_submit_button("Lagre Endringer"):
-                        df.at[i, 'Bank_Navn'] = nb
-                        df.at[i, 'Behandlings_Status'] = ns
-                        df.to_csv(DB_FILE, index=False)
+# --- NEW SECTION: ANSATTE KONTROLL (THE CRM MASTER) ---
+elif valg == "👥 Ansatte Kontroll" and role == "Admin":
+    st.header("👥 Ansatte & Worker Management")
+    
+    # Files Refresh
+    users_list = pd.read_csv(USER_FILE)
+    agents_list = pd.read_csv(AGENT_RECORDS_FILE)
+    logs_data = pd.read_csv(LOG_FILE)
+    
+    workers = users_list[users_list['role'] == 'Worker']
+    
+    if workers.empty:
+        st.info("Ingen arbeidere funnet i systemet.")
+    else:
+        for idx, worker in workers.iterrows():
+            username = worker['username']
+            
+            # Get Agent Details
+            agent_detail = agents_list[agents_list['username'] == username]
+            full_name = agent_detail['full_name'].values[0] if not agent_detail.empty else username.capitalize()
+            rank = agent_detail['rank'].values[0] if not agent_detail.empty else "Worker"
+            
+            with st.expander(f"👤 {full_name} (@{username}) - {rank}"):
+                col1, col2, col3 = st.columns(3)
+                
+                # Column 1: Performance
+                with col1:
+                    worker_cases = df[df['Registrert_Av'] == username]
+                    st.metric("Saker Registrert", len(worker_cases))
+                    total_vol = pd.to_numeric(worker_cases['Beløp'], errors='coerce').sum()
+                    st.write(f"**Total Volum:** {total_vol:,} kr")
+                
+                # Column 2: Last Activities
+                with col2:
+                    st.write("**Siste Login Aktivitet:**")
+                    worker_logs = logs_data[logs_data['Bruker'] == username].tail(3)
+                    if not worker_logs.empty:
+                        for _, l in worker_logs.iterrows():
+                            st.caption(f"🕒 {l['Tidspunkt']} - {l['Handling']}")
+                    else:
+                        st.write("Ingen logg funnet.")
+                
+                # Column 3: Control Actions
+                with col3:
+                    st.write("**System Kontroll:**")
+                    if st.button(f"Slett {username} helt", key=f"del_{username}"):
+                        # Delete from Users
+                        new_u = users_list[users_list['username'] != username]
+                        new_u.to_csv(USER_FILE, index=False)
+                        # Delete from Agent Management
+                        new_a = agents_list[agents_list['username'] != username]
+                        new_a.to_csv(AGENT_RECORDS_FILE, index=False)
+                        st.error(f"{username} slettet fra databasen!")
                         st.rerun()
 
-# --- SECTION: MASTER KONTROLLPANEL (FIXED TAB1) ---
+                st.divider()
+                st.write("**Arbeidshistorikk (Siste 5 saker):**")
+                st.table(worker_cases[['Dato', 'Hovedsøker', 'Produkt', 'Beløp', 'Behandlings_Status']].tail(5))
+
+# --- SECTION: MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ System Kontroll")
-    tab1, tab2, tab3 = st.tabs(["👥 Agentstyring", "🛡️ Logger", "📊 Statistikk"])
+    tab1, tab2, tab3 = st.tabs(["➕ Opprett Agent", "🛡️ Logger", "📊 Statistikk"])
 
     with tab1:
-        st.subheader("Opprett Ny Agent (Worker)")
+        st.subheader("Lag ny tilgang")
         with st.form("new_agent_form"):
-            new_u = st.text_input("Loginn-ID (Brukernavn)").lower().strip()
+            new_u = st.text_input("Brukernavn").lower().strip()
             new_p = st.text_input("Passord")
             full_n = st.text_input("Fullt Navn")
             rank = st.selectbox("Stilling", ["Junior Agent", "Senior Agent", "Partner"])
             if st.form_submit_button("AKTIVER AGENT"):
-                u_df = pd.read_csv(USER_FILE)
-                if new_u in u_df['username'].values:
-                    st.error("Dette brukernavnet eksisterer allerede!")
-                else:
-                    pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
-                    pd.DataFrame([{"username": new_u, "full_name": full_n, "rank": rank, "duty_time": "N/A", "invoice_status": "Active", "contract": "Signed"}]).to_csv(AGENT_RECORDS_FILE, mode='a', header=False, index=False)
-                    st.success(f"Suksess! {full_n} opprettet.")
-                    st.rerun()
-
-        st.divider()
-        st.subheader("👥 Worker Profiler & Kontroll")
-        
-        # Fresh read agents
-        agents_data = pd.read_csv(AGENT_RECORDS_FILE)
-        
-        if agents_data.empty:
-            st.info("Ingen agenter registrert.")
-        else:
-            for idx, agent in agents_data.iterrows():
-                with st.expander(f"👤 {agent['full_name']} (@{agent['username']})"):
-                    st.write(f"**Stilling:** {agent['rank']}")
-                    st.write(f"**Faktura Status:** {agent['invoice_status']}")
-                    
-                    # Check worker's cases
-                    w_cases = df[df['Registrert_Av'] == agent['username']]
-                    st.write(f"**Saker Registrert:** {len(w_cases)}")
-                    
-                    if st.button(f"Slett Agent {agent['username']}", key=f"del_{agent['username']}"):
-                        # 1. Remove from Login File
-                        u_df = pd.read_csv(USER_FILE)
-                        u_df = u_df[u_df['username'] != agent['username']]
-                        u_df.to_csv(USER_FILE, index=False)
-                        
-                        # 2. Remove from Management File
-                        a_df = pd.read_csv(AGENT_RECORDS_FILE)
-                        a_df = a_df[a_df['username'] != agent['username']]
-                        a_df.to_csv(AGENT_RECORDS_FILE, index=False)
-                        
-                        st.warning(f"Agent {agent['username']} slettet.")
-                        st.rerun()
+                pd.DataFrame([{"username": new_u, "password": new_p, "role": "Worker"}]).to_csv(USER_FILE, mode='a', header=False, index=False)
+                pd.DataFrame([{"username": new_u, "full_name": full_n, "rank": rank, "duty_time": "N/A", "invoice_status": "Active", "contract": "Signed"}]).to_csv(AGENT_RECORDS_FILE, mode='a', header=False, index=False)
+                st.success(f"Agent {full_n} er aktivert!")
+                st.rerun()
 
     with tab2:
-        st.subheader("Geolokasjon og Sikkerhetslogger")
         st.dataframe(pd.read_csv(LOG_FILE).sort_values("Tidspunkt", ascending=False), use_container_width=True)
 
     with tab3:
-        st.subheader("Portefølje Statistikk")
         st.bar_chart(df['Registrert_Av'].value_counts())

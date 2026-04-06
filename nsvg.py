@@ -299,43 +299,45 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     # Data load karne ki koshish
     agents_df = get_data("Agents")
     
-    # Agar data khali hai, to check karein ke sheet ka naam sahi hai ya nahi
     if agents_df.empty:
-        st.error("Kunne ikke finne data i 'Agents' fanen. Vennligst sjekk om Google Sheet fanen heter 'Agents' (med stor A).")
-        st.info("Tips: Sjekk også om kolonnene 'username', 'navn', 'stilling', 'vakt', 'status' finnes i sheeten.")
+        st.error("⚠️ Ingen data funnet i 'Agents' fanen.")
+        st.info("Sjekk om Sheet-navnet er nøyaktig 'Agents' og om den inneholder data.")
     else:
-        # Extra space saaf karein (Jadu wali line for agents)
-        agents_df.columns = [str(c).strip() for c in agents_df.columns]
+        # --- JADU WALI LINE (Column Clean-up) ---
+        # Ye line headers se spaces khatam karti hai aur sab ko chota (lowercase) kar deti hai
+        agents_df.columns = [str(c).strip().lower() for c in agents_df.columns]
         
         # Search bar
-        sok_agent = st.text_input("Søk etter agent navn...", placeholder="Skriv navn her...")
+        sok_agent = st.text_input("🔍 Søk etter ansatt...", placeholder="Skriv navn...")
         
         if sok_agent:
-            if 'navn' in agents_df.columns:
-                agents_df = agents_df[agents_df['navn'].astype(str).str.contains(sok_agent, case=False)]
+            # 'navn' ya 'username' dono mein search karega
+            search_cols = [c for c in ['navn', 'username'] if c in agents_df.columns]
+            if search_cols:
+                agents_df = agents_df[agents_df[search_cols].astype(str).apply(lambda x: x.str.contains(sok_agent, case=False)).any(axis=1)]
         
-        # Zaroori columns check karna taake crash na ho
-        cols_to_show = [c for c in ['username', 'navn', 'stilling', 'vakt', 'status'] if c in agents_df.columns]
-        
-        # Table dikhana
-        st.dataframe(agents_df[cols_to_show], use_container_width=True)
+        # Display Table (Sirf wahi columns jo mojud hain)
+        display_cols = [c for c in ['username', 'navn', 'stilling', 'vakt', 'status'] if c in agents_df.columns]
+        st.dataframe(agents_df[display_cols], use_container_width=True)
         
         st.divider()
-        st.subheader("Hurtigredigering")
+        st.subheader("⚙️ Administrer Ansatte")
         
         for i, row in agents_df.iterrows():
-            # Column names ki safety ke saath data dikhana
-            a_navn = row.get('navn', 'Ukjent')
-            a_pos = row.get('stilling', 'Agent')
-            a_user = row.get('username', '-')
-            a_vakt = row.get('vakt', '-')
-            a_status = row.get('status', '-')
+            # Safety checks for names
+            n = row.get('navn', row.get('username', 'Ukjent'))
+            s = row.get('status', 'Aktiv')
+            p = row.get('stilling', 'Agent')
             
-            with st.expander(f"👤 {a_navn} ({a_pos})"):
-                st.write(f"**Brukernavn:** {a_user} | **Vakt:** {a_vakt}")
-                st.write(f"**Nåværende Status:** {a_status}")
+            with st.expander(f"👤 {n} ({p})"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.write(f"**Brukernavn:** {row.get('username', '-')}")
+                    st.write(f"**Vakt:** {row.get('vakt', '-')}")
+                with c2:
+                    st.write(f"**Nåværende Status:** {s}")
                 
+                # Status Change
                 n_status = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"edit_st_{i}")
                 if st.button("Oppdater Status", key=f"edit_btn_{i}"):
-                    # Status update logic
-                    st.success(f"Status for {a_navn} er oppdatert til {n_status}!")
+                    st.success(f"Status for {n} er oppdatert til {n_status}!")

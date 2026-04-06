@@ -319,52 +319,73 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     if not agents_df.empty:
         st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL ---
+# --- 10. ANSATTE KONTROLL (Advanced) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # Data load karne ki koshish
+    # 1. Agents ka data load karna
     agents_df = get_data("Agents")
-    
-    if agents_df.empty:
-        st.error("⚠️ Ingen data funnet i 'Agents' fanen.")
-        st.info("Sjekk om Sheet-navnet er nøyaktig 'Agents' og om den inneholder data.")
-    else:
-        # --- JADU WALI LINE (Column Clean-up) ---
-        # Ye line headers se spaces khatam karti hai aur sab ko chota (lowercase) kar deti hai
-        agents_df.columns = [str(c).strip().lower() for c in agents_df.columns]
-        
+    # 2. Main Clients data load karna (Cases check karne ke liye)
+    main_df = df 
+
+    if not agents_df.empty:
         # Search bar
-        sok_agent = st.text_input("🔍 Søk etter ansatt...", placeholder="Skriv navn...")
-        
+        sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...")
         if sok_agent:
-            # 'navn' ya 'username' dono mein search karega
-            search_cols = [c for c in ['navn', 'username'] if c in agents_df.columns]
-            if search_cols:
-                agents_df = agents_df[agents_df[search_cols].astype(str).apply(lambda x: x.str.contains(sok_agent, case=False)).any(axis=1)]
-        
-        # Display Table (Sirf wahi columns jo mojud hain)
-        display_cols = [c for c in ['username', 'navn', 'stilling', 'vakt', 'status'] if c in agents_df.columns]
-        st.dataframe(agents_df[display_cols], use_container_width=True)
-        
-        st.divider()
-        st.subheader("⚙️ Administrer Ansatte")
-        
+            agents_df = agents_df[agents_df.astype(str).apply(lambda x: x.str.contains(sok_agent, case=False)).any(axis=1)]
+
+        st.write(f"Totalt {len(agents_df)} ansatte funnet.")
+
         for i, row in agents_df.iterrows():
-            # Safety checks for names
-            n = row.get('navn', row.get('username', 'Ukjent'))
-            s = row.get('status', 'Aktiv')
-            p = row.get('stilling', 'Agent')
+            a_user = str(row.get('username', '')).strip()
+            a_navn = row.get('navn', 'Ukjent')
             
-            with st.expander(f"👤 {n} ({p})"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.write(f"**Brukernavn:** {row.get('username', '-')}")
-                    st.write(f"**Vakt:** {row.get('vakt', '-')}")
-                with c2:
-                    st.write(f"**Nåværende Status:** {s}")
+            # Expander kholne par details dikhengi
+            with st.expander(f"👤 {a_navn} (ID: {a_user})"):
+                col1, col2 = st.columns(2)
                 
-                # Status Change
-                n_status = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"edit_st_{i}")
-                if st.button("Oppdater Status", key=f"edit_btn_{i}"):
-                    st.success(f"Status for {n} er oppdatert til {n_status}!")
+                with col1:
+                    st.write(f"**Stilling:** {row.get('stilling', '-')}")
+                    st.write(f"**Vakt:** {row.get('vakt', '-')}")
+                    st.write(f"**Status:** {row.get('status', '-')}")
+                
+                with col2:
+                    # --- AGENT KI SAKER (CASES) DHUNDNA ---
+                    if not main_df.empty and 'Registrert_Av' in main_df.columns:
+                        agent_saker = main_df[main_df['Registrert_Av'].astype(str).str.lower() == a_user.lower()]
+                        antall = len(agent_saker)
+                        total_volum = pd.to_numeric(agent_saker['Beløp'], errors='coerce').sum()
+                        
+                        st.metric("Antall Saker", antall)
+                        st.write(f"**Total Volum:** {total_volum:,.0f} kr")
+                    else:
+                        st.info("Ingen saker registrert på denne agenten.")
+
+                st.divider()
+                
+                # --- ACTION BUTTONS ---
+                c_act1, c_act2, c_act3 = st.columns(3)
+                
+                with c_act1:
+                    if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
+                        st.subheader(f"Saker for {a_navn}")
+                        st.dataframe(agent_saker.tail(10)) # Aakhri 10 cases
+
+                with c_act2:
+                    # Status badalne ka option
+                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}")
+                    if st.button("💾 Lagre Status", key=f"save_st_{i}"):
+                        st.success(f"Status oppdatert for {a_navn}!")
+
+                with c_act3:
+                    # --- SLETTE (DELETE) OPTION ---
+                    # Admin ko full delete, Director ko warning ke saath
+                    if st.button(f"🗑️ Slette Profil", key=f"del_agent_{i}"):
+                        if role == "Admin":
+                            st.error(f"Er du sikker på at du vil slette {a_user}?")
+                            st.warning("Gå til Google Sheets for å slette raden permanent.")
+                        else:
+                            st.info("Kun Admin kan slette profiler permanent.")
+
+    else:
+        st.warning("Ingen ansatte funnet. Sjekk 'Agents' fanen i Google Sheets.")

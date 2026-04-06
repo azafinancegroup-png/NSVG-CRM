@@ -129,23 +129,24 @@ if st.sidebar.button("🔴 Logg ut"):
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
-    # User data define karna aur filtering
     if not df.empty:
         df.columns = [str(c).strip() for c in df.columns]
         
-        if 'Registrert_Av' in df.columns:
-            user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
-        else:
+        # Super Logic: Admin aur Director dono ko poora data (All Agents) dikhega
+        if role in ["Admin", "Director"]:
             user_data = df 
+        else:
+            # Baaki agents ko sirf apna data dikhega
+            if 'Registrert_Av' in df.columns:
+                user_data = df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+            else:
+                user_data = df
     else:
         user_data = pd.DataFrame()
 
-    # Metrics dikhana
+    # Metrics (Total Volume, Saker etc.)
     c1, c2, c3 = st.columns(3)
-    
-    volum = 0
-    if not user_data.empty and 'Beløp' in user_data.columns:
-        volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum()
+    volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if 'Beløp' in user_data.columns else 0
     
     c1.metric("Antall Saker", len(user_data))
     c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
@@ -153,11 +154,10 @@ if valg == "📊 Dashbord":
     
     st.divider()
     st.subheader("Siste Saker & Status")
-    
     if not user_data.empty:
         st.dataframe(user_data.tail(15), use_container_width=True)
     else:
-        st.info("Ingen saker funnet.")  
+        st.info("Ingen saker funnet.")
         
 # --- 7. NY REGISTRERING (PRIVAT & BEDRIFT) ---
 elif valg == "➕ Ny Registrering":

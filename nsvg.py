@@ -261,26 +261,37 @@ elif valg == "📂 Kunde Arkiv":
     else:
         st.info("Ingen saker funnet i databasen.")
         
-# --- 9. ANSATTE KONTROLL (WITH DELETE) ---
-elif valg == "👥 Ansatte Kontroll" and role == "Admin":
-    st.header("👥 Ansatte Management")
-    u_list = get_data("Users")
-    if not u_list.empty:
-        workers = u_list[u_list['role'] == 'Worker']
-        for _, w in workers.iterrows():
-            u_id = str(w['username'])
-            with st.expander(f"👤 Agent: {u_id.upper()}"):
-                c1, c2 = st.columns([3, 1])
-                with c1:
-                    w_cases = df[df['Registrert_Av'].astype(str).str.lower() == u_id.lower()] if not df.empty else pd.DataFrame()
-                    st.write(f"Saker: {len(w_cases)}")
-                    st.dataframe(w_cases.tail(3), use_container_width=True)
-                with c2:
-                    if st.button(f"🗑️ Slette {u_id}", key=f"del_{u_id}"):
-                        if delete_user_completely(u_id):
-                            st.success(f"{u_id} slettet!")
-                            st.rerun()
+# --- 9. MASTER KONTROLL ---
+elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
+    st.header("🕵️ Ny Agent Registrering")
+    
+    with st.form("agent_form"):
+        u = st.text_input("Brukernavn (Login ID)").lower().strip()
+        p = st.text_input("Passord", type="password")
+        n = st.text_input("Fullt Navn")
+        pos = st.selectbox("Stilling", ["Senior Agent", "Junior Agent", "Trainee"])
+        
+        if st.form_submit_button("✅ Aktiver og Lagre Agent"):
+            if u and p and n:
+                # 1. Users wali sheet mein login details dalna
+                user_sh = connect_to_sheet("Users")
+                user_sh.append_row([u, p, "Worker"])
+                
+                # 2. Agents wali sheet mein profile details dalna
+                agent_sh = connect_to_sheet("Agents")
+                agent_sh.append_row([u, n, pos, "09-17", "Aktiv", "Signed"])
+                
+                st.success(f"Agent {n} er nå aktivert i systemet!")
+            else:
+                st.error("Vennligst fyll ut alle feltene.")
 
+    # Ansatte ki list dikhana (Taki Amina ko sab nazar aayein)
+    st.divider()
+    st.subheader("👥 Oversikt over alle Ansatte")
+    agents_df = get_data("Agents")
+    if not agents_df.empty:
+        st.table(agents_df[['username', 'navn', 'stilling', 'status']])
+        
 # --- 10. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
     st.header("🕵️ System Admin")

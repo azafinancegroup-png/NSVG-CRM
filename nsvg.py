@@ -114,6 +114,8 @@ current_user = st.session_state['user_id']
 # --- 5. SIDEBAR NAVIGATION ---
 st.sidebar.title(f"👤 {current_user.capitalize()}")
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+# Sirf Admin hi naye agents bana sakta hai (Director ko ye option nahi dikhega)
 if role == "Admin":
     options.extend(["👥 Ansatte Kontroll", "🕵️ Master Kontrollpanel"])
 
@@ -122,7 +124,7 @@ valg = st.sidebar.selectbox("Hovedmeny", options)
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
-
+    
 # --- 6. DASHBORD LOGIC ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
@@ -210,35 +212,52 @@ elif valg == "➕ Ny Registrering":
             add_data("MainDB", new_row)
             st.success("✅ Søknad registrert!")
 
-# --- 8. KUNDE ARKIV (WITH ADMIN STATUS CONTROL) ---
+# --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
-    st.header("📂 Kunde Arkiv & Behandling")
-    sok = st.text_input("Søk på Navn, Fnr, Agent or Status...")
+    st.header("📂 Kunde Arkiv")
     
-    view_df = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+    # Logic: Admin aur Director ko poora data (1200 clients) dikhao
+    # Worker ko sirf uska apna data dikhao
+    if role in ["Admin", "Director"]:
+        view_df = df 
+    else:
+        if 'Registrert_Av' in df.columns:
+            view_df = df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+        else:
+            view_df = pd.DataFrame()
+
+    # Search Bar (Naam, Phone ya Fnr se dhoondein)
+    sok = st.text_input("Søk etter navn, tlf eller fnr...")
     
     if not view_df.empty:
         if sok:
             view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
         
+        # Ek ek karke clients ki details dikhana
         for i, r in view_df.iterrows():
-            with st.expander(f"📄 {r['Dato']} - {r['Hovedsøker']} | Status: {r['Status']}"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Produkt:** {r['Produkt']}")
-                    st.write(f"**Fødselsnr:** {r['Fødselsnummer']}")
-                    st.write(f"**Beløp:** {r['Beløp']:,} kr")
-                    st.write(f"**Agent:** {r['Registrert_Av']}")
-                with col2:
-                    if role == "Admin":
-                        new_st = st.selectbox("Oppdater Status", ["Mottatt", "Under Behandling", "Mangelfull", "Godkjent", "Avslått", "Utbetalt"], index=0, key=f"status_{i}")
-                        if st.button("Lagre Status", key=f"btn_{i}"):
-                            if update_status(i + 1, new_st):
-                                st.success(f"Status endret til {new_st}")
-                                st.rerun()
-                    else:
-                        st.info(f"Gjeldende Status: {r['Status']}")
-
+            with st.expander(f"👤 {r['Hovedsøker']} - Status: {r['Status']}"):
+                st.write(f"**Produkt:** {r['Produkt']} | **Beløp:** {r['Beløp']} kr")
+                st.write(f"**Fødselsnummer:** {r['Fødselsnummer']} | **Telefon:** {r['Telefon']}")
+                st.write(f"**E-post:** {r['Epost']}")
+                st.info(f"**Notater:** {r['Notater']}")
+                
+                # STATUS UPDATE: Admin aur Director dono kar sakte hain
+                if role in ["Admin", "Director"]:
+                    st.divider()
+                    new_st = st.selectbox("Oppdater Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått"], key=f"st_{i}")
+                    if st.button("Lagre Status", key=f"btn_{i}"):
+                        update_status(i + 1, new_st)
+                        st.success(f"Status for {r['Hovedsøker']} er oppdatert!")
+                
+                # DELETE BUTTON: Sirf Admin (Aap) ko nazar aayega
+                if role == "Admin":
+                    st.divider()
+                    if st.button("🗑️ Slette Sak", key=f"del_{i}"):
+                        st.warning(f"Er du sikker på at du vil slette saken til {r['Hovedsøker']}?")
+                        # Slette ki logic hum zaroorat parne par add kar sakte hain
+    else:
+        st.info("Ingen saker funnet i databasen.")
+        
 # --- 9. ANSATTE KONTROLL (WITH DELETE) ---
 elif valg == "👥 Ansatte Kontroll" and role == "Admin":
     st.header("👥 Ansatte Management")

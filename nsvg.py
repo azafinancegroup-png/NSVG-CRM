@@ -132,45 +132,46 @@ if st.sidebar.button("🔴 Logg ut"):
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
-    # 1. Check karein ke main data (df) khali to nahi?
-    if df is not None and not df.empty:
-        # Column names saaf karna (Spaces khatam karna)
-        df.columns = [str(c).strip() for c in df.columns]
-        
-        # 2. Permission Logic: Admin aur Director ko poora data dikhana
-        if role in ["Admin", "Director"]:
-            user_data = df 
+    # Global variables se data lene ki koshish (Check karein ke 'df' define hai ya nahi)
+    try:
+        # Agar df khali hai ya load nahi hua, to dobara koshish karein
+        if 'df' not in locals() or df is None or df.empty:
+            # Sheet index 0 (Pehli tab) se data uthana
+            current_df = get_data(0) 
         else:
-            # Agents ko sirf unka apna data dikhao
-            # Check karein ke 'Registrert_Av' ya 'Agent' column mojud hai
-            reg_col = next((c for c in df.columns if c.lower() in ['registrert_av', 'agent', 'bruker']), None)
-            if reg_col:
-                user_data = df[df[reg_col].astype(str).str.lower() == current_user.lower()]
-            else:
-                user_data = df
+            current_df = df
 
-        # 3. Metrics Calculation
-        c1, c2, c3 = st.columns(3)
+        if not current_df.empty:
+            # Column names saaf karna
+            current_df.columns = [str(c).strip() for c in current_df.columns]
+            
+            # Permission Logic
+            if role in ["Admin", "Director"]:
+                user_data = current_df 
+            else:
+                reg_col = next((c for c in current_df.columns if c.lower() in ['registrert_av', 'agent', 'bruker']), None)
+                user_data = current_df[current_df[reg_col].astype(str).str.lower() == current_user.lower()] if reg_col else current_df
+
+            # Metrics
+            c1, c2, c3 = st.columns(3)
+            belop_col = next((c for c in current_df.columns if c.lower() in ['beløp', 'belop', 'sum', 'amount']), None)
+            volum = pd.to_numeric(user_data[belop_col], errors='coerce').sum() if belop_col else 0
+            
+            c1.metric("Antall Saker", len(user_data))
+            c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
+            c3.metric("Estimert Inntekt (1%)", f"{volum * 0.01:,.0f} kr")
+            
+            st.divider()
+            st.subheader("Siste Aktiviteter")
+            st.dataframe(user_data.head(20), use_container_width=True)
+        else:
+            st.error("❌ Kunne ikke hente data fra hovedfanen.")
+            st.info("Vennligst sjekk om den første fanen i Google Sheets inneholder data.")
+
+    except Exception as e:
+        st.error(f"Det oppstod en feil ved lasting av dashbord: {e}")
+        st.info("Prøv å laste siden på nytt (Refresh).")
         
-        # 'Beløp' column dhoondna (Amount)
-        belop_col = next((c for c in df.columns if c.lower() in ['beløp', 'belop', 'sum', 'amount']), None)
-        volum = pd.to_numeric(user_data[belop_col], errors='coerce').sum() if belop_col else 0
-        
-        c1.metric("Antall Saker", len(user_data))
-        c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
-        c3.metric("Estimert Inntekt (1%)", f"{volum * 0.01:,.0f} kr")
-        
-        st.divider()
-        st.subheader("Siste Aktiviteter")
-        st.dataframe(user_data.head(20), use_container_width=True)
-        
-    else:
-        # AGAR DATA NAHI MIL RAHA TO YE ERROR DIKHAYEGA
-        st.error("❌ Kunne ikke koble til hoveddatabasen.")
-        st.info("Sjekk om Google Sheet inneholder data i den første fanen (Sheet1).")
-        # Debugging ke liye:
-        if st.button("Sjekk Database Tilkobling"):
-            st.write("Tilgjengelige ark i Google Sheets:", [s.title for s in gc.open_by_key(spreadsheet_id).worksheets()])        
 # --- 7. NY REGISTRERING (PRIVAT & BEDRIFT) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")

@@ -95,22 +95,33 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- 6. DASHBORD ---
+# --- 6. DASHBORD (REPAIRED SECTION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
-    user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
     
+    # Check if 'Registrert_Av' column exists to prevent KeyError
+    if not df.empty and 'Registrert_Av' in df.columns:
+        user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+    else:
+        # Agar column nahi mila to khali dataframe dikhao aur Admin ko warning do
+        user_data = df if role == "Admin" else pd.DataFrame()
+        if role == "Admin":
+            st.warning("Advarsel: Kolonnen 'Registrert_Av' ble ikke funnet i Google Sheets!")
+
     c1, c2, c3 = st.columns(3)
-    volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if not user_data.empty else 0
+    # Check if 'Beløp' column exists before summing
+    volum = 0
+    if not user_data.empty and 'Beløp' in user_data.columns:
+        volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum()
+    
     c1.metric("Antall Saker", len(user_data))
     c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
     c3.metric("Estimert Provisjon (1%)", f"{volum * 0.01:,.0f} kr")
     
     st.divider()
     st.subheader("Siste Saker & Status")
-    if not user_data.empty:
-        st.dataframe(user_data.tail(15), use_container_width=True)
-
+    st.dataframe(user_data.tail(15), use_container_width=True)
+    
 # --- 7. NY REGISTRERING (PRIVAT & BEDRIFT) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")

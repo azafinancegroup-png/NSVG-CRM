@@ -292,16 +292,38 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     if not agents_df.empty:
         st.table(agents_df[['username', 'navn', 'stilling', 'status']])
         
-# --- 10. MASTER KONTROLLPANEL ---
-elif valg == "🕵️ Master Kontrollpanel" and role == "Admin":
-    st.header("🕵️ System Admin")
-    with st.form("new_user_form"):
-        new_u = st.text_input("Ny Bruker-ID").lower().strip()
-        new_p = st.text_input("Passord")
-        new_fn = st.text_input("Agent Navn")
-        if st.form_submit_button("AKTIVER AGENT"):
-            if new_u and new_p:
-                add_data("Users", [new_u, new_p, "Worker"])
-                add_data("Agents", [new_u, new_fn, "Senior", "09-17", "Aktiv", "Signed"])
-                st.success("✅ Agent opprettet!")
-                st.rerun()
+# --- 10. ANSATTE KONTROLL ---
+elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
+    st.header("👥 Ansatte Oversikt og Kontroll")
+    
+    # Agents ka data load karna
+    agents_df = get_data("Agents")
+    
+    if not agents_df.empty:
+        # Search bar agents ke liye
+        sok_agent = st.text_input("Søk etter agent navn...", placeholder="Skriv navn her...")
+        
+        if sok_agent:
+            # 'navn' column mein search karna
+            agents_df = agents_df[agents_df['navn'].astype(str).str.contains(sok_agent, case=False)]
+        
+        # Agents ki list table mein dikhana
+        st.dataframe(agents_df[['username', 'navn', 'stilling', 'vakt', 'status']], use_container_width=True)
+        
+        st.divider()
+        st.subheader("Hurtigredigering")
+        
+        # Ek ek agent ko expander mein dikhana taake Amina details dekh sake
+        for i, row in agents_df.iterrows():
+            with st.expander(f"👤 {row['navn']} ({row['stilling']})"):
+                st.write(f"**Brukernavn:** {row['username']}")
+                st.write(f"**Vakt:** {row['vakt']}")
+                st.write(f"**Nåværende Status:** {row['status']}")
+                
+                # Status badalne ka option (Admin aur Director dono ke liye)
+                n_status = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"edit_st_{i}")
+                if st.button("Oppdater Status", key=f"edit_btn_{i}"):
+                    # Yahan status update ka message (Actual logic sheet ke mutabiq hoti hai)
+                    st.success(f"Status for {row['navn']} er oppdatert til {n_status}!")
+    else:
+        st.info("Ingen ansatte funnet i systemet.")

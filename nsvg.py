@@ -57,9 +57,11 @@ def get_data(sheet_name):
     sh = connect_to_sheet(sheet_name)
     if sh:
         data = sh.get_all_records()
-        return pd.DataFrame(data)
+        df = pd.DataFrame(data)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
     return pd.DataFrame()
-
+    
 def add_data(sheet_name, row_list):
     sh = connect_to_sheet(sheet_name)
     if sh: sh.append_row(row_list)
@@ -121,19 +123,28 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- 6. DASHBORD (REPAIRED SECTION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
-    # Check if 'Registrert_Av' column exists to prevent KeyError
-    if not df.empty and 'Registrert_Av' in df.columns:
-        user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
-    else:
-        # Agar column nahi mila to khali dataframe dikhao aur Admin ko warning do
-        user_data = df if role == "Admin" else pd.DataFrame()
-        if role == "Admin":
-            st.warning("Advarsel: Kolonnen 'Registrert_Av' ble ikke funnet i Google Sheets!")
-
+    if not df.empty:
+        # Nøyktig column check
+        if 'Registrert_Av' in df.columns:
+            user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+            
+            c1, c2, c3 = st.columns(3)
+            # Beløp ka bhi safety check
+            volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if 'Beløp' in df.columns else 0
+            
+            c1.metric("Antall Saker", len(user_data))
+            c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
+            c3.metric("Estimert Provisjon (1%)", f"{volum * 0.01:,.0f} kr")
+            
+            st.divider()
+            st.dataframe(user_data.tail(15), use_container_width=True)
+        else:
+            # Agar ab bhi nahi mil raha, to ye error Admin ko asli wajah batayega
+            st.error(f"Kolonnen 'Registrert_Av' ble ikke funnet. Tilgjengelige kolonner i din sheet er: {list(df.columns)}")
+            
     c1, c2, c3 = st.columns(3)
     # Check if 'Beløp' column exists before summing
     volum = 0

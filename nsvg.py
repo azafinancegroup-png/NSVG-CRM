@@ -126,25 +126,36 @@ if st.sidebar.button("🔴 Logg ut"):
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
+    # 1. Sab se pehle 'user_data' ko define karna zaroori hai
     if not df.empty:
-        # Nøyktig column check
+        # Columns saaf karein
+        df.columns = [str(c).strip() for c in df.columns]
+        
+        # Admin aur Worker ka filter lagana
         if 'Registrert_Av' in df.columns:
             user_data = df if role == "Admin" else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
-            
-            c1, c2, c3 = st.columns(3)
-            # Beløp ka bhi safety check
-            volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if 'Beløp' in df.columns else 0
-            
-            c1.metric("Antall Saker", len(user_data))
-            c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
-            c3.metric("Estimert Provisjon (1%)", f"{volum * 0.01:,.0f} kr")
-            
-            st.divider()
-            st.dataframe(user_data.tail(15), use_container_width=True)
         else:
-            # Agar ab bhi nahi mil raha, to ye error Admin ko asli wajah batayega
-            st.error(f"Kolonnen 'Registrert_Av' ble ikke funnet. Tilgjengelige kolonner i din sheet er: {list(df.columns)}")
-            
+            user_data = df # Agar column na mile to saara data dikhao (safety)
+    else:
+        user_data = pd.DataFrame() # Agar sheet bilkul khali ho
+
+    # 2. Ab Metrics dikhana (Ab error nahi aayega kyunke user_data define ho chuka hai)
+    c1, c2, c3 = st.columns(3)
+    
+    volum = 0
+    if not user_data.empty and 'Beløp' in user_data.columns:
+        volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum()
+    
+    c1.metric("Antall Saker", len(user_data))
+    c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
+    c3.metric("Estimert Provisjon (1%)", f"{volum * 0.01:,.0f} kr")
+    
+    st.divider()
+    st.subheader("Siste Saker & Status")
+    if not user_data.empty:
+        st.dataframe(user_data.tail(15), use_container_width=True)
+    else:
+        st.info("Ingen saker funnet.")            
     c1, c2, c3 = st.columns(3)
     # Check if 'Beløp' column exists before summing
     volum = 0

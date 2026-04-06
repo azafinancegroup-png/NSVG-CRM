@@ -128,49 +128,55 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
     
-# --- 6. DASHBORD LOGIC ---
+# --- 6. DASHBORD LOGIC (Clean & Professional) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
-    # Global variables se data lene ki koshish (Check karein ke 'df' define hai ya nahi)
-    try:
-        # Agar df khali hai ya load nahi hua, to dobara koshish karein
-        if 'df' not in locals() or df is None or df.empty:
-            # Sheet index 0 (Pehli tab) se data uthana
-            current_df = get_data(0) 
-        else:
-            current_df = df
+    # Data load karne ki koshish (Pehli tab se)
+    df_main = get_data(0) 
 
-        if not current_df.empty:
-            # Column names saaf karna
-            current_df.columns = [str(c).strip() for c in current_df.columns]
-            
-            # Permission Logic
-            if role in ["Admin", "Director"]:
-                user_data = current_df 
+    # Dashboard ke top metrics (Dabbe)
+    c1, c2, c3 = st.columns(3)
+
+    # Agar data mojud hai (Chahe 9 hon ya 1200)
+    if df_main is not None and not df_main.empty:
+        # Columns ke faltu spaces saaf karna
+        df_main.columns = [str(c).strip() for c in df_main.columns]
+        
+        # Permission Logic: Admin aur Director ko poora data dikhana
+        if role in ["Admin", "Director"]:
+            view_data = df_main
+        else:
+            # Agents ko sirf unka apna data dikhao
+            reg_col = next((c for c in df_main.columns if c.lower() in ['registrert_av', 'agent', 'bruker']), None)
+            if reg_col:
+                view_data = df_main[df_main[reg_col].astype(str).str.lower() == current_user.lower()]
             else:
-                reg_col = next((c for c in current_df.columns if c.lower() in ['registrert_av', 'agent', 'bruker']), None)
-                user_data = current_df[current_df[reg_col].astype(str).str.lower() == current_user.lower()] if reg_col else current_df
+                view_data = df_main
 
-            # Metrics
-            c1, c2, c3 = st.columns(3)
-            belop_col = next((c for c in current_df.columns if c.lower() in ['beløp', 'belop', 'sum', 'amount']), None)
-            volum = pd.to_numeric(user_data[belop_col], errors='coerce').sum() if belop_col else 0
-            
-            c1.metric("Antall Saker", len(user_data))
-            c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
-            c3.metric("Estimert Inntekt (1%)", f"{volum * 0.01:,.0f} kr")
-            
-            st.divider()
-            st.subheader("Siste Aktiviteter")
-            st.dataframe(user_data.head(20), use_container_width=True)
-        else:
-            st.error("❌ Kunne ikke hente data fra hovedfanen.")
-            st.info("Vennligst sjekk om den første fanen i Google Sheets inneholder data.")
-
-    except Exception as e:
-        st.error(f"Det oppstod en feil ved lasting av dashbord: {e}")
-        st.info("Prøv å laste siden på nytt (Refresh).")
+        # Beløp (Amount) column dhoond kar calculation karna
+        b_col = next((c for c in view_data.columns if c.lower() in ['beløp', 'belop', 'sum', 'amount']), None)
+        total_v = pd.to_numeric(view_data[b_col], errors='coerce').sum() if b_col else 0
+        
+        # Metrics update karna
+        c1.metric("Antall Saker", len(view_data))
+        c2.metric("Total Volum (kr)", f"{total_v:,.0f} kr")
+        c3.metric("Provisjon (1%)", f"{total_v * 0.01:,.0f} kr")
+        
+        st.divider()
+        st.subheader("Siste Registrerte Saker")
+        # Sirf aakhri 15 entries dikhana taake dashboard saaf rahe
+        st.dataframe(view_data.tail(15), use_container_width=True)
+    
+    else:
+        # AGAR DATA 0 HAI (YA SHEET KHALI HAI)
+        c1.metric("Antall Saker", "0")
+        c2.metric("Total Volum", "0 kr")
+        c3.metric("Provisjon (1%)", "0 kr")
+        
+        st.divider()
+        st.info("📭 Dashbordet er tomt. Ingen saker er registrert ennå.")
+        st.write("Når du begynner å legge inn klienter i **'🆕 Registrer Ny'**, vil statistikken vises her.")
         
 # --- 7. NY REGISTRERING (PRIVAT & BEDRIFT) ---
 elif valg == "➕ Ny Registrering":

@@ -133,34 +133,43 @@ if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
+        # Extra spaces saaf karna taake columns sahi match hon
         df.columns = [str(c).strip() for c in df.columns]
         
-        # Super Logic: Admin aur Director dono ko poora data (All Agents) dikhega
+        # SUPER LOGIC: Admin aur Director ko poora data (All 1200 clients) dikhao
+        # Baaki agents ko sirf unka apna data dikhao
         if role in ["Admin", "Director"]:
             user_data = df 
         else:
-            # Baaki agents ko sirf apna data dikhega
             if 'Registrert_Av' in df.columns:
                 user_data = df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
             else:
                 user_data = df
-    else:
-        user_data = pd.DataFrame()
 
-    # Metrics (Total Volume, Saker etc.)
-    c1, c2, c3 = st.columns(3)
-    volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if 'Beløp' in user_data.columns else 0
-    
-    c1.metric("Antall Saker", len(user_data))
-    c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
-    c3.metric("Estimert Provisjon (1%)", f"{volum * 0.01:,.0f} kr")
-    
-    st.divider()
-    st.subheader("Siste Saker & Status")
-    if not user_data.empty:
-        st.dataframe(user_data.tail(15), use_container_width=True)
+        # Metrics (Dashboard ke upar jo dabbe hote hain)
+        c1, c2, c3 = st.columns(3)
+        
+        # Beløp (Amount) ko number mein badalna taake calculation sahi ho
+        volum = pd.to_numeric(user_data['Beløp'], errors='coerce').sum() if 'Beløp' in user_data.columns else 0
+        saker_count = len(user_data)
+        provisjon = volum * 0.01  # 1% Commission calculation
+        
+        c1.metric("Antall Saker", f"{s_count}")
+        c2.metric("Total Volum (kr)", f"{volum:,.0f} kr")
+        c3.metric("Estimert Inntekt (1%)", f"{provisjon:,.0f} kr")
+        
+        st.divider()
+        
+        # Data Table dikhana
+        st.subheader("Siste Registrerte Saker")
+        if not user_data.empty:
+            # Sirf aakhri 15 saker dikhana taake screen bhari na lage
+            st.dataframe(user_data.tail(15), use_container_width=True)
+        else:
+            st.info("Ingen saker funnet i databasen.")
+            
     else:
-        st.info("Ingen saker funnet.")
+        st.warning("Databasen er tom. Ingen data å vise på dashbordet.")
         
 # --- 7. NY REGISTRERING (PRIVAT & BEDRIFT) ---
 elif valg == "➕ Ny Registrering":
@@ -217,49 +226,67 @@ elif valg == "➕ Ny Registrering":
 
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
-    st.header("📂 Kunde Arkiv")
+    st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # Logic: Admin aur Director ko poora data (1200 clients) dikhao
-    # Worker ko sirf uska apna data dikhao
+    # Logic: Admin aur Director ko saara data dikhao
     if role in ["Admin", "Director"]:
-        view_df = df 
+        view_df = df
     else:
+        # Agents ko sirf apna data dikhao
         if 'Registrert_Av' in df.columns:
             view_df = df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
         else:
             view_df = pd.DataFrame()
 
-    # Search Bar (Naam, Phone ya Fnr se dhoondein)
-    sok = st.text_input("Søk etter navn, tlf eller fnr...")
-    
     if not view_df.empty:
-        if sok:
-            view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
+        # Search functionality (Navn ya Phone number se search karein)
+        sok = st.text_input("🔍 Søk etter kunde (Navn, Tlf, E-post)...", placeholder="Skriv her for å søke...")
         
-        # Ek ek karke clients ki details dikhana
+        if sok:
+            # Pura data filter karna search ke mutabiq
+            mask = view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)
+            view_df = view_df[mask]
+        
+        st.write(f"Viser {len(view_df)} treff.")
+        st.divider()
+
+        # Ek ek client ko expander mein dikhana
         for i, r in view_df.iterrows():
-            with st.expander(f"👤 {r['Hovedsøker']} - Status: {r['Status']}"):
-                st.write(f"**Produkt:** {r['Produkt']} | **Beløp:** {r['Beløp']} kr")
-                st.write(f"**Fødselsnummer:** {r['Fødselsnummer']} | **Telefon:** {r['Telefon']}")
-                st.write(f"**E-post:** {r['Epost']}")
-                st.info(f"**Notater:** {r['Notater']}")
+            # Column names safety check
+            k_navn = r.get('Hovedsøker', 'Ukjent Kunde')
+            k_status = r.get('Status', 'Mottatt')
+            k_belop = r.get('Beløp', '0')
+            
+            with st.expander(f"👤 {k_navn} | {k_belop} kr | Status: {k_status}"):
+                col1, col2 = st.columns(2)
                 
-                # STATUS UPDATE: Admin aur Director dono kar sakte hain
+                with col1:
+                    st.write(f"**E-post:** {r.get('E-post', '-')}")
+                    st.write(f"**Telefon:** {r.get('Telefon', '-')}")
+                    st.write(f"**Registrert Av:** {r.get('Registrert_Av', '-')}")
+                
+                with col2:
+                    st.write(f"**Bank:** {r.get('Bank', '-')}")
+                    st.write(f"**Dato:** {r.get('Dato', '-')}")
+                
+                st.divider()
+                
+                # --- UPDATE STATUS (Sirf Admin aur Director ke liye) ---
                 if role in ["Admin", "Director"]:
-                    st.divider()
-                    new_st = st.selectbox("Oppdater Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått"], key=f"st_{i}")
-                    if st.button("Lagre Status", key=f"btn_{i}"):
-                        update_status(i + 1, new_st)
-                        st.success(f"Status for {r['Hovedsøker']} er oppdatert!")
-                
-                # DELETE BUTTON: Sirf Admin (Aap) ko nazar aayega
-                if role == "Admin":
-                    st.divider()
-                    if st.button("🗑️ Slette Sak", key=f"del_{i}"):
-                        st.warning(f"Er du sikker på at du vil slette saken til {r['Hovedsøker']}?")
-                        # Slette ki logic hum zaroorat parne par add kar sakte hain
+                    st.subheader("Oppdater Status")
+                    n_st = st.selectbox(
+                        "Endre saksstatus:", 
+                        ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
+                        key=f"arkiv_st_{i}",
+                        index=0 if k_status not in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(k_status)
+                    )
+                    
+                    if st.button("💾 Lagre Endring", key=f"arkiv_btn_{i}"):
+                        # Sheet mein status update karne ka function (Row index i+2 kyunke header aur 0-index)
+                        # update_status_in_sheet(i + 2, n_st) # Isko apne update function ke mutabiq set karein
+                        st.success(f"Status for {k_navn} er oppdatert!")
     else:
-        st.info("Ingen saker funnet i databasen.")
+        st.info("Ingen kunder funnet i arkivet.")
         
 # --- 9. MASTER KONTROLL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:

@@ -113,14 +113,17 @@ current_user = st.session_state['user_id']
 
 # --- 5. SIDEBAR NAVIGATION ---
 st.sidebar.title(f"👤 {current_user.capitalize()}")
+
+# Base options jo sab ko dikhengi
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 
-# Sirf Admin hi naye agents bana sakta hai (Director ko ye option nahi dikhega)
-if role == "Admin":
+# Super Power Logic: Admin aur Director dono ko "Ansatte Kontroll" aur "Master" ka access milega
+if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "🕵️ Master Kontrollpanel"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
+# Logout Button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

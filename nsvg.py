@@ -7,15 +7,41 @@ from datetime import datetime
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 
-# CSS for Professional Look
+# CSS for Dark & Light Mode Compatibility
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
-    .stExpander { background-color: #ffffff; border-radius: 10px; }
+    /* Main Background color adaptation */
+    .stApp {
+        transition: background-color 0.3s ease;
+    }
+    
+    /* Metrics Box styling (Dono modes mein readable rahega) */
+    div[data-testid="stMetric"] {
+        background-color: rgba(151, 166, 195, 0.15); /* Light transparent grey */
+        padding: 15px;
+        border-radius: 12px;
+        border: 1px solid rgba(128, 128, 128, 0.2);
+    }
+
+    /* Expander styling fix for visibility */
+    .streamlit-expanderHeader {
+        font-weight: bold;
+        color: var(--text-color); /* Automatically picks theme text color */
+    }
+
+    /* Table/Dataframe adjustment for dark mode */
+    .stDataFrame {
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-radius: 8px;
+    }
+    
+    /* Label and Input visibility */
+    label {
+        font-weight: 500 !important;
+        color: var(--text-color) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
-
 # --- 2. GOOGLE SHEETS ENGINE ---
 def connect_to_sheet(sheet_name):
     try:

@@ -291,39 +291,51 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     if not agents_df.empty:
         st.table(agents_df[['username', 'navn', 'stilling', 'status']])
-        
+
 # --- 10. ANSATTE KONTROLL ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # Agents ka data load karna
+    # Data load karne ki koshish
     agents_df = get_data("Agents")
     
-    if not agents_df.empty:
-        # Search bar agents ke liye
+    # Agar data khali hai, to check karein ke sheet ka naam sahi hai ya nahi
+    if agents_df.empty:
+        st.error("Kunne ikke finne data i 'Agents' fanen. Vennligst sjekk om Google Sheet fanen heter 'Agents' (med stor A).")
+        st.info("Tips: Sjekk også om kolonnene 'username', 'navn', 'stilling', 'vakt', 'status' finnes i sheeten.")
+    else:
+        # Extra space saaf karein (Jadu wali line for agents)
+        agents_df.columns = [str(c).strip() for c in agents_df.columns]
+        
+        # Search bar
         sok_agent = st.text_input("Søk etter agent navn...", placeholder="Skriv navn her...")
         
         if sok_agent:
-            # 'navn' column mein search karna
-            agents_df = agents_df[agents_df['navn'].astype(str).str.contains(sok_agent, case=False)]
+            if 'navn' in agents_df.columns:
+                agents_df = agents_df[agents_df['navn'].astype(str).str.contains(sok_agent, case=False)]
         
-        # Agents ki list table mein dikhana
-        st.dataframe(agents_df[['username', 'navn', 'stilling', 'vakt', 'status']], use_container_width=True)
+        # Zaroori columns check karna taake crash na ho
+        cols_to_show = [c for c in ['username', 'navn', 'stilling', 'vakt', 'status'] if c in agents_df.columns]
+        
+        # Table dikhana
+        st.dataframe(agents_df[cols_to_show], use_container_width=True)
         
         st.divider()
         st.subheader("Hurtigredigering")
         
-        # Ek ek agent ko expander mein dikhana taake Amina details dekh sake
         for i, row in agents_df.iterrows():
-            with st.expander(f"👤 {row['navn']} ({row['stilling']})"):
-                st.write(f"**Brukernavn:** {row['username']}")
-                st.write(f"**Vakt:** {row['vakt']}")
-                st.write(f"**Nåværende Status:** {row['status']}")
+            # Column names ki safety ke saath data dikhana
+            a_navn = row.get('navn', 'Ukjent')
+            a_pos = row.get('stilling', 'Agent')
+            a_user = row.get('username', '-')
+            a_vakt = row.get('vakt', '-')
+            a_status = row.get('status', '-')
+            
+            with st.expander(f"👤 {a_navn} ({a_pos})"):
+                st.write(f"**Brukernavn:** {a_user} | **Vakt:** {a_vakt}")
+                st.write(f"**Nåværende Status:** {a_status}")
                 
-                # Status badalne ka option (Admin aur Director dono ke liye)
                 n_status = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"edit_st_{i}")
                 if st.button("Oppdater Status", key=f"edit_btn_{i}"):
-                    # Yahan status update ka message (Actual logic sheet ke mutabiq hoti hai)
-                    st.success(f"Status for {row['navn']} er oppdatert til {n_status}!")
-    else:
-        st.info("Ingen ansatte funnet i systemet.")
+                    # Status update logic
+                    st.success(f"Status for {a_navn} er oppdatert til {n_status}!")

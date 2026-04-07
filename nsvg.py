@@ -178,18 +178,76 @@ if valg == "📊 Dashbord":
         st.info("📭 Dashbordet er tomt. Ingen saker er registrert ennå.")
         st.write("Når du begynner å legge inn klienter i **'🆕 Registrer Ny'**, vil statistikken vises her.")
         
-# --- 7. NY REGISTRERING (FINAL REVISED VERSION) ---
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+
+# --- 1. CONFIG & SETTINGS ---
+st.set_page_config(page_title="NSVG CRM - Professional", layout="wide")
+
+# --- 2. SPEED CACHING (Country List) ---
+@st.cache_data
+def get_country_list():
+    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
+    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
+    return base + others
+
+# --- 3. GOOGLE SHEETS CONNECTION ---
+def get_gsheet_client():
+    # GitHub Secrets se credentials uthana
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+    return gspread.authorize(creds)
+
+def load_data(sheet_name):
+    try:
+        client = get_gsheet_client()
+        # APNI SHEET KA NAAM YAHAN CHECK KAREIN (e.g. "MainDB" ya jo bhi aapne rakha hai)
+        sh = client.open("Kredittnova_Database").worksheet(sheet_name)
+        data = sh.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return pd.DataFrame()
+
+def add_data(sheet_name, row):
+    try:
+        client = get_gsheet_client()
+        sh = client.open("Kredittnova_Database").worksheet(sheet_name)
+        sh.append_row(row)
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
+
+# --- 4. DATA INITIALIZATION ---
+df = load_data("MainDB")
+current_user = "Iqbal Entrepreneur"
+
+# --- 5. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    st.title("🛡️ NSVG Portal")
+    st.write(f"Saksbehandler: **{current_user}**")
+    valg = st.radio("MENY", ["📊 Dashboard", "➕ Ny Registrering", "🗂️ Kunde Arkiv"])
+
+# --- 6. DASHBOARD ---
+if valg == "📊 Dashboard":
+    st.title("📊 Oversikt")
+    if not df.empty:
+        st.metric("Totale Søknader", len(df))
+        st.dataframe(df.tail(10), use_container_width=True)
+    else:
+        st.info("Ingen data funnet i Google Sheets.")
+
+# --- 7. NY REGISTRERING (FINAL COMPACT & FAST) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
-    
-    # Speed Optimization: Get cached country list
     countries = get_country_list()
 
-    # 1. Product Selection
     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
 
-    # --- DYNAMIC CHECKBOX (FORM SE BAHAR) ---
+    # Medsøker Checkbox (Instant UI Update)
     st.info("Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
     has_med = st.checkbox("✅ JA, legg til Medsøker (Ektefelle/Samboer)")
 
@@ -200,9 +258,9 @@ elif valg == "➕ Ny Registrering":
             st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
             f_navn = bc1.text_input("Firma Navn")
-            f_org = bc1.text_input("Organisasjonsnummer (9 siffer)")
-            f_eier = bc2.text_area("Navn & Personnummer på alle eiere")
-            f_aksjer = bc2.text_input("Aksjefordeling (%)")
+            f_org = bc1.text_input("Organisasjonsnummer")
+            f_eier = bc2.text_area("Eiere & Fnr")
+            f_aksjer = bc2.text_input("Aksjer (%)")
             st.divider()
 
         # --- HOVEDSØKER SECTION ---
@@ -212,105 +270,71 @@ elif valg == "➕ Ny Registrering":
         fnr = c1.text_input("Fødselsnummer (11 siffer)")
         epost = c1.text_input("E-post")
         tlf = c2.text_input("Telefon")
-        sivil = c2.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt", "Enke/Enkemann"])
-        pass_land = c1.selectbox("Statsborgerskap (Pass fra)", countries, index=0)
-        botid = c2.text_input("Botid i Norge (Hvis ikke norsk pass)")
+        sivil = c2.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt"])
+        pass_land = c1.selectbox("Statsborgerskap", countries, index=0)
+        botid = c2.text_input("Botid i Norge")
 
-        st.markdown("#### 💼 Arbeid & Inntekt (Hovedsøker)")
+        st.markdown("#### 💼 Arbeid & Inntekt")
         l1, l2, l3 = st.columns(3)
-        lonn = l1.number_input("Årslønn Brutto (kr)", min_value=0, step=1000, format="%d")
-        arbeidsgiver = l2.text_input("Arbeidsgiver")
-        ansatt_tid = l3.text_input("Ansettelsestid (Hvor lenge?)")
-        stilling_type = l1.selectbox("Ansettelsesform", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"])
-        ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
-        still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
+        lonn = l1.number_input("Årslønn Brutto (kr)", 0, step=1000)
+        arb = l2.text_input("Arbeidsgiver")
+        ansatt_tid = l3.text_input("Ansettelsestid")
+        ekstra_jobb = l2.number_input("Bi-inntekt (kr/år)", 0)
 
         st.divider()
 
-        # --- FINANCIAL & DEBT SECTION ---
-        st.subheader("🏠 Finansiell Status & Søknad")
+        # --- FINANCIALS ---
+        st.subheader("🏠 Økonomi & Gjeld")
         f1, f2 = st.columns(2)
-        belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d")
-        ek = f1.number_input("Egenkapital (kr)", 0, step=10000, format="%d")
-        ek_kilde = f1.selectbox("Egenkapital Kilde", ["Sparing", "Salg av bolig", "Arv/Gave", "Lån fra familie", "Annet"])
-        barn = f2.number_input("Antall Barn (under 18 år)", 0)
+        belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000)
+        ek = f1.number_input("Egenkapital (kr)", 0, step=10000)
+        barn = f2.number_input("Antall Barn", 0)
         biler = f2.number_input("Antall Biler", 0)
-        sfo = f2.selectbox("SFO / Barnehage utgifter?", ["Nei", "Ja"])
+        sfo = f2.selectbox("SFO / Barnehage?", ["Nei", "Ja"])
 
-        st.markdown("#### 💳 Eksisterende Gjeld (Samlet)")
         g1, g2, g3 = st.columns(3)
-        g_bolig = g1.number_input("Nåværende Boliglån (kr)", 0, step=10000, format="%d")
-        g_bil = g2.number_input("Billån (kr)", 0, step=5000, format="%d")
-        g_forbruk = g3.number_input("Forbrukslån (kr)", 0, step=5000, format="%d")
-        g_kort = g1.number_input("Kredittkort Ramme (kr)", 0, step=5000, format="%d")
-        g_studie = g2.number_input("Studielån (kr)", 0, step=5000, format="%d")
+        g_bolig = g1.number_input("Boliglån", 0)
+        g_bil = g2.number_input("Billån", 0)
+        g_forbruk = g3.number_input("Forbrukslån", 0)
+        g_kort = g1.number_input("Kredittkort Ramme", 0)
+        g_studie = g2.number_input("Studielån", 0)
 
-        # --- MEDSØKER SECTION (100% Identical & At the Bottom) ---
+        # --- MEDSØKER SECTION ---
         m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb = "", "", "", "", 0, ""
         m_pass = "Norge"
-
         if has_med:
             st.divider()
-            st.subheader("👥 Medsøker Detaljer (Full Profil)")
+            st.subheader("👥 Medsøker Detaljer")
             mc1, mc2 = st.columns(2)
             m_navn = mc1.text_input("Fullt Navn (Medsøker)")
-            m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
+            m_fnr = mc1.text_input("Fødselsnummer (Medsøker)")
             m_epost = mc1.text_input("E-post (Medsøker)")
             m_tlf = mc2.text_input("Telefon (Medsøker)")
             m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
-            
-            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
-            ml1, ml2 = st.columns(2)
-            m_lonn = ml1.number_input("Årslønn Brutto (Medsøker - kr)", 0, step=1000, format="%d")
-            m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
+            m_lonn = mc1.number_input("Årslønn (Medsøker)", 0)
+            m_arb = mc2.text_input("Arbeidsgiver (Medsøker)")
 
         st.divider()
-        notater = st.text_area("Interne Notater (Viktig info for banken)")
-        st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
-
-        # --- SUBMIT BUTTON ---
-        if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
-            fmt_sum = f"{belop:,.0f}".replace(",", " ")
+        notater = st.text_area("Notater / Kommentarer")
+        
+        # SUBMIT
+        if st.form_submit_button("🚀 SEND SØKNAD"):
             tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
-            
-            # Row structure that matches your NEW Google Sheet exactly
             new_row = [
-                "AUTO", # ID
-                datetime.now().strftime("%d-%m-%Y"), # Dato
-                prod, # Produkt
-                navn, # Navn
-                fnr, # Fnr
-                epost, # Epost
-                tlf, # Tlf
-                sivil, # Sivilstatus
-                "Bedrift" if is_bedrift else "Privat", # Type
-                "Active", # Status
-                f_navn, # Firma
-                lonn, # Lønn
-                barn, # Barn
-                sfo, # SFO
-                ek, # EK
-                tot_gjeld, # Gjeld
-                biler, # Biler
-                belop, # Lånebeløp
-                f_org, # OrgNr
-                f_eier, # Eiere
-                f_aksjer, # Aksjer
-                m_navn, # Medsøker_Navn
-                m_fnr, # Medsøker_Fnr
-                m_epost, # Medsøker_Epost
-                m_tlf, # Medsøker_Tlf
-                m_lonn, # Medsøker_Lønn
-                m_arb, # Medsøker_Arbeid
-                notater, # Notater
-                f"P1: {pass_land} | P2: {m_pass}", # Pass_Info
-                current_user, # Saksbehandler
-                "Mottatt" # Bank_Status
+                len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil, 
+                "Bedrift" if is_bedrift else "Privat", "Active", f_navn, lonn, barn, sfo, ek, 
+                tot_gjeld, biler, belop, f_org, f_eier, f_aksjer, 
+                m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater, 
+                f"P1: {pass_land} | P2: {m_pass}", current_user, "Mottatt"
             ]
-            
             add_data("MainDB", new_row)
-            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")
+            st.success("✅ Søknad er sendt til Google Sheets!")
             st.balloons()
+
+# --- 8. KUNDE ARKIV ---
+elif valg == "🗂️ Kunde Arkiv":
+    st.header("🗂️ Arkiv")
+    st.dataframe(df, use_container_width=True)
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

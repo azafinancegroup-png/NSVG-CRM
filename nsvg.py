@@ -189,6 +189,11 @@ elif valg == "➕ Ny Registrering":
     # 195 Countries List
     countries = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"] + sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Antigua og Barbuda", "Argentina", "Armenia", "Australia", "Aserbajdsjan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgia", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia-Hercegovina", "Botswana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea North", "Korea South", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Oman", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "UAE", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"])
 
+    # --- 2. MEDSØKER CHECKBOX (FORM SE BAHAR) ---
+    # Isay form se bahar rakha hai taake click karte hi niche fields khul jayein
+    st.info("Har kunden en Medsøker? Klikk nedenfor før du fyller ut skjemaet.")
+    has_med = st.checkbox("✅ JA, legg til Medsøker")
+
     # --- MAIN FORM START ---
     with st.form("main_bank_form"):
         if is_bedrift:
@@ -215,7 +220,7 @@ elif valg == "➕ Ny Registrering":
         l1, l2, l3 = st.columns(3)
         lonn = l1.number_input("Årslønn Brutto (kr)", min_value=0, step=1000, format="%d")
         arbeidsgiver = l2.text_input("Arbeidsgiver")
-        ansatt_tid = l3.text_input("Ansettelsestid (f.eks 3 år)")
+        ansatt_tid = l3.text_input("Ansettelsestid (Hvor lenge?)")
         stilling_type = l1.selectbox("Ansettelsesform", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"])
         ekstra_jobb = l2.number_input("Bi-inntekt (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
@@ -242,14 +247,11 @@ elif valg == "➕ Ny Registrering":
 
         st.divider()
 
-        # --- MEDSØKER (Bottom Position) ---
-        st.subheader("👥 Medsøker Informasjon")
-        has_med = st.checkbox("Klikk her hvis det er en Medsøker")
-        
+        # --- MEDSØKER (Bottom Position & Dynamic) ---
         m_navn, m_fnr, m_lonn, m_arb, m_tid, m_pass, m_still_type = "", "", 0, "", "", "Norge", "Fast ansatt"
-
+        
         if has_med:
-            st.info("Fyll ut detaljer for medsøker nedenfor")
+            st.subheader("👥 Medsøker Informasjon")
             mc1, mc2 = st.columns(2)
             m_navn = mc1.text_input("Fullt Navn (Medsøker)")
             m_fnr = mc1.text_input("Fødselsnummer (Medsøker)")
@@ -261,8 +263,8 @@ elif valg == "➕ Ny Registrering":
             m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
             m_tid = ml3.text_input("Ansettelsestid (Medsøker)")
             m_still_type = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"], key="m_job_unique")
+            st.divider()
 
-        st.divider()
         notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
@@ -273,13 +275,13 @@ elif valg == "➕ Ny Registrering":
             
             new_row = [
                 len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil, 
-                "Bedrift" if is_bedrift else "Privat", "Aktiv", f_navn if is_bedrift else "", lonn, 
+                "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "", lonn, 
                 barn, sfo, ek, tot_gjeld, biler, belop, f_org if is_bedrift else "", 
                 f_navn if is_bedrift else "", f_eier if is_bedrift else "", 
-                m_navn, m_lonn, notater, f"Pass: {pass_land} | Med: {m_pass}", current_user, "Mottatt"
+                m_navn, m_lonn, notater, f"P1: {pass_land} | P2: {m_pass}", current_user, "Mottatt"
             ]
             add_data("MainDB", new_row)
-            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")            
+            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

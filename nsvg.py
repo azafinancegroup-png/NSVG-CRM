@@ -328,6 +328,12 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
 
 tte funnet. Sjekk 'Agents' fanen i Google Sheets.")
 
+else:
+        st.warning("Ingen ansatte funnet. Sjekk 'Agents' fanen i Google Sheets.")
+
+# --- 11. FOOTER (Optional) ---
+st.sidebar.markdown("---")
+st.sidebar.caption("NSVG CRM v2.0 | © 2026 Iqbal Entrepreneur")
 
 # --- 10. ANSATTE KONTROLL (Advanced & Fixed) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:

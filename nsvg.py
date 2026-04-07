@@ -178,18 +178,19 @@ if valg == "📊 Dashbord":
         st.info("📭 Dashbordet er tomt. Ingen saker er registrert ennå.")
         st.write("Når du begynner å legge inn klienter i **'🆕 Registrer Ny'**, vil statistikken vises her.")
         
-# --- 7. NY REGISTRERING (CLEAN VERSION) ---
+# --- 7. NY REGISTRERING (FIXED DYNAMIC POSITIONING) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     
-    # Product Selection
+    # 1. Product Selection
     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
 
     # 195 Countries List
-    countries = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"] + sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Antigua og Barbuda", "Argentina", "Armenia", "Australia", "Aserbajdsjan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgia", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia-Hercegovina", "Botswana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea North", "Korea South", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Oman", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "UAE", "Uruguay", "Uzritan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"])
+    countries = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"] + sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Antigua og Barbuda", "Argentina", "Armenia", "Australia", "Aserbajdsjan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgia", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia-Hercegovina", "Botswana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea North", "Korea South", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Oman", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "UAE", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"])
 
-    with st.form("form_reg"):
+    # --- MAIN FORM START ---
+    with st.form("main_bank_form"):
         if is_bedrift:
             st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
@@ -221,25 +222,6 @@ elif valg == "➕ Ny Registrering":
 
         st.divider()
 
-        # --- MEDSØKER ---
-        st.subheader("👥 Medsøker Informasjon")
-        has_med = st.checkbox("Legg til Medsøker")
-        m_navn, m_fnr, m_lonn, m_arb, m_tid, m_pass, m_still_type = "", "", 0, "", "", "Norge", "Fast ansatt"
-
-        if has_med:
-            mc1, mc2 = st.columns(2)
-            m_navn = mc1.text_input("Fullt Navn (Medsøker)")
-            m_fnr = mc1.text_input("Fødselsnummer (Medsøker)")
-            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="m_pass_box")
-            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
-            ml1, ml2, ml3 = st.columns(3)
-            m_lonn = ml1.number_input("Årslønn Medsøker (kr)", 0, step=1000, format="%d")
-            m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
-            m_tid = ml3.text_input("Ansettelsestid (Medsøker)")
-            m_still_type = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"], key="m_job_type")
-
-        st.divider()
-
         # --- FINANCIAL & DEBT ---
         st.subheader("🏠 Finansiell Status & Søknad")
         f1, f2 = st.columns(2)
@@ -258,12 +240,37 @@ elif valg == "➕ Ny Registrering":
         g_kort = g1.number_input("Kredittkort Ramme (kr)", 0, step=5000, format="%d")
         g_studie = g2.number_input("Studielån (kr)", 0, step=5000, format="%d")
 
-        notater = st.text_area("Interne Notater (F.eks spesielle betingelser)")
+        st.divider()
+
+        # --- MEDSØKER (Bottom Position) ---
+        st.subheader("👥 Medsøker Informasjon")
+        has_med = st.checkbox("Klikk her hvis det er en Medsøker")
+        
+        m_navn, m_fnr, m_lonn, m_arb, m_tid, m_pass, m_still_type = "", "", 0, "", "", "Norge", "Fast ansatt"
+
+        if has_med:
+            st.info("Fyll ut detaljer for medsøker nedenfor")
+            mc1, mc2 = st.columns(2)
+            m_navn = mc1.text_input("Fullt Navn (Medsøker)")
+            m_fnr = mc1.text_input("Fødselsnummer (Medsøker)")
+            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="m_pass_unique")
+            
+            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
+            ml1, ml2, ml3 = st.columns(3)
+            m_lonn = ml1.number_input("Årslønn Medsøker (kr)", 0, step=1000, format="%d")
+            m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
+            m_tid = ml3.text_input("Ansettelsestid (Medsøker)")
+            m_still_type = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"], key="m_job_unique")
+
+        st.divider()
+        notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
-        if st.form_submit_button("🚀 SEND SØKNAD"):
+        # --- SUBMIT BUTTON ---
+        if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
             fmt_sum = f"{belop:,.0f}".replace(",", " ")
             tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
+            
             new_row = [
                 len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil, 
                 "Bedrift" if is_bedrift else "Privat", "Aktiv", f_navn if is_bedrift else "", lonn, 
@@ -272,8 +279,7 @@ elif valg == "➕ Ny Registrering":
                 m_navn, m_lonn, notater, f"Pass: {pass_land} | Med: {m_pass}", current_user, "Mottatt"
             ]
             add_data("MainDB", new_row)
-            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")
-            
+            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")            
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

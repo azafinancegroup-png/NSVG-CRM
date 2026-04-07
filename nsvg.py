@@ -294,7 +294,6 @@ elif valg == "📂 Kunde Arkiv":
                         st.success(f"Status for {k_navn} er oppdatert!")
     else:
         st.info("Ingen kunder funnet i arkivet.")
-        
 # --- 9. MASTER KONTROLL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")
@@ -319,32 +318,23 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
             else:
                 st.error("Vennligst fyll ut alle feltene.")
 
-    # Ansatte ki list dikhana (Taki Amina ko sab nazar aayein)
+    # Ansatte ki list dikhana
     st.divider()
     st.subheader("👥 Oversikt over alle Ansatte")
     agents_df = get_data("Agents")
     if not agents_df.empty:
         st.table(agents_df[['username', 'navn', 'stilling', 'status']])
-
-tte funnet. Sjekk 'Agents' fanen i Google Sheets.")
-
-else:
-        st.warning("Ingen ansatte funnet. Sjekk 'Agents' fanen i Google Sheets.")
-
-# --- 11. FOOTER (Optional) ---
-st.sidebar.markdown("---")
-st.sidebar.caption("NSVG CRM v2.0 | © 2026 Iqbal Entrepreneur")
+    else:
+        st.info("Ingen ansatte funnet i databasen.")
 
 # --- 10. ANSATTE KONTROLL (Advanced & Fixed) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # 1. Data load karna
     agents_df = get_data("Agents")
-    main_df = df # Yeh global load se aa raha hai
+    main_df = df # Global load se aa raha hai
 
     if not agents_df.empty:
-        # Search bar
         sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...")
         if sok_agent:
             agents_df = agents_df[agents_df.astype(str).apply(lambda x: x.str.contains(sok_agent, case=False)).any(axis=1)]
@@ -363,15 +353,13 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                     st.write(f"**Vakt:** {row.get('vakt', '-')}")
                     st.write(f"**Status:** {row.get('status', '-')}")
                 
-                # Agent ki sales/cases ka hisab
-                agent_saker = pd.DataFrame() # Khali start karein
+                agent_saker = pd.DataFrame()
                 if not main_df.empty and 'Registrert_Av' in main_df.columns:
                     agent_saker = main_df[main_df['Registrert_Av'].astype(str).str.lower() == a_user.lower()]
                 
                 with col2:
                     if not agent_saker.empty:
                         antall = len(agent_saker)
-                        # Beløp column ko number mein badalna safety ke liye
                         volum = pd.to_numeric(agent_saker['Beløp'], errors='coerce').sum()
                         st.metric("Antall Saker", antall)
                         st.write(f"**Total Volum:** {volum:,.0f} kr")
@@ -380,9 +368,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
 
                 st.divider()
                 
-                # Action Buttons
                 c_act1, c_act2, c_act3 = st.columns(3)
-                
                 with c_act1:
                     if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
                         if not agent_saker.empty:
@@ -403,4 +389,8 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                         else:
                             st.info("Kun Admin kan slette.")
     else:
-        st.warning("Ingen ansatte funnet.")
+        st.warning("Ingen ansatte funnet. Sjekk 'Agents' fanen i Google Sheets.")
+
+# --- 11. FOOTER ---
+st.sidebar.markdown("---")
+st.sidebar.caption("NSVG CRM v2.0 | © 2026 Iqbal Entrepreneur")

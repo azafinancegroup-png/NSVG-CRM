@@ -7,24 +7,15 @@ from datetime import datetime
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 
-# CSS for Dark & Light Mode Compatibility
+# CSS Styling
 st.markdown("""
     <style>
     .stApp { transition: background-color 0.3s ease; }
     div[data-testid="stMetric"] {
         background-color: rgba(151, 166, 195, 0.15);
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid rgba(128, 128, 128, 0.2);
+        padding: 15px; border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2);
     }
-    .streamlit-expanderHeader {
-        font-weight: bold;
-        color: var(--text-color);
-    }
-    .stDataFrame {
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 8px;
-    }
+    .streamlit-expanderHeader { font-weight: bold; color: var(--text-color); }
     label { font-weight: 500 !important; color: var(--text-color) !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -33,13 +24,12 @@ st.markdown("""
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # Streamlit secrets se credentials utha raha hai
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Note: Agar file name change hai to yahan check karlein
+        # YAHAN FILE NAME CHECK KAREIN: "NSVG_CRM_Data" ya "Kredittnova_Database"
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
-    except:
+    except Exception as e:
         return None
 
 def get_data(sheet_name):
@@ -54,14 +44,6 @@ def get_data(sheet_name):
 def add_data(sheet_name, row_list):
     sh = connect_to_sheet(sheet_name)
     if sh: sh.append_row(row_list)
-
-def update_status_in_sheet(row_index, new_status):
-    sh = connect_to_sheet("MainDB")
-    if sh:
-        # Status column usually 27 ya 31 hoti hai sequence ke mutabiq
-        sh.update_cell(row_index, 31, new_status) 
-        return True
-    return False
 
 @st.cache_data
 def get_country_list():
@@ -87,7 +69,7 @@ if not st.session_state['logged_in']:
             else: st.error("Feil brukernavn eller passord!")
     st.stop()
 
-# --- 4. DATA LOAD ---
+# --- 4. GLOBAL DATA ---
 df = get_data("MainDB")
 role = st.session_state['user_role']
 current_user = st.session_state['user_id']
@@ -107,13 +89,11 @@ if st.sidebar.button("🔴 Logg ut"):
 
 # --- 6. DASHBORD ---
 if valg == "📊 Dashbord":
-    st.header(f"Oversikt - {current_user.capitalize()}")
+    st.header(f"Oversikt")
     c1, c2, c3 = st.columns(3)
     if not df.empty:
-        if role in ["Admin", "Director"]:
-            view_data = df
-        else:
-            view_data = df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+        # Filter data based on role
+        view_data = df if role in ["Admin", "Director"] else df[df.get('Registrert_Av', '').astype(str).str.lower() == current_user.lower()]
         
         b_col = next((c for c in view_data.columns if c.lower() in ['beløp', 'sum']), None)
         total_v = pd.to_numeric(view_data[b_col], errors='coerce').sum() if b_col else 0
@@ -124,16 +104,16 @@ if valg == "📊 Dashbord":
         st.divider()
         st.dataframe(view_data.tail(15), use_container_width=True)
     else:
-        st.info("Ingen saker funnet.")
+        st.info("Ingen data mojud hai.")
 
-# --- 7. NY REGISTRERING (With Medsøker Logic) ---
+# --- 7. NY REGISTRERING ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
     has_med = st.checkbox("✅ JA, legg til Medsøker")
 
-    with st.form("main_form", clear_on_submit=True):
+    with st.form("reg_form", clear_on_submit=True):
         if is_bedrift:
             st.subheader("🏢 Bedrift Detaljer")
             bc1, bc2 = st.columns(2)
@@ -141,39 +121,25 @@ elif valg == "➕ Ny Registrering":
             f_org = bc1.text_input("Organisasjonsnummer")
             f_eier = bc2.text_area("Eiere & Fnr")
             f_aksjer = bc2.text_input("Aksjer (%)")
-            st.divider()
         else:
             f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
 
         st.subheader("👤 Hovedsøker")
         c1, c2 = st.columns(2)
         navn = c1.text_input("Fullt Navn")
-        fnr = c1.text_input("Fødselsnummer (11 siffer)")
+        fnr = c1.text_input("Fødselsnummer")
         epost = c1.text_input("E-post")
         tlf = c2.text_input("Telefon")
         sivil = c2.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt"])
         pass_land = c1.selectbox("Statsborgerskap", countries)
         botid = c2.text_input("Botid i Norge")
 
-        l1, l2, l3 = st.columns(3)
-        lonn = l1.number_input("Årslønn Brutto", 0)
-        arb = l2.text_input("Arbeidsgiver")
-        ans_tid = l3.text_input("Ansettelsestid")
-
         st.subheader("🏠 Økonomi")
         f1, f2 = st.columns(2)
-        belop = f1.number_input("Lånebeløp", 0)
+        belop = f1.number_input("Ønsket Lånebeløp", 0)
         ek = f1.number_input("Egenkapital", 0)
-        barn = f2.number_input("Barn", 0)
-        biler = f2.number_input("Biler", 0)
-        sfo = f2.selectbox("SFO?", ["Nei", "Ja"])
-
-        g1, g2, g3 = st.columns(3)
-        g_bolig = g1.number_input("Boliglån", 0)
-        g_bil = g2.number_input("Billån", 0)
-        g_forbruk = g3.number_input("Forbrukslån", 0)
-        g_kort = g1.number_input("Kredittkort", 0)
-        g_studie = g2.number_input("Studielån", 0)
+        
+        g_bolig = st.number_input("Eksisterende Gjeld (Totalt)", 0)
 
         m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, m_pass = "", "", "", "", 0, "", "Norge"
         if has_med:
@@ -182,66 +148,47 @@ elif valg == "➕ Ny Registrering":
             mc1, mc2 = st.columns(2)
             m_navn = mc1.text_input("Navn (Medsøker)")
             m_fnr = mc1.text_input("Fnr (Medsøker)")
-            m_epost = mc1.text_input("E-post (Medsøker)")
-            m_tlf = mc2.text_input("Tlf (Medsøker)")
-            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="m_pass")
             m_lonn = mc1.number_input("Lønn (Medsøker)", 0)
-            m_arb = mc2.text_input("Arbeidsgiver (Medsøker)")
+            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="med_p")
 
-        st.divider()
-        notater = st.text_area("Kommentarer")
+        notater = st.text_area("Notater")
 
         if st.form_submit_button("🚀 SEND SØKNAD"):
-            tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
-            row = [
+            new_row = [
                 len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
-                "Bedrift" if is_bedrift else "Privat", "Active", f_navn, lonn, barn, sfo, ek,
-                tot_gjeld, biler, belop, f_org, f_eier, f_aksjer,
-                m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater,
+                "Bedrift" if is_bedrift else "Privat", "Active", f_navn, 0, 0, "Nei", ek,
+                g_bolig, 0, belop, f_org, f_eier, f_aksjer,
+                m_navn, m_fnr, m_epost, m_tlf, m_lonn, "", notater,
                 f"P1: {pass_land} | P2: {m_pass}", current_user, "Mottatt"
             ]
-            add_data("MainDB", row)
-            st.success("Søknad lagret!")
-            st.balloons()
+            add_data("MainDB", new_row)
+            st.success("Søknad Registrert!")
 
-# --- 8. KUNDE ARKIV (Original Logic) ---
+# --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv")
-    view_df = df if role in ["Admin", "Director"] else df[df['Registrert_Av'].astype(str).str.lower() == current_user.lower()]
+    view_df = df if role in ["Admin", "Director"] else df[df.get('Registrert_Av', '').astype(str).str.lower() == current_user.lower()]
     
     if not view_df.empty:
-        sok = st.text_input("🔍 Søk kunde...")
+        sok = st.text_input("🔍 Søk...")
         if sok:
-            mask = view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)
-            view_df = view_df[mask]
+            view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
         
         for i, r in view_df.iterrows():
-            with st.expander(f"👤 {r.get('Hovedsøker', 'Ukjent')} | {r.get('Beløp', '0')} kr"):
-                c1, c2 = st.columns(2)
-                c1.write(f"**E-post:** {r.get('E-post', '-')}")
-                c1.write(f"**Telefon:** {r.get('Telefon', '-')}")
-                c2.write(f"**Status:** {r.get('Status', 'Mottatt')}")
-                c2.write(f"**Dato:** {r.get('Dato', '-')}")
-                
-                if role in ["Admin", "Director"]:
-                    n_st = st.selectbox("Endre Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], key=f"st_{i}")
-                    if st.button("Lagre Status", key=f"btn_{i}"):
-                        update_status_in_sheet(i + 2, n_st)
-                        st.success("Status oppdatert!")
+            with st.expander(f"👤 {r.get('Hovedsøker', 'Kunde')} | Status: {r.get('Status', 'Mottatt')}"):
+                st.write(r)
 
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
-    st.header("🕵️ Ny Agent Registrering")
-    with st.form("agent_form"):
-        u = st.text_input("Login ID").lower().strip()
-        p = st.text_input("Passord", type="password")
-        n = st.text_input("Fullt Navn")
-        pos = st.selectbox("Stilling", ["Senior Agent", "Junior Agent", "Trainee"])
-        if st.form_submit_button("✅ Aktiver Agent"):
-            if u and p and n:
-                add_data("Users", [u, p, "Worker"])
-                add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signed"])
-                st.success(f"Agent {n} aktivert!")
+    st.header("🕵️ Agent Kontroll")
+    with st.form("new_agent"):
+        u = st.text_input("Brukernavn").lower().strip()
+        p = st.text_input("Passord")
+        n = st.text_input("Navn")
+        if st.form_submit_button("✅ Lagre Agent"):
+            add_data("Users", [u, p, "Worker"])
+            add_data("Agents", [u, n, "Senior Agent", "09-17", "Aktiv", "Signed"])
+            st.success("Agent opprettet!")
 
 # --- 10. ANSATTE KONTROLL ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
@@ -249,15 +196,22 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     if not agents_df.empty:
         for i, row in agents_df.iterrows():
+            # SAFE CHECK FOR COLUMN
             a_user = str(row.get('username', '')).strip()
-            with st.expander(f"👤 {row.get('navn', 'Ukjent')} ({a_user})"):
-                st.write(f"**Stilling:** {row.get('stilling', '-')}")
-                st.write(f"**Status:** {row.get('status', '-')}")
-                # Count cases for this agent
-                agent_saker = df[df['Registrert_Av'].astype(str).str.lower() == a_user.lower()]
-                st.metric("Antall Saker", len(agent_saker))
-                if st.button("Se Saker", key=f"v_{i}"):
-                    st.dataframe(agent_saker)
+            a_navn = row.get('navn', 'Ukjent')
+            
+            with st.expander(f"👤 {a_navn} ({a_user})"):
+                st.write(f"Status: {row.get('status', 'Aktiv')}")
+                
+                # FIXING KEYERROR: Use .get() or check columns
+                reg_col = 'Registrert_Av'
+                if reg_col in df.columns:
+                    agent_saker = df[df[reg_col].astype(str).str.lower() == a_user.lower()]
+                    st.metric("Antall Saker", len(agent_saker))
+                    if not agent_saker.empty:
+                        st.dataframe(agent_saker)
+                else:
+                    st.warning(f"Column '{reg_col}' missing in MainDB sheet.")
 
 # --- FOOTER ---
 st.sidebar.markdown("---")

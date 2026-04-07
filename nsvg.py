@@ -326,14 +326,16 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     if not agents_df.empty:
         st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL (Advanced) ---
+tte funnet. Sjekk 'Agents' fanen i Google Sheets.")
+
+
+# --- 10. ANSATTE KONTROLL (Advanced & Fixed) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # 1. Agents ka data load karna
+    # 1. Data load karna
     agents_df = get_data("Agents")
-    # 2. Main Clients data load karna (Cases check karne ke liye)
-    main_df = df 
+    main_df = df # Yeh global load se aa raha hai
 
     if not agents_df.empty:
         # Search bar
@@ -347,7 +349,6 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
             a_user = str(row.get('username', '')).strip()
             a_navn = row.get('navn', 'Ukjent')
             
-            # Expander kholne par details dikhengi
             with st.expander(f"👤 {a_navn} (ID: {a_user})"):
                 col1, col2 = st.columns(2)
                 
@@ -356,46 +357,44 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                     st.write(f"**Vakt:** {row.get('vakt', '-')}")
                     st.write(f"**Status:** {row.get('status', '-')}")
                 
+                # Agent ki sales/cases ka hisab
+                agent_saker = pd.DataFrame() # Khali start karein
+                if not main_df.empty and 'Registrert_Av' in main_df.columns:
+                    agent_saker = main_df[main_df['Registrert_Av'].astype(str).str.lower() == a_user.lower()]
+                
                 with col2:
-                    # --- AGENT KI SAKER (CASES) DHUNDNA ---
-                    if not main_df.empty and 'Registrert_Av' in main_df.columns:
-                        agent_saker = main_df[main_df['Registrert_Av'].astype(str).str.lower() == a_user.lower()]
+                    if not agent_saker.empty:
                         antall = len(agent_saker)
-                        total_volum = pd.to_numeric(agent_saker['Beløp'], errors='coerce').sum()
-                        
+                        # Beløp column ko number mein badalna safety ke liye
+                        volum = pd.to_numeric(agent_saker['Beløp'], errors='coerce').sum()
                         st.metric("Antall Saker", antall)
-                        st.write(f"**Total Volum:** {total_volum:,.0f} kr")
+                        st.write(f"**Total Volum:** {volum:,.0f} kr")
                     else:
-                        st.info("Ingen saker registrert på denne agenten.")
+                        st.info("Ingen saker registrert.")
 
                 st.divider()
                 
-                # --- ACTION BUTTONS ---
+                # Action Buttons
                 c_act1, c_act2, c_act3 = st.columns(3)
                 
                 with c_act1:
                     if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
-                       with c_act1:
-                    # BUTTON: See Saker (Sirf tab chale jab data mojud ho)
-                    if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
-                        # Safety Check: Check karein variable bana hai ya nahi
-                        if 'agent_saker' in locals() and not agent_saker.empty:
-                            st.subheader(f"Saker for {a_navn}")
+                        if not agent_saker.empty:
+                            st.subheader(f"Siste 10 saker for {a_navn}")
                             st.dataframe(agent_saker.tail(10), use_container_width=True)
                         else:
-                            st.info(f"Ingen saker registrert på {a_navn} ennå.")                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}")
+                            st.warning("Ingen data å vise.")
+
+                with c_act2:
+                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}")
                     if st.button("💾 Lagre Status", key=f"save_st_{i}"):
-                        st.success(f"Status oppdatert for {a_navn}!")
+                        st.success(f"Status oppdatert!")
 
                 with c_act3:
-                    # --- SLETTE (DELETE) OPTION ---
-                    # Admin ko full delete, Director ko warning ke saath
                     if st.button(f"🗑️ Slette Profil", key=f"del_agent_{i}"):
                         if role == "Admin":
-                            st.error(f"Er du sikker på at du vil slette {a_user}?")
-                            st.warning("Gå til Google Sheets for å slette raden permanent.")
+                            st.error(f"Slette {a_user}? Gjør dette manuelt i Google Sheets.")
                         else:
-                            st.info("Kun Admin kan slette profiler permanent.")
-
+                            st.info("Kun Admin kan slette.")
     else:
-        st.warning("Ingen ansatte funnet. Sjekk 'Agents' fanen i Google Sheets.")
+        st.warning("Ingen ansatte funnet.")

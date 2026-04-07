@@ -375,12 +375,15 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                 
                 with c_act1:
                     if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
-                        st.subheader(f"Saker for {a_navn}")
-                        st.dataframe(agent_saker.tail(10)) # Aakhri 10 cases
-
-                with c_act2:
-                    # Status badalne ka option
-                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}")
+                       with c_act1:
+                    # BUTTON: See Saker (Sirf tab chale jab data mojud ho)
+                    if st.button(f"📂 Se Saker", key=f"view_saker_{i}"):
+                        # Safety Check: Check karein variable bana hai ya nahi
+                        if 'agent_saker' in locals() and not agent_saker.empty:
+                            st.subheader(f"Saker for {a_navn}")
+                            st.dataframe(agent_saker.tail(10), use_container_width=True)
+                        else:
+                            st.info(f"Ingen saker registrert på {a_navn} ennå.")                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}")
                     if st.button("💾 Lagre Status", key=f"save_st_{i}"):
                         st.success(f"Status oppdatert for {a_navn}!")
 

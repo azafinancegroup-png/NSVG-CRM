@@ -178,23 +178,24 @@ if valg == "📊 Dashbord":
         st.info("📭 Dashbordet er tomt. Ingen saker er registrert ennå.")
         st.write("Når du begynner å legge inn klienter i **'🆕 Registrer Ny'**, vil statistikken vises her.")
         
-# --- 7. NY REGISTRERING (COMPLETE SYMMETRIC VERSION) ---
+# --- 7. NY REGISTRERING (FINAL REVISED VERSION) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     
+    # Speed Optimization: Get cached country list
+    countries = get_country_list()
+
     # 1. Product Selection
     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
-
-    # Countries List
-    countries = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"] + sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
 
     # --- DYNAMIC CHECKBOX (FORM SE BAHAR) ---
     st.info("Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
     has_med = st.checkbox("✅ JA, legg til Medsøker (Ektefelle/Samboer)")
 
-    with st.form("main_bank_form"):
+    with st.form("main_bank_form", clear_on_submit=True):
         # --- BEDRIFT SECTION ---
+        f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
         if is_bedrift:
             st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
@@ -245,8 +246,8 @@ elif valg == "➕ Ny Registrering":
         g_studie = g2.number_input("Studielån (kr)", 0, step=5000, format="%d")
 
         # --- MEDSØKER SECTION (100% Identical & At the Bottom) ---
-        m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
-        m_lonn, m_arb, m_tid, m_still_type, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
+        m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb = "", "", "", "", 0, ""
+        m_pass = "Norge"
 
         if has_med:
             st.divider()
@@ -256,18 +257,12 @@ elif valg == "➕ Ny Registrering":
             m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
             m_epost = mc1.text_input("E-post (Medsøker)")
             m_tlf = mc2.text_input("Telefon (Medsøker)")
-            m_sivil = mc2.selectbox("Sivilstatus (Medsøker)", ["Gift", "Samboer", "Skilt", "Enke/Enkemann", "Enslig"], key="ms_sivil")
             m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
-            m_botid = mc1.text_input("Botid i Norge (Medsøker - Hvis ikke norsk)", key="ms_botid")
-
+            
             st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
-            ml1, ml2, ml3 = st.columns(3)
+            ml1, ml2 = st.columns(2)
             m_lonn = ml1.number_input("Årslønn Brutto (Medsøker - kr)", 0, step=1000, format="%d")
             m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
-            m_tid = ml3.text_input("Ansettelsestid (Medsøker - f.eks 3 år)")
-            m_still_type = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"], key="ms_job")
-            m_ekstra = ml2.number_input("Bi-inntekt / Ekstra (Medsøker - kr/år)", 0, key="ms_ekstra")
-            m_pst = ml3.slider("Stillingsprosent (Medsøker %)", 0, 100, 100, key="ms_pst")
 
         st.divider()
         notater = st.text_area("Interne Notater (Viktig info for banken)")
@@ -278,15 +273,44 @@ elif valg == "➕ Ny Registrering":
             fmt_sum = f"{belop:,.0f}".replace(",", " ")
             tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
             
+            # Row structure that matches your NEW Google Sheet exactly
             new_row = [
-                len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil, 
-                "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "", lonn, 
-                barn, sfo, ek, tot_gjeld, biler, belop, f_org if is_bedrift else "", 
-                f_navn if is_bedrift else "", f_eier if is_bedrift else "", 
-                m_navn, m_lonn, notater, f"P1: {pass_land} | P2: {m_pass}", current_user, "Mottatt"
+                "AUTO", # ID
+                datetime.now().strftime("%d-%m-%Y"), # Dato
+                prod, # Produkt
+                navn, # Navn
+                fnr, # Fnr
+                epost, # Epost
+                tlf, # Tlf
+                sivil, # Sivilstatus
+                "Bedrift" if is_bedrift else "Privat", # Type
+                "Active", # Status
+                f_navn, # Firma
+                lonn, # Lønn
+                barn, # Barn
+                sfo, # SFO
+                ek, # EK
+                tot_gjeld, # Gjeld
+                biler, # Biler
+                belop, # Lånebeløp
+                f_org, # OrgNr
+                f_eier, # Eiere
+                f_aksjer, # Aksjer
+                m_navn, # Medsøker_Navn
+                m_fnr, # Medsøker_Fnr
+                m_epost, # Medsøker_Epost
+                m_tlf, # Medsøker_Tlf
+                m_lonn, # Medsøker_Lønn
+                m_arb, # Medsøker_Arbeid
+                notater, # Notater
+                f"P1: {pass_land} | P2: {m_pass}", # Pass_Info
+                current_user, # Saksbehandler
+                "Mottatt" # Bank_Status
             ]
+            
             add_data("MainDB", new_row)
             st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")
+            st.balloons()
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

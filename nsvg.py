@@ -178,94 +178,102 @@ if valg == "📊 Dashbord":
         st.info("📭 Dashbordet er tomt. Ingen saker er registrert ennå.")
         st.write("Når du begynner å legge inn klienter i **'🆕 Registrer Ny'**, vil statistikken vises her.")
         
-➕ Ny Bankforespørsel
-Velg Produkt
-Boliglån
+# --- 7. NY REGISTRERING (CLEAN VERSION) ---
+elif valg == "➕ Ny Registrering":
+    st.header("➕ Ny Bankforespørsel")
+    
+    # Product Selection
+    prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
+    is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
 
-👤 Hovedsøker Detaljer
-Fullt Navn (Hovedsøker)
+    # 195 Countries List
+    countries = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"] + sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Antigua og Barbuda", "Argentina", "Armenia", "Australia", "Aserbajdsjan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgia", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia-Hercegovina", "Botswana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia", "Cuba", "Cyprus", "Czech Republic", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Korea North", "Korea South", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Macedonia", "Oman", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "UAE", "Uruguay", "Uzritan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"])
 
-Fødselsnummer (11 siffer)
+    with st.form("form_reg"):
+        if is_bedrift:
+            st.subheader("🏢 Bedrift / Firma Detaljer")
+            bc1, bc2 = st.columns(2)
+            f_navn = bc1.text_input("Firma Navn")
+            f_org = bc1.text_input("Organisasjonsnummer (9 siffer)")
+            f_eier = bc2.text_area("Navn & Personnummer på alle eiere")
+            f_aksjer = bc2.text_input("Aksjefordeling (%)")
+            st.divider()
 
-E-post
+        # --- HOVEDSØKER ---
+        st.subheader("👤 Hovedsøker Detaljer")
+        c1, c2 = st.columns(2)
+        navn = c1.text_input("Fullt Navn (Hovedsøker)")
+        fnr = c1.text_input("Fødselsnummer (11 siffer)")
+        epost = c1.text_input("E-post")
+        tlf = c2.text_input("Telefon")
+        sivil = c2.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt", "Enke/Enkemann"])
+        pass_land = c1.selectbox("Statsborgerskap (Pass fra)", countries, index=0)
+        botid = c2.text_input("Botid i Norge (Hvis ikke norsk pass)")
 
-Statsborgerskap (Pass fra)
-Norge
+        st.markdown("#### 💼 Arbeid & Inntekt (Hovedsøker)")
+        l1, l2, l3 = st.columns(3)
+        lonn = l1.number_input("Årslønn Brutto (kr)", min_value=0, step=1000, format="%d")
+        arbeidsgiver = l2.text_input("Arbeidsgiver")
+        ansatt_tid = l3.text_input("Ansettelsestid (f.eks 3 år)")
+        stilling_type = l1.selectbox("Ansettelsesform", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"])
+        ekstra_jobb = l2.number_input("Bi-inntekt (kr/år)", 0)
+        still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
-Telefon
+        st.divider()
 
-Sivilstatus
-Enslig
+        # --- MEDSØKER ---
+        st.subheader("👥 Medsøker Informasjon")
+        has_med = st.checkbox("Legg til Medsøker")
+        m_navn, m_fnr, m_lonn, m_arb, m_tid, m_pass, m_still_type = "", "", 0, "", "", "Norge", "Fast ansatt"
 
-💼 Arbeid & Inntekt (Hovedsøker)
-Årslønn Brutto (kr)
+        if has_med:
+            mc1, mc2 = st.columns(2)
+            m_navn = mc1.text_input("Fullt Navn (Medsøker)")
+            m_fnr = mc1.text_input("Fødselsnummer (Medsøker)")
+            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="m_pass_box")
+            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
+            ml1, ml2, ml3 = st.columns(3)
+            m_lonn = ml1.number_input("Årslønn Medsøker (kr)", 0, step=1000, format="%d")
+            m_arb = ml2.text_input("Arbeidsgiver (Medsøker)")
+            m_tid = ml3.text_input("Ansettelsestid (Medsøker)")
+            m_still_type = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"], key="m_job_type")
 
+        st.divider()
 
+        # --- FINANCIAL & DEBT ---
+        st.subheader("🏠 Finansiell Status & Søknad")
+        f1, f2 = st.columns(2)
+        belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d")
+        ek = f1.number_input("Egenkapital (kr)", 0, step=10000, format="%d")
+        ek_kilde = f1.selectbox("Egenkapital Kilde", ["Sparing", "Salg av bolig", "Arv/Gave", "Lån fra familie", "Annet"])
+        barn = f2.number_input("Antall Barn (under 18 år)", 0)
+        biler = f2.number_input("Antall Biler", 0)
+        sfo = f2.selectbox("SFO / Barnehage utgifter?", ["Nei", "Ja"])
 
-Ansettelsesform
-Fast ansatt
+        st.markdown("#### 💳 Eksisterende Gjeld (Samlet)")
+        g1, g2, g3 = st.columns(3)
+        g_bolig = g1.number_input("Nåværende Boliglån (kr)", 0, step=10000, format="%d")
+        g_bil = g2.number_input("Billån (kr)", 0, step=5000, format="%d")
+        g_forbruk = g3.number_input("Forbrukslån (kr)", 0, step=5000, format="%d")
+        g_kort = g1.number_input("Kredittkort Ramme (kr)", 0, step=5000, format="%d")
+        g_studie = g2.number_input("Studielån (kr)", 0, step=5000, format="%d")
 
-Arbeidsgiver (Nåværende firma)
+        notater = st.text_area("Interne Notater (F.eks spesielle betingelser)")
+        st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
-Bi-inntekt / Ekstra jobb (kr/år)
-
-
-
-Ansettelsestid (f.eks 4 år)
-
-Stillingsprosent (%)
-0
-100
-🏠 Finansiell Status & Søknad
-Ønsket Lånebeløp (kr)
-
-
-
-Egenkapital (kr)
-
-
-
-Egenkapital Kilde
-Sparing
-
-Antall Barn (under 18 år)
-
-
-
-Antall Biler
-
-
-
-Har du SFO / Barnehage utgifter?
-Nei
-
-💳 Eksisterende Gjeld (Samlet)
-Nåværende Boliglån (kr)
-
-
-
-Kredittkort Ramme (kr)
-
-
-
-Billån (kr)
-
-
-
-Studielån (kr)
-
-
-
-Forbrukslån / Kreditt (kr)
-
-
-
-Interne Notater / Kommentarer (Viktig info for banken)
-
-Last opp Vedlegg (Skattemelding, Lønnslipper, ID)
-
-200MB per file
-
+        if st.form_submit_button("🚀 SEND SØKNAD"):
+            fmt_sum = f"{belop:,.0f}".replace(",", " ")
+            tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
+            new_row = [
+                len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil, 
+                "Bedrift" if is_bedrift else "Privat", "Aktiv", f_navn if is_bedrift else "", lonn, 
+                barn, sfo, ek, tot_gjeld, biler, belop, f_org if is_bedrift else "", 
+                f_navn if is_bedrift else "", f_eier if is_bedrift else "", 
+                m_navn, m_lonn, notater, f"Pass: {pass_land} | Med: {m_pass}", current_user, "Mottatt"
+            ]
+            add_data("MainDB", new_row)
+            st.success(f"✅ Søknad på {fmt_sum} kr er registrert!")
+            
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

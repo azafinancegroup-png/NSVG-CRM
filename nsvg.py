@@ -55,7 +55,6 @@ def get_country_list():
     base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
     others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
     return base + others
-
 # --- 4. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})

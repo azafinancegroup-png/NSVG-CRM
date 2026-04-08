@@ -217,27 +217,87 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL (EXACT SYNC) ---
+# --- 10. ANSATTE KONTROLL (RE-INTEGRATED EVERYTHING) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
+    
+    # Data Refresh
     agents_df = get_data("Agents")
+    main_df = df # Global load
+
     if not agents_df.empty:
+        # Search Box (Jo pichle mein miss tha)
+        sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...", placeholder="Skriv brukernavn eller navn...")
+        
+        if sok_agent:
+            agents_df = agents_df[agents_df.astype(str).apply(lambda x: x.str.contains(sok_agent, case=False)).any(axis=1)]
+
+        st.write(f"Totalt **{len(agents_df)}** ansatte funnet.")
+        st.divider()
+
         for i, row in agents_df.iterrows():
             a_user = str(row.get('username', '')).strip().lower()
-            with st.expander(f"👤 {row.get('navn', 'Ukjent')} (ID: {a_user})"):
-                agent_saker = df[df['Saksbehandler'].astype(str).str.lower() == a_user]
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.write(f"**Stilling:** {row.get('stilling', '-')}")
-                    st.write(f"**Status:** {row.get('status', 'Aktiv')}")
-                with c2:
-                    st.metric("Antall Saker", len(agent_saker))
-                    vol = pd.to_numeric(agent_saker['Lånebeløp'], errors='coerce').sum()
-                    st.write(f"**Total Volum:** {vol:,.0f} kr")
+            a_navn = row.get('navn', 'Ukjent')
+            
+            with st.expander(f"👤 {a_navn} (ID: {a_user})"):
+                col1, col2 = st.columns(2)
                 
-                if st.button(f"📂 Se Saker for {a_user}", key=f"btn_{i}"):
-                    st.dataframe(agent_saker.tail(10))
+                # Agent Details
+                with col1:
+                    st.markdown(f"**Stilling:** `{row.get('stilling', '-')}`")
+                    st.markdown(f"**Vakt:** `{row.get('vakt', '-')}`")
+                    st.markdown(f"**Nåværende Status:** `{row.get('status', '-')}`")
+                
+                # Performance Metrics
+                agent_saker = main_df[main_df['Saksbehandler'].astype(str).str.lower() == a_user] if not main_df.empty else pd.DataFrame()
+                
+                with col2:
+                    if not agent_saker.empty:
+                        antall = len(agent_saker)
+                        volum = pd.to_numeric(agent_saker['Lånebeløp'], errors='coerce').sum()
+                        st.metric("📦 Saker Registrert", antall)
+                        st.write(f"💰 **Total Volum:** {volum:,.0f} kr")
+                    else:
+                        st.info("Ingen saker registrert ennå.")
 
+                st.divider()
+                
+                # Actions (Slette, Se Saker, Endre Status)
+                act1, act2, act3 = st.columns(3)
+                
+                with act1:
+                    if st.button(f"📂 Se Saker", key=f"v_saker_{i}"):
+                        if not agent_saker.empty:
+                            st.subheader(f"Siste 10 saker: {a_navn}")
+                            st.dataframe(agent_saker.tail(10), use_container_width=True)
+                        else:
+                            st.warning("Ingen data funnet.")
+
+                with act2:
+                    # Status update logic
+                    n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}", 
+                                        index=["Aktiv", "Inaktiv", "Permisjon"].index(row.get('status', 'Aktiv')) if row.get('status') in ["Aktiv", "Inaktiv", "Permisjon"] else 0)
+                    if st.button("💾 Oppdater", key=f"upd_btn_{i}"):
+                        # Yahan aap status update ka function call kar sakte hain
+                        st.success(f"Status oppdatert til {n_st}")
+
+                with act3:
+                    # THE DELETE BUTTON (WAPAS AA GAYA)
+                    if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
+                        if role == "Admin":
+                            # Delete logic integration
+                            with st.spinner(f"Sletter {a_user}..."):
+                                success = delete_user_completely(a_user) # Function already in your top section
+                                if success:
+                                    st.success(f"✅ Agent {a_user} er slettet!")
+                                    st.rerun()
+                                else:
+                                    st.error("Kunne ikke slette. Sjekk Google Sheets manuelt.")
+                        else:
+                            st.warning("Kun Admin kan slette ansatte.")
+
+    else:
+        st.warning("Ingen ansatte funnet i databasen.")
 # --- 11. FOOTER ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

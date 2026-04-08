@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST SYSTEM (WORKING ENGINE) ---
+# --- 11. E-POST SYSTEM (UPDATED WITH TLS PORT 587) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -588,7 +588,7 @@ elif valg == "📧 Send E-post":
                     import smtplib
                     from email.mime.text import MIMEText
 
-                    # YE HAI ASLI JADU: Ye secrets se aapka email uthayega
+                    # Secrets se data uthana
                     sender = st.secrets["email_auth"]["sender_email"]
                     pwd = st.secrets["email_auth"]["app_password"]
 
@@ -598,17 +598,19 @@ elif valg == "📧 Send E-post":
                     msg['To'] = recipient
 
                     with st.spinner("Sender e-post..."):
-                        # Gmail Server connection
-                        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+                        # 👇 NAYA CONNECTION LOGIC (PORT 587) 👇
+                        server = smtplib.SMTP('smtp.gmail.com', 587)
+                        server.starttls()  # Connection secure karna
                         server.login(sender, pwd)
                         server.sendmail(sender, recipient, msg.as_string())
                         server.quit()
+                        # 👆 NAYA LOGIC KHATAM 👆
                     
                     st.success(f"✅ E-post er sendt til {recipient}!")
                 
                 except Exception as e:
-                    # Agar ab bhi nahi gayi, to yahan asli wajah (Error) likhi aayegi
+                    # Agar ab bhi error aaye, to yahan se asli wajah pata chalegi
                     st.error(f"❌ Feil: {e}")
-                    
+
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

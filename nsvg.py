@@ -6,7 +6,15 @@ from datetime import datetime
 
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
-        conn = gc if 'gc' in globals() else client
+        # Aapka connection 'gc' hai, isliye hum 'gc' use karenge
+        if 'gc' in globals():
+            conn = gc
+        elif 'client' in globals():
+            conn = client
+        else:
+            st.error("Kunne ikke finne database-tilkobling (gc/client missing)")
+            return False
+
         sheet = conn.open("MainDB").sheet1 
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
@@ -22,25 +30,8 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        st.error(f"Error: {e}")
-        return False        
-# --- 1. SETTINGS & PAGE CONFIG ---
-st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
-
-# CSS for Dark & Light Mode Compatibility & Professional Styling
-st.markdown("""
-    <style>
-    .stApp { transition: background-color 0.3s ease; }
-    div[data-testid="stMetric"] {
-        background-color: rgba(151, 166, 195, 0.15);
-        padding: 15px; border-radius: 12px; border: 1px solid rgba(128, 128, 128, 0.2);
-    }
-    .streamlit-expanderHeader { font-weight: bold; color: var(--text-color); }
-    .stDataFrame { border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; }
-    label { font-weight: 500 !important; color: var(--text-color) !important; }
-    </style>
-    """, unsafe_allow_html=True)
-
+        st.error(f"Database Error: {e}")
+        return False
 # --- 2. GOOGLE SHEETS ENGINE ---
 def connect_to_sheet(sheet_name):
     try:
@@ -304,79 +295,91 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
 
-# --- 8. KUNDE ARKIV (AAPKA CODE + FULL REGISTRATION EDIT) ---
+# --- 8. KUNDE ARKIV (VIEW & EDIT SYSTEM) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # --- 100% AAPKA PURANA LOGIC (ROLE FILTER) ---
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
-    
-    # --- 100% AAPKA PURANA LOGIC (SEARCH BAR) ---
-    sok = st.text_input("🔍 Søk etter kunde (Navn, Tlf, E-post, ID)...", placeholder="Skriv her for å filtrere...")
+    sok = st.text_input("🔍 Søk (Navn, ID, Tlf)...", placeholder="Skriv her...")
     
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
-    # Metrics for Archive
-    st.info(f"Totalt **{len(view_df)}** saker funnet i arkivet.")
-
-    # --- LIST VIEW WITH EXPANDERS (AAPKA LAYOUT) ---
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
-        hoved = r.get('Hovedsøker', 'Ukjent Kunde')
-        status = r.get('Bank_Status', 'Mottatt')
+        prod_type = r.get('Produkt', 'Boliglån')
         
-        with st.expander(f"👤 {hoved} | ID: {sak_id} | Status: {status}"):
-            st.markdown(f"### 📄 Sak Detaljer (Full Redigering)")
-            st.warning("Her kan du endre alt, akkurat som ved første registrering.")
+        with st.expander(f"📁 {r.get('Hovedsøker', 'Kunde')} | ID: {sak_id} | {prod_type}"):
             
-            # --- MODIFIED EDIT SYSTEM (Har cheez edit karne ke liye) ---
-            with st.container():
-                edit_c1, edit_c2 = st.columns(2)
-                
-                with edit_c1:
-                    # Registration fields jo ab edit ho sakti hain
-                    new_hoved = st.text_input("Hovedsøker", value=r.get('Hovedsøker', ''), key=f"ed_hoved_{i}")
-                    new_tlf = st.text_input("Telefon", value=r.get('Telefon', ''), key=f"ed_tlf_{i}")
-                    new_mail = st.text_input("E-post", value=r.get('E-post', ''), key=f"ed_mail_{i}")
-                    new_belop = st.text_input("Lånebeløp", value=r.get('Lånebeløp', ''), key=f"ed_bel_{i}")
+            # --- SESSION STATE FOR EDIT MODE ---
+            # Har sak ke liye alag edit button handle karne ke liye
+            if f"edit_mode_{sak_id}" not in st.session_state:
+                st.session_state[f"edit_mode_{sak_id}"] = False
 
-                with edit_c2:
-                    new_prod = st.text_input("Produkt", value=r.get('Produkt', ''), key=f"ed_prod_{i}")
-                    # Status selection
-                    st_list = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-                    curr_idx = st_list.index(status) if status in st_list else 0
-                    new_st = st.selectbox("Bank Status", st_list, index=curr_idx, key=f"ed_stat_{i}")
-                    
-                    new_mangler = st.text_input("Mangler dokumenter? (Melding til Agent)", value=r.get('Mangler', ''), key=f"ed_mng_{i}")
+            if not st.session_state[f"edit_mode_{sak_id}"]:
+                # --- VIEW MODE (Sirf dekhne ke liye) ---
+                st.subheader("📄 Sak Detaljer")
+                v_col1, v_col2 = st.columns(2)
+                with v_col1:
+                    st.write(f"**Hovedsøker:** {r.get('Hovedsøker', '-')}")
+                    st.write(f"**Fødselsnummer:** {r.get('Fødselsnummer', '-')}")
+                    st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
+                with v_col2:
+                    st.write(f"**Telefon:** {r.get('Telefon', '-')}")
+                    st.write(f"**Bank Status:** {r.get('Bank_Status', '-')}")
+                    st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
                 
-                # Internal Notes (Full width)
-                new_notater = st.text_area("Interne Notater (Viktig info)", value=r.get('Notater', ''), key=f"ed_not_{i}")
-                
-                st.divider()
+                if st.button(f"📝 Rediger Sak (Modify)", key=f"btn_edit_{sak_id}"):
+                    st.session_state[f"edit_mode_{sak_id}"] = True
+                    st.rerun()
 
-                # --- SAVE BUTTON (Jo poora data update karega) ---
-                if st.button(f"💾 Lagre Alle Endringer (ID: {sak_id})", key=f"ark_save_btn_{i}"):
-                    # Saari fields ka data aik saath
-                    full_updates = {
-                        "Hovedsøker": new_hoved,
-                        "Telefon": new_tlf,
-                        "E-post": new_mail,
-                        "Lånebeløp": new_belop,
-                        "Produkt": new_prod,
-                        "Bank_Status": new_st,
-                        "Mangler": new_mangler,
-                        "Notater": new_notater
-                    }
+            else:
+                # --- EDIT MODE (Registration Form Mode) ---
+                st.subheader("🛠️ Redigerer Sak (Full Registreringsmodus)")
+                st.info("Her kan du endre all informasjon. Ingenting blir slettet før du trykker Lagre.")
+                
+                # Registration Layout
+                with st.form(key=f"edit_form_{sak_id}"):
+                    st.markdown("### 👤 Hovedsøker Detaljer")
+                    ec1, ec2 = st.columns(2)
+                    new_navn = ec1.text_input("Fullt Navn", value=r.get('Hovedsøker', ''))
+                    new_fnr = ec1.text_input("Fødselsnummer", value=r.get('Fødselsnummer', ''))
+                    new_tlf = ec2.text_input("Telefon", value=r.get('Telefon', ''))
+                    new_mail = ec2.text_input("E-post", value=r.get('E-post', ''))
                     
-                    with st.spinner("Oppdaterer Google Sheets..."):
-                        # Yeh function "update_full_sak" ya "update_sak_in_sheet" ko call karega
-                        success = update_sak_in_sheet(sak_id, full_updates)
-                        if success:
-                            st.success(f"✅ Sak {sak_id} er nå oppdatert med alle nye detaljer!")
+                    st.markdown("### 🏠 Finansiell Status")
+                    ec3, ec4 = st.columns(2)
+                    new_belop = ec3.text_input("Ønsket Lånebeløp (kr)", value=r.get('Lånebeløp', ''))
+                    new_ek = ec3.text_input("Egenkapital (kr)", value=r.get('Egenkapital', ''))
+                    
+                    # Status & Internal
+                    new_status = ec4.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
+                                             index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
+                    new_notater = st.text_area("Interne Notater", value=r.get('Notater', ''))
+                    new_mangler = st.text_input("Mangler dokumenter?", value=r.get('Mangler', ''))
+
+                    # Buttons for Form
+                    fcol1, fcol2 = st.columns(2)
+                    if fcol1.form_submit_button("💾 Lagre Endringer"):
+                        updates = {
+                            "Hovedsøker": new_navn,
+                            "Fødselsnummer": new_fnr,
+                            "Telefon": new_tlf,
+                            "E-post": new_mail,
+                            "Lånebeløp": new_belop,
+                            "Egenkapital": new_ek,
+                            "Bank_Status": new_status,
+                            "Notater": new_notater,
+                            "Mangler": new_mangler
+                        }
+                        if update_sak_in_sheet(sak_id, updates):
+                            st.success("Sak oppdatert!")
+                            st.session_state[f"edit_mode_{sak_id}"] = False
                             st.rerun()
-                        else:
-                            st.error("Kunne ikke koble til databasen. Sjekk connection.")                            
+                    
+                    if fcol2.form_submit_button("❌ Avbryt"):
+                        st.session_state[f"edit_mode_{sak_id}"] = False
+                        st.rerun()
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

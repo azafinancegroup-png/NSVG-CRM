@@ -295,62 +295,64 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
 
-# --- 8. KUNDE ARKIV (FIXED VIEW/EDIT TOGGLE) ---
+# --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # Role-based filter
+    # Filtering logic for Admin/Director vs Ansatt
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    sok = st.text_input("🔍 Søk (Navn, ID, Tlf)...", placeholder="Skriv her...")
+    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", placeholder="Skriv her...")
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
+    st.info(f"Antall saker funnet: {len(view_df)}")
+
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
-        # UNIQUE KEY for each record to prevent state mixing
-        edit_key = f"edit_active_{sak_id}"
         
-        # Force initial state to False if not present
-        if edit_key not in st.session_state:
-            st.session_state[edit_key] = False
-
-        with st.expander(f"📁 {r.get('Navn', 'Kunde')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
+        # Har sak ke liye expander hamesha normal view dikhayega
+        with st.expander(f"📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
             
-            # CHECK: Agar edit_active False hai to sirf View Mode dikhao
-            if not st.session_state[edit_key]:
-                # --- A: VIEW MODE (Pora sak jese aik file mein ho) ---
-                st.markdown(f"### 📄 Sak Detaljer (ID: {sak_id})")
-                c1, c2, c3 = st.columns(3)
-                with c1:
+            # Ye checkbox button ki tarah kaam karega modification mode kholne ke liye
+            show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
+
+            if not show_edit:
+                # --- A: VIEW MODE (Hamesha pehle ye dikhega) ---
+                st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
+                v1, v2, v3 = st.columns(3)
+                with v1:
                     st.write(f"**Navn:** {r.get('Navn', '-')}")
                     st.write(f"**Fnr:** {r.get('Fnr', '-')}")
-                    st.write(f"**Tlf:** {r.get('Tlf', '-')}")
                     st.write(f"**Epost:** {r.get('Epost', '-')}")
-                with c2:
+                    st.write(f"**Tlf:** {r.get('Tlf', '-')}")
+                with v2:
                     st.write(f"**Produkt:** {r.get('Produkt', '-')}")
                     st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
                     st.write(f"**Lønn:** {r.get('Lønn', '0')} kr")
                     st.write(f"**EK:** {r.get('EK', '0')} kr")
-                with c3:
+                with v3:
+                    st.write(f"**Gjeld:** {r.get('Gjeld', '0')} kr")
                     st.write(f"**Sivilstatus:** {r.get('Sivilstatus', '-')}")
                     st.write(f"**Dato:** {r.get('Dato', '-')}")
-                    st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
 
                 st.divider()
+                # Medsøker View
+                if r.get('Medsøker_Navn'):
+                    st.markdown("**👥 Medsøker Info:**")
+                    mv1, mv2 = st.columns(2)
+                    mv1.write(f"**Navn:** {r.get('Medsøker_Navn')}")
+                    mv2.write(f"**Fnr:** {r.get('Medsøker_Fnr')}")
+                
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
-                # MODIFY BUTTON
-                if st.button(f"🛠️ Endre denne saken (Modify)", key=f"btn_open_mod_{sak_id}_{i}"):
-                    st.session_state[edit_key] = True
-                    st.rerun()
-
             else:
-                # --- B: MODIFICATION MODE (Form opens only after click) ---
-                st.subheader(f"🛠️ Redigerer Sak: {r.get('Navn')} (ID: {sak_id})")
+                # --- B: MODIFICATION MODE (Sirf tick karne par open hoga) ---
+                st.subheader("🛠️ Full Redigeringsmodus")
                 
-                with st.form(key=f"full_edit_form_{sak_id}_{i}"):
+                with st.form(key=f"edit_form_final_{sak_id}"):
                     # HOVEDSØKER
+                    st.markdown("#### 👤 Hovedsøker Detaljer")
                     h1, h2 = st.columns(2)
                     up_navn = h1.text_input("Fullt Navn", value=str(r.get('Navn', '')))
                     up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
@@ -358,6 +360,7 @@ elif valg == "📂 Kunde Arkiv":
                     up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
                     
                     # ØKONOMI
+                    st.markdown("#### 💼 Økonomi")
                     a1, a2 = st.columns(2)
                     up_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
                     up_gjeld = a1.text_input("Gjeld (kr)", value=str(r.get('Gjeld', '0')))
@@ -365,35 +368,30 @@ elif valg == "📂 Kunde Arkiv":
                     up_ek = a2.text_input("EK (kr)", value=str(r.get('EK', '0')))
 
                     # MEDSØKER
+                    st.markdown("#### 👥 Medsøker")
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Navn", value=str(r.get('Medsøker_Navn', '')))
                     up_m_fnr = m1.text_input("Medsøker Fnr", value=str(r.get('Medsøker_Fnr', '')))
                     up_m_lonn = m2.text_input("Medsøker Lønn", value=str(r.get('Medsøker_Lønn', '0')))
                     up_m_tlf = m2.text_input("Medsøker Tlf", value=str(r.get('Medsøker_Tlf', '')))
 
-                    # SYSTEM
+                    # SYSTEM STATUS
+                    st.markdown("#### ⚙️ Status & Notater")
                     up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
                                          index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
                     up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
 
-                    # SUBMIT
-                    b1, b2 = st.columns(2)
-                    if b1.form_submit_button("💾 Lagre Alle Endringer"):
-                        final_updates = {
+                    if st.form_submit_button("💾 Lagre Alle Endringer"):
+                        final_data = {
                             "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
                             "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
-                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, 
-                            "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
+                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
                             "Bank_Status": up_st, "Notater": up_notat
                         }
-                        if update_sak_in_sheet(sak_id, final_updates):
+                        # update_sak_in_sheet function lazmi upar define honi chahiye
+                        if update_sak_in_sheet(sak_id, final_data):
                             st.success("✅ Sak oppdatert!")
-                            st.session_state[edit_key] = False # Reset to View Mode after save
                             st.rerun()
-                    
-                    if b2.form_submit_button("❌ Avbryt"):
-                        st.session_state[edit_key] = False # Reset to View Mode
-                        st.rerun()
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

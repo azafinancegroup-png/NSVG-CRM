@@ -555,40 +555,41 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST SYSTEM (UPDATED WITH TLS PORT 587) ---
+# --- 11. E-POST SYSTEM (FINAL SIMPLIFIED) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    # Ye dropdown sirf aapki asani ke liye hai
+    # Simple dictionary for contacts
     mottaker_presets = {
         "Admin (nsvg.no)": "info@nsvg.no",
         "Aggi (oest.no)": "aggi@oest.no",
-        "Kredittnova": "info@kredittnova.no",
-        "Annet": "" 
+        "Kredittnova": "info@kredittnova.no"
     }
 
     with st.form("email_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            valgt_navn = st.selectbox("Velg mottaker", list(mottaker_presets.keys()))
-            recipient = st.text_input("Mottaker e-post", value=mottaker_presets[valgt_navn])
+        # Dropdown se select karein
+        valgt_navn = st.selectbox("Velg mottaker", list(mottaker_presets.keys()))
         
-        with col2:
-            subject = st.text_input("Emne (Subject)")
-
+        # Is line se email address select ho jayega
+        recipient = mottaker_presets[valgt_navn]
+        
+        # Display ke liye email dikhayein (Optional)
+        st.info(f"Sender til: {recipient}")
+        
+        subject = st.text_input("Emne (Subject)", value="Melding fra CRM")
         message = st.text_area("Melding (Message)", height=200)
         
         submit_mail = st.form_submit_button("🚀 Send E-post")
 
         if submit_mail:
-            if not recipient or not message:
-                st.error("Fyll ut mottaker og melding!")
+            if not message:
+                st.error("Vennligst skriv en melding.")
             else:
                 try:
                     import smtplib
                     from email.mime.text import MIMEText
 
-                    # Secrets se data uthana
+                    # SECRETS CHECK: Ensure these match your Streamlit Secrets exactly
                     sender = st.secrets["email_auth"]["sender_email"]
                     pwd = st.secrets["email_auth"]["app_password"]
 
@@ -597,20 +598,19 @@ elif valg == "📧 Send E-post":
                     msg['From'] = sender
                     msg['To'] = recipient
 
-                    with st.spinner("Sender e-post..."):
-                        # 👇 NAYA CONNECTION LOGIC (PORT 587) 👇
+                    with st.spinner("Kobler til server..."):
+                        # Try Port 587 (Modern Standard)
                         server = smtplib.SMTP('smtp.gmail.com', 587)
-                        server.starttls()  # Connection secure karna
+                        server.starttls() 
                         server.login(sender, pwd)
                         server.sendmail(sender, recipient, msg.as_string())
                         server.quit()
-                        # 👆 NAYA LOGIC KHATAM 👆
                     
-                    st.success(f"✅ E-post er sendt til {recipient}!")
+                    st.success(f"✅ Suksess! E-post sendt til {recipient}")
                 
                 except Exception as e:
-                    # Agar ab bhi error aaye, to yahan se asli wajah pata chalegi
-                    st.error(f"❌ Feil: {e}")
-
+                    # Agar ab bhi error aaye, to yahan se check hoga
+                    st.error(f"❌ Login Feil: {e}")
+                    st.warning("Tips: Sjekk om App Password er riktig i Secrets.")
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

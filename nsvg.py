@@ -176,7 +176,7 @@ if valg == "📊 Dashbord":
     else:
         st.warning("Ingen data tilgjengelig i databasen.")        
 
-# --- 7. NY REGISTRERING (SYMMETRIC HOVEDSØKER & MEDSØKER) ---
+# --- 7. NY REGISTRERING (100000% SYMMETRIC + SEPARATE FINANCIALS) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     countries = get_country_list()
@@ -193,7 +193,7 @@ elif valg == "➕ Ny Registrering":
             bc1, bc2 = st.columns(2)
             f_navn = bc1.text_input("Firma Navn")
             f_org = bc1.text_input("Organisasjonsnummer (9 siffer)")
-            f_eier = bc2.text_area("Navn & Personnummer på alle eiere")
+            f_eier = bc2.text_area("Navn & Personnummer pe alle eiere")
             f_aksjer = bc2.text_input("Aksjefordeling (%)")
             st.divider()
 
@@ -217,9 +217,17 @@ elif valg == "➕ Ny Registrering":
         ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
+        # NEW: Finansiell Status for Hovedsøker
+        st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
+        hf1, hf2, hf3 = st.columns(3)
+        h_ek = hf1.number_input("Egenkapital (kr) - Hoved", 0, step=10000, format="%d")
+        h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
+        h_gjeld = hf3.number_input("Eksisterende Gjeld (kr) - Hoved", 0, step=10000, format="%d")
+
         # --- 👥 MEDSØKER SECTION (100% Symmetric) ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
+        m_ek, m_sfo, m_gjeld = 0, "Nei", 0
         
         if has_med:
             st.divider()
@@ -242,24 +250,20 @@ elif valg == "➕ Ny Registrering":
             m_ekstra = ml2.number_input("Bi-inntekt (Medsøker)", 0, key="ms_extra")
             m_pst = ml3.slider("Stillingsprosent (Medsøker)", 0, 100, 100, key="ms_pst")
 
+            # NEW: Symmetric Finansiell Status for Medsøker
+            st.markdown("#### 🏠 Finansiell Status & Gjeld (Medsøker)")
+            mf1, mf2, mf3 = st.columns(3)
+            m_ek = mf1.number_input("Egenkapital (kr) - Medsøker", 0, step=10000, format="%d", key="ms_ek")
+            m_sfo = mf2.selectbox("SFO / Barnehage? - Medsøker", ["Nei", "Ja"], key="ms_sfo")
+            m_gjeld = mf3.number_input("Eksisterende Gjeld (kr) - Medsøker", 0, step=10000, format="%d", key="ms_gjeld")
+
         st.divider()
-        st.subheader("🏠 Finansiell Status & Søknad")
-        f1, f2 = st.columns(2)
+        st.subheader("📊 Felles Lånesøknad")
+        f1, f2, f3 = st.columns(3)
         belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d")
-        ek = f1.number_input("Egenkapital (kr)", 0, step=10000, format="%d")
-        barn = f2.number_input("Antall Barn (under 18 år)", 0)
-        biler = f2.number_input("Antall Biler", 0)
-        sfo = f2.selectbox("SFO / Barnehage utgifter?", ["Nei", "Ja"])
+        barn = f2.number_input("Antall Barn totalt (under 18 år)", 0)
+        biler = f3.number_input("Antall Biler totalt", 0)
 
-        st.markdown("#### 💳 Eksisterende Gjeld (Samlet)")
-        g1, g2, g3 = st.columns(3)
-        g_bolig = g1.number_input("Nåværende Boliglån", 0)
-        g_bil = g2.number_input("Billån", 0)
-        g_forbruk = g3.number_input("Forbrukslån", 0)
-        g_kort = g1.number_input("Kredittkort Ramme", 0)
-        g_studie = g2.number_input("Studielån", 0)
-
-        st.divider()
         notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
@@ -267,9 +271,10 @@ elif valg == "➕ Ny Registrering":
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
-                tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
+                # Calculations for Sheet columns
+                tot_ek = h_ek + m_ek
+                tot_gjeld = h_gjeld + m_gjeld
                 
-                # --- SYNCED COLUMN MAPPING (Hamesha ke liye fixed) ---
                 new_row = [
                     len(df)+1, 
                     datetime.now().strftime("%d-%m-%Y"), 
@@ -284,8 +289,8 @@ elif valg == "➕ Ny Registrering":
                     f_navn if is_bedrift else "", 
                     lonn,
                     barn, 
-                    sfo, 
-                    ek, 
+                    h_sfo, # Using Main applicant's SFO for primary column
+                    tot_ek, 
                     tot_gjeld, 
                     biler, 
                     belop, 
@@ -306,7 +311,7 @@ elif valg == "➕ Ny Registrering":
                 ]
                 
                 add_data("MainDB", new_row)
-                st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
+                st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
 # --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST) ---
 elif valg == "📂 Kunde Arkiv":

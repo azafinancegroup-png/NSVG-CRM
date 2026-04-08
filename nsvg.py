@@ -555,78 +555,66 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (POORA SYSTEM EK SATH) ---
+# --- 11. E-POST & KONTAKTER (ULTIMATE VERSION) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    # Zaruri Imports (Section ke andar taake error na aaye)
     from streamlit_gsheets import GSheetsConnection
     import pandas as pd
     import smtplib
     from email.mime.text import MIMEText
 
-    # 1. Google Sheets Connection Setup
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Contacts load karne ki koshish
+    # 1. Contacts fetching with Error Handling
     try:
-        contacts_df = conn.read(worksheet="Contacts")
-    except Exception:
-        # Agar sheet nahi milti to khali table bana do
+        contacts_df = conn.read(worksheet="Contacts", ttl=0)
+    except Exception as e:
+        st.error("Kunne ikke lese 'Contacts' tabben. Sjekk om tabben finnes i Google Sheets!")
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # 2. Naya Contact Add Karne Ka Form (Expander)
+    # 2. Add New Contact Form
     with st.expander("➕ Legg til ny kontakt (Save New Contact)"):
         with st.form("new_contact_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_n = st.text_input("Navn (Name)")
-                new_e = st.text_input("E-post (Email)")
-            with col2:
-                new_t = st.text_input("Telefon")
-            
+            new_n = st.text_input("Navn (Name)")
+            new_e = st.text_input("E-post (Email)")
+            new_t = st.text_input("Telefon")
             if st.form_submit_button("Lagre Kontakt"):
                 if new_e:
                     new_entry = pd.DataFrame([{"Navn": new_n, "E-post": new_e, "Telefon": new_t}])
                     updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
-                    # Sheet update karein
-                    conn.create(worksheet="Contacts", data=updated_df)
-                    st.success(f"✅ {new_e} er lagret!")
-                    st.rerun()
+                    try:
+                        conn.update(worksheet="Contacts", data=updated_df)
+                        st.success(f"✅ {new_e} er lagret!")
+                        st.rerun()
+                    except Exception as err:
+                        st.error(f"Kunne ikke lagre: Sjekk om Sheet er satt til 'Editor' mode! Error: {err}")
                 else:
                     st.error("E-post må fylles ut!")
 
     st.divider()
 
-    # 3. Email Bhejne Ka Form
+    # 3. Main Email Form
     with st.form("main_email_form"):
-        st.subheader("Skriv og Send E-post")
+        st.subheader("Send E-post")
+        recipient_manual = st.text_input("Mottaker e-post (Manuelt)")
         
-        # Option A: Email khud likhein
-        recipient_manual = st.text_input("Mottaker e-post (Skriv inn e-post)")
-        
-        # Option B: Saved contacts mein se chunain
         recipient_select = ""
         if not contacts_df.empty:
-            recipient_select = st.selectbox("Eller velg fra lagrede kontakter", [""] + contacts_df["E-post"].tolist())
+            recipient_select = st.selectbox("Eller velg fra kontakter", [""] + contacts_df["E-post"].tolist())
         
-        # Faisla: Agar manual likha hai to wo, warna dropdown wala
         final_recipient = recipient_manual if recipient_manual else recipient_select
-        
-        subject = st.text_input("Emne (Subject)", value="Melding fra Iqbal Entrepreneur")
-        message = st.text_area("Melding (Message)", height=200)
-        
-        # Auto-save check
-        auto_save = st.checkbox("Lagre denne e-posten i kontakter automatisk", value=True)
+        subject = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
+        message = st.text_area("Melding", height=200)
+        auto_save = st.checkbox("Lagre e-posten i kontakter automatisk", value=True)
         
         submit_mail = st.form_submit_button("🚀 Send E-post")
 
         if submit_mail:
             if not final_recipient or not message:
-                st.error("Mottaker og melding må fylles ut!")
+                st.error("Fyll ut mottaker og melding!")
             else:
                 try:
-                    # Secrets se login data lena
                     sender = st.secrets["email_auth"]["sender_email"]
                     pwd = st.secrets["email_auth"]["app_password"]
 
@@ -636,24 +624,23 @@ elif valg == "📧 Send E-post":
                     msg['To'] = final_recipient
 
                     with st.spinner("Sender e-post..."):
-                        # SMTP Setup (Tested Port 587)
                         server = smtplib.SMTP('smtp.gmail.com', 587)
                         server.starttls()
                         server.login(sender, pwd)
                         server.sendmail(sender, final_recipient, msg.as_string())
                         server.quit()
                     
-                    st.success(f"✅ E-post sendt til {final_recipient}!")
+                    st.success(f"✅ Sendt til {final_recipient}!")
 
-                    # Auto-save logic: Agar contact naya hai to save karo
+                    # Auto-save Check
                     if auto_save and final_recipient not in contacts_df["E-post"].values:
                         new_entry = pd.DataFrame([{"Navn": "Auto-Saved", "E-post": final_recipient, "Telefon": "-"}])
                         updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
-                        conn.create(worksheet="Contacts", data=updated_df)
+                        conn.update(worksheet="Contacts", data=updated_df)
                         st.info("E-posten ble lagret i kontaktlisten.")
 
                 except Exception as e:
-                    st.error(f"❌ Feil: {e}")
+                    st.error(f"E-post Error: {e}")
                     
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

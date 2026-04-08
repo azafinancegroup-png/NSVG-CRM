@@ -88,15 +88,20 @@ role = st.session_state['user_role']
 current_user = st.session_state['user_id']
 
 st.sidebar.title(f"👤 {current_user.capitalize()}")
+
+# Base options jo sab ko dikhenge
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+# Admin aur Director ke liye makhsoos options
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "🕵️ Master Kontrollpanel"])
+    options.extend(["👥 Ansatte Kontroll", "📧 Send E-post", "🕵️ Master Kontrollpanel"])
+
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
-
+    
 # --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
@@ -549,5 +554,39 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
 
     else:
         st.warning("Ingen ansatte funnet i databasen.")
+
+# --- 11. E-POST SYSTEM (NEW SECTION) ---
+elif valg == "📧 Send E-post":
+    st.header("📧 Send Direkte E-post")
+    
+    # Staff aur contact list
+    staff_emails = {
+        "Amina (Director )": "aminaaz98@hotmail.com",
+        "Admin (nsvg.no)": "info@nsvg.no",
+        "Bedi": "contact@onefinans.no",
+        "Generell Kunde": "" # Khali jagah taake khud likh sakein
+    }
+
+    with st.form("email_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            mottaker_valg = st.selectbox("Velg mottaker (Meltig til)", list(staff_emails.keys()))
+            recipient = st.text_input("Mottaker e-post", value=staff_emails[mottaker_valg])
+        
+        with col2:
+            subject = st.text_input("Emne (Subject)", placeholder="F.eks: Manglende dokumentasjon")
+
+        message = st.text_area("Melding (Message)", height=200, placeholder="Skriv din e-post her...")
+        
+        submit_mail = st.form_submit_button("🚀 Send E-post")
+
+        if submit_mail:
+            if not recipient or not message:
+                st.error("Vennligst fyll ut mottaker og melding.")
+            else:
+                # Filhal ye sirf interface hai, jab aap SMTP server ki details denge
+                # to hum ise asli email bhejney ke liye connect kar denge.
+                st.info(f"E-post systemet er klart. Melding til {recipient} er generert.")
+                st.success("✅ Funksjonen er klar for tilkobling til SMTP server.")
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

@@ -555,19 +555,18 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (NYESTE VERSJON) ---
+# --- 11. E-POST & KONTAKTER (FIXED VERSION) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    # 1. Contacts fetching (Google Sheets se)
+    # 1. Contacts fetching
+    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
         contacts_df = conn.read(worksheet="Contacts")
     except Exception:
-        # Agar sheet nahi bani to khali list dikhaye
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # 2. Add New Contact Expander
+    # 2. Add New Contact Expander (Fixed)
     with st.expander("➕ Legg til ny kontakt (Save New Contact)"):
         with st.form("new_contact_form"):
             new_n = st.text_input("Navn (Name)")
@@ -575,10 +574,10 @@ elif valg == "📧 Send E-post":
             new_t = st.text_input("Telefon")
             if st.form_submit_button("Lagre i systemet"):
                 if new_e:
-                    # Naya data purane data mein add karna
                     new_entry = pd.DataFrame([{"Navn": new_n, "E-post": new_e, "Telefon": new_t}])
                     updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
-                    conn.update(worksheet="Contacts", data=updated_df)
+                    # FIX: Correct update method for GSheetsConnection
+                    conn.create(worksheet="Contacts", data=updated_df, replace=True)
                     st.success("Kontakt lagret!")
                     st.rerun()
                 else:
@@ -590,19 +589,19 @@ elif valg == "📧 Send E-post":
     with st.form("main_email_form"):
         st.subheader("Skriv Melding")
         
-        # Option 1: Manually type email
         recipient_manual = st.text_input("Mottaker e-post (Skriv inn manuelt)")
         
-        # Option 2: Select from saved contacts
         recipient_select = ""
         if not contacts_df.empty:
             recipient_select = st.selectbox("Eller velg fra lagrede kontakter", [""] + contacts_df["E-post"].tolist())
         
-        # Final Recipient logic: Manual entry takes priority unless empty
         final_recipient = recipient_manual if recipient_manual else recipient_select
         
         subject = st.text_input("Emne (Subject)", value="Viktig melding fra Iqbal Entrepreneur")
         message = st.text_area("Melding (Message)", height=250)
+        
+        # 👇 AUTO-SAVE CHECKBOX 👇
+        auto_save = st.checkbox("Lagre denne e-posten automatisk i kontakter", value=True)
         
         submit_mail = st.form_submit_button("🚀 Send E-post NÅ")
 
@@ -614,7 +613,6 @@ elif valg == "📧 Send E-post":
                     import smtplib
                     from email.mime.text import MIMEText
 
-                    # Wahi settings jo abhi kaam kar rahi hain
                     sender = st.secrets["email_auth"]["sender_email"]
                     pwd = st.secrets["email_auth"]["app_password"]
 
@@ -624,7 +622,6 @@ elif valg == "📧 Send E-post":
                     msg['To'] = final_recipient
 
                     with st.spinner("Sender e-post..."):
-                        # Port 587 and TLS (Tested & Working)
                         server = smtplib.SMTP('smtp.gmail.com', 587)
                         server.starttls()
                         server.login(sender, pwd)
@@ -632,9 +629,16 @@ elif valg == "📧 Send E-post":
                         server.quit()
                     
                     st.success(f"✅ Suksess! E-post er sendt til {final_recipient}")
-                
+
+                    # 👇 AUTO-SAVE LOGIC 👇
+                    if auto_save and final_recipient not in contacts_df["E-post"].values:
+                        new_entry = pd.DataFrame([{"Navn": "Auto-Saved", "E-post": final_recipient, "Telefon": "-"}])
+                        updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
+                        conn.create(worksheet="Contacts", data=updated_df, replace=True)
+                        st.info("E-posten ble lagret i kontaktlisten din.")
+
                 except Exception as e:
-                    st.error(f"❌ Feil ved sending: {e}")
+                    st.error(f"❌ Feil: {e}")
                     
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

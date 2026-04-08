@@ -1,25 +1,24 @@
-import streamlit as st
-import pandas as pd
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
-
 def update_sak_in_sheet(sak_id, updated_values_dict):
+    """
+    Sari ID match karke sirf makhsoos row ko update karta hai. 
+    Data delete nahi hoga, sirf tabdeeli hogi.
+    """
     try:
-        # Aapka connection 'gc' hai, isliye hum 'gc' use karenge
-        if 'gc' in globals():
-            conn = gc
-        elif 'client' in globals():
-            conn = client
-        else:
-            st.error("Kunne ikke finne database-tilkobling (gc/client missing)")
-            return False
-
-        sheet = conn.open("MainDB").sheet1 
+        # Har baar fresh connection taake 'gc/client' ka error na aaye
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        
+        # NOTE: Agar aapki sheet ka naam 'NSVG_CRM_Data' hai to ye sahi hai. 
+        # Agar sheet ka naam 'MainDB' hai, to yahan naam badal lein.
+        sheet = client.open("NSVG_CRM_Data").worksheet("MainDB") 
+        
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
         if 'ID' in temp_df.columns:
+            # ID ko match karna
             matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
             if matched_rows:
                 actual_row = matched_rows[0] + 2 
@@ -30,33 +29,26 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        st.error(f"Database Error: {e}")
+        st.error(f"Database Update Error: {e}")
         return False
+
 # --- 2. GOOGLE SHEETS ENGINE ---
 def connect_to_sheet(sheet_name):
+    """
+    Ye function connection banata hai.
+    """
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Apni sheet ka exact naam "Kredittnova_Database" ya "NSVG_CRM_Data" yahan confirm karein
+        
+        # Apni main Google Sheet ka exact naam yahan confirm karein
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
-    except:
+    except Exception as e:
+        # Agar connection nahi banta to sidebar mein warning dikhayega
+        st.sidebar.warning(f"⚠️ Connection lost: {sheet_name}")
         return None
-
-def get_data(sheet_name):
-    sh = connect_to_sheet(sheet_name)
-    if sh:
-        data = sh.get_all_records()
-        df = pd.DataFrame(data)
-        df.columns = [str(c).strip() for c in df.columns]
-        return df
-    return pd.DataFrame()
-
-def add_data(sheet_name, row_list):
-    sh = connect_to_sheet(sheet_name)
-    if sh: sh.append_row(row_list)
-
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data
 def get_country_list():

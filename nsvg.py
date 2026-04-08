@@ -6,18 +6,7 @@ from datetime import datetime
 
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
-        # Hum check kar rahe hain ke aapka system 'gc' use kar raha hai ya 'client'
-        # Isse aapka 'not defined' wala error khatam ho jayega
-        conn = None
-        if 'gc' in globals():
-            conn = gc
-        elif 'client' in globals():
-            conn = client
-        
-        if conn is None:
-            st.error("Kunne ikke finne database-tilkobling (Connection not found)")
-            return False
-
+        conn = gc if 'gc' in globals() else client
         sheet = conn.open("MainDB").sheet1 
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
@@ -33,7 +22,7 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        st.error(f"System Error: {e}")
+        st.error(f"Error: {e}")
         return False        
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
@@ -315,7 +304,7 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
 
-# --- 8. KUNDE ARKIV (AAPKA ORIGINAL CODE + MODIFICATION SYSTEM) ---
+# --- 8. KUNDE ARKIV (AAPKA CODE + FULL REGISTRATION EDIT) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
@@ -337,59 +326,57 @@ elif valg == "📂 Kunde Arkiv":
         hoved = r.get('Hovedsøker', 'Ukjent Kunde')
         status = r.get('Bank_Status', 'Mottatt')
         
-        # Color coding for status (Aapka logic)
-        color = "blue" if status == "Mottatt" else "orange" if status == "Under Behandling" else "green" if status == "Godkjent" else "red"
-        
         with st.expander(f"👤 {hoved} | ID: {sak_id} | Status: {status}"):
-            st.markdown(f"### 📄 Sak Detaljer")
+            st.markdown(f"### 📄 Sak Detaljer (Full Redigering)")
+            st.warning("Her kan du endre alt, akkurat som ved første registrering.")
             
-            # --- 100% AAPKA VIEW MODE (2 Columns) ---
-            c1, c2 = st.columns(2)
-            with c1:
-                st.write(f"**Dato:** {r.get('Dato', '-')}")
-                st.write(f"**Produkt:** {r.get('Produkt', '-')}")
-                st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
-            with c2:
-                st.write(f"**Telefon:** {r.get('Telefon', '-')}")
-                st.write(f"**E-post:** {r.get('E-post', '-')}")
-                st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
-
-            st.divider()
-
-            # --- NEYA EDIT SYSTEM (JO AAPKO CHAHIYE THA) ---
-            st.markdown("### 🔧 **Saksbehandling (Modify System)**")
-            
+            # --- MODIFIED EDIT SYSTEM (Har cheez edit karne ke liye) ---
             with st.container():
                 edit_c1, edit_c2 = st.columns(2)
                 
-                # 1. Status Update
-                st_list = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-                current_st_idx = st_list.index(status) if status in st_list else 0
-                new_st = edit_c1.selectbox("Oppdater Status", st_list, index=current_st_idx, key=f"ark_st_{i}")
+                with edit_c1:
+                    # Registration fields jo ab edit ho sakti hain
+                    new_hoved = st.text_input("Hovedsøker", value=r.get('Hovedsøker', ''), key=f"ed_hoved_{i}")
+                    new_tlf = st.text_input("Telefon", value=r.get('Telefon', ''), key=f"ed_tlf_{i}")
+                    new_mail = st.text_input("E-post", value=r.get('E-post', ''), key=f"ed_mail_{i}")
+                    new_belop = st.text_input("Lånebeløp", value=r.get('Lånebeløp', ''), key=f"ed_bel_{i}")
+
+                with edit_c2:
+                    new_prod = st.text_input("Produkt", value=r.get('Produkt', ''), key=f"ed_prod_{i}")
+                    # Status selection
+                    st_list = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                    curr_idx = st_list.index(status) if status in st_list else 0
+                    new_st = st.selectbox("Bank Status", st_list, index=curr_idx, key=f"ed_stat_{i}")
+                    
+                    new_mangler = st.text_input("Mangler dokumenter? (Melding til Agent)", value=r.get('Mangler', ''), key=f"ed_mng_{i}")
                 
-                # 2. Mangler Message
-                new_mangler = edit_c2.text_input("Mangler dokumenter? (Melding til Agent)", value=r.get('Mangler', ''), key=f"ark_mng_{i}")
+                # Internal Notes (Full width)
+                new_notater = st.text_area("Interne Notater (Viktig info)", value=r.get('Notater', ''), key=f"ed_not_{i}")
                 
-                # 3. Internal Notes
-                new_notater = st.text_area("Interne Notater (Viktig info)", value=r.get('Notater', ''), key=f"ark_not_{i}")
-                
-                # SAVE BUTTON (Calls update_sak_in_sheet function)
-                if st.button(f"💾 Lagre Endringer (ID: {sak_id})", key=f"ark_save_btn_{i}"):
-                    updates = {
+                st.divider()
+
+                # --- SAVE BUTTON (Jo poora data update karega) ---
+                if st.button(f"💾 Lagre Alle Endringer (ID: {sak_id})", key=f"ark_save_btn_{i}"):
+                    # Saari fields ka data aik saath
+                    full_updates = {
+                        "Hovedsøker": new_hoved,
+                        "Telefon": new_tlf,
+                        "E-post": new_mail,
+                        "Lånebeløp": new_belop,
+                        "Produkt": new_prod,
                         "Bank_Status": new_st,
                         "Mangler": new_mangler,
                         "Notater": new_notater
                     }
                     
                     with st.spinner("Oppdaterer Google Sheets..."):
-                        # Yeh wahi function hai jo humne top par rakha hai
-                        success = update_sak_in_sheet(sak_id, updates)
+                        # Yeh function "update_full_sak" ya "update_sak_in_sheet" ko call karega
+                        success = update_sak_in_sheet(sak_id, full_updates)
                         if success:
-                            st.success(f"✅ Sak {sak_id} er nå oppdatert!")
+                            st.success(f"✅ Sak {sak_id} er nå oppdatert med alle nye detaljer!")
                             st.rerun()
                         else:
-                            st.error("Kunne ikke koble til databasen. Sjekk connection.")
-                            
+                            st.error("Kunne ikke koble til databasen. Sjekk connection.")                            
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

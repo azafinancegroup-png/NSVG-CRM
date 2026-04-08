@@ -555,38 +555,60 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST SYSTEM (NEW SECTION) ---
+# --- 11. E-POST SYSTEM (WORKING ENGINE) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    # Staff aur contact list
-    staff_emails = {
-        "Amina (Director )": "aminaaz98@hotmail.com",
+    # Ye dropdown sirf aapki asani ke liye hai
+    mottaker_presets = {
         "Admin (nsvg.no)": "info@nsvg.no",
-        "Bedi": "contact@onefinans.no",
-        "Generell Kunde": "" # Khali jagah taake khud likh sakein
+        "Aggi (oest.no)": "aggi@oest.no",
+        "Kredittnova": "info@kredittnova.no",
+        "Annet": "" 
     }
 
     with st.form("email_form"):
         col1, col2 = st.columns(2)
         with col1:
-            mottaker_valg = st.selectbox("Velg mottaker (Meltig til)", list(staff_emails.keys()))
-            recipient = st.text_input("Mottaker e-post", value=staff_emails[mottaker_valg])
+            valgt_navn = st.selectbox("Velg mottaker", list(mottaker_presets.keys()))
+            recipient = st.text_input("Mottaker e-post", value=mottaker_presets[valgt_navn])
         
         with col2:
-            subject = st.text_input("Emne (Subject)", placeholder="F.eks: Manglende dokumentasjon")
+            subject = st.text_input("Emne (Subject)")
 
-        message = st.text_area("Melding (Message)", height=200, placeholder="Skriv din e-post her...")
+        message = st.text_area("Melding (Message)", height=200)
         
         submit_mail = st.form_submit_button("🚀 Send E-post")
 
         if submit_mail:
             if not recipient or not message:
-                st.error("Vennligst fyll ut mottaker og melding.")
+                st.error("Fyll ut mottaker og melding!")
             else:
-                # Filhal ye sirf interface hai, jab aap SMTP server ki details denge
-                # to hum ise asli email bhejney ke liye connect kar denge.
-                st.info(f"E-post systemet er klart. Melding til {recipient} er generert.")
-                st.success("✅ Funksjonen er klar for tilkobling til SMTP server.")
-st.sidebar.markdown("---")
+                try:
+                    import smtplib
+                    from email.mime.text import MIMEText
+
+                    # YE HAI ASLI JADU: Ye secrets se aapka email uthayega
+                    sender = st.secrets["email_auth"]["sender_email"]
+                    pwd = st.secrets["email_auth"]["app_password"]
+
+                    msg = MIMEText(message)
+                    msg['Subject'] = subject
+                    msg['From'] = sender
+                    msg['To'] = recipient
+
+                    with st.spinner("Sender e-post..."):
+                        # Gmail Server connection
+                        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+                        server.login(sender, pwd)
+                        server.sendmail(sender, recipient, msg.as_string())
+                        server.quit()
+                    
+                    st.success(f"✅ E-post er sendt til {recipient}!")
+                
+                except Exception as e:
+                    # Agar ab bhi nahi gayi, to yahan asli wajah (Error) likhi aayegi
+                    st.error(f"❌ Feil: {e}")
+                    
+                    st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

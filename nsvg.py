@@ -4,11 +4,10 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# --- UPDATE ENGINE (Isko sabse upar rakhein) ---
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
-        # Note: Agar aapka gspread client 'gc' hai to niche 'client' ko 'gc' kar dena
-        sheet = client.open("MainDB").sheet1 
+        # Aapke system mein 'gc' valid hai, isliye hum 'gc' use kar rahe hain
+        sheet = gc.open("MainDB").sheet1 
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
@@ -23,7 +22,8 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        st.error(f"Database error: {e}")
+        # Agar koi error aaye to ye aapko screen par dikhayega
+        st.error(f"System Error: {e}")
         return False
         
 # --- 1. SETTINGS & PAGE CONFIG ---
@@ -305,15 +305,82 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
-# --- 8. KUNDE ARKIV ---
+# --- 8. KUNDE ARKIV (MODERN EDITABLE SYSTEM) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
+    
+    # Role-based filter (Aapka original logic)
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
-    sok = st.text_input("🔍 Søk etter kunde (Navn, Tlf, E-post)...")
+    
+    # Modern Search Bar
+    sok = st.text_input("🔍 Søk etter kunde (Navn, Tlf, E-post, ID)...", placeholder="Skriv her for å filtrere...")
+    
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
-    st.dataframe(view_df, use_container_width=True)
 
+    # Metrics for Archive
+    st.info(f"Totalt **{len(view_df)}** saker funnet i arkivet.")
+
+    # List View with Expanders (Like Modern Banking Apps)
+    for i, r in view_df.iterrows():
+        sak_id = r.get('ID', i)
+        hoved = r.get('Hovedsøker', 'Ukjent Kunde')
+        status = r.get('Bank_Status', 'Mottatt')
+        
+        # Color coding for status
+        color = "blue" if status == "Mottatt" else "orange" if status == "Under Behandling" else "green" if status == "Godkjent" else "red"
+        
+        with st.expander(f"👤 {hoved} | ID: {sak_id} | Status: {status}"):
+            st.markdown(f"### 📄 Sak Detaljer")
+            
+            # --- VIEW MODE (2 Columns) ---
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write(f"**Dato:** {r.get('Dato', '-')}")
+                st.write(f"**Produkt:** {r.get('Produkt', '-')}")
+                st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
+            with c2:
+                st.write(f"**Telefon:** {r.get('Telefon', '-')}")
+                st.write(f"**E-post:** {r.get('E-post', '-')}")
+                st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
+
+            st.divider()
+
+            # --- EDIT MODE (Banking Modification System) ---
+            st.markdown("### 🔧 **Saksbehandling (Modify System)**")
+            
+            with st.container():
+                edit_c1, edit_c2 = st.columns(2)
+                
+                # 1. Status Update
+                st_list = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                current_st_idx = st_list.index(status) if status in st_list else 0
+                new_st = edit_c1.selectbox("Oppdater Status", st_list, index=current_st_idx, key=f"ark_st_{i}")
+                
+                # 2. Mangler Message (Messaging System)
+                new_mangler = edit_c2.text_input("Mangler dokumenter? (Melding til Agent)", value=r.get('Mangler', ''), key=f"ark_mng_{i}")
+                
+                # 3. Internal Notes
+                new_notater = st.text_area("Interne Notater (Viktig info)", value=r.get('Notater', ''), key=f"ark_not_{i}")
+                
+                # SAVE BUTTON
+                if st.button(f"💾 Lagre Endringer (ID: {sak_id})", key=f"ark_save_btn_{i}"):
+                    # Dictionary of changes
+                    updates = {
+                        "Bank_Status": new_st,
+                        "Mangler": new_mangler,
+                        "Notater": new_notater
+                    }
+                    
+                    with st.spinner("Oppdaterer Google Sheets..."):
+                        # ENGINE CALL (Function humne top par rakha hai)
+                        # Yahan hum 'gc' use karenge function ke andar error se bachne ke liye
+                        success = update_sak_in_sheet(sak_id, updates)
+                        if success:
+                            st.success(f"✅ Sak {sak_id} er nå oppdatert!")
+                            st.rerun()
+                        else:
+                            st.error("Kunne ikke koble til databasen. Sjekk connection.")
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

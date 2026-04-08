@@ -4,6 +4,28 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
+# --- UPDATE ENGINE (Isko sabse upar rakhein) ---
+def update_sak_in_sheet(sak_id, updated_values_dict):
+    try:
+        # Note: Agar aapka gspread client 'gc' hai to niche 'client' ko 'gc' kar dena
+        sheet = client.open("MainDB").sheet1 
+        data = sheet.get_all_records()
+        temp_df = pd.DataFrame(data)
+        
+        if 'ID' in temp_df.columns:
+            matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
+            if matched_rows:
+                actual_row = matched_rows[0] + 2 
+                for col_name, new_val in updated_values_dict.items():
+                    if col_name in temp_df.columns:
+                        col_idx = temp_df.columns.get_loc(col_name) + 1
+                        sheet.update_cell(actual_row, col_idx, str(new_val))
+                return True
+        return False
+    except Exception as e:
+        st.error(f"Database error: {e}")
+        return False
+        
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 

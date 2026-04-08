@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (NORSK VERSION) ---
+# --- 11. E-POST & KONTAKTER (FIXED) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -568,13 +568,12 @@ elif valg == "📧 Send E-post":
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         url = st.secrets["spreadsheet"]
-        # Leser kontakter
         contacts_df = conn.read(spreadsheet=url, worksheet="Contacts", ttl=0)
     except Exception as e:
         st.error(f"Tilkoblingsfeil: {e}")
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # --- Legg til ny kontakt ---
+    # 1. Legg til ny kontakt
     with st.expander("➕ Legg til ny kontakt"):
         with st.form("kontakt_form", clear_on_submit=True):
             n = st.text_input("Navn")
@@ -596,11 +595,10 @@ elif valg == "📧 Send E-post":
 
     st.divider()
 
-    # --- Send E-post ---
+    # 2. Skriv og send e-post
     with st.form("send_mail_form"):
         st.subheader("Skriv Melding")
         
-        # Velg mottaker
         if not contacts_df.empty:
             chosen_email = st.selectbox("Velg mottaker", [""] + contacts_df["E-post"].tolist())
         else:
@@ -629,7 +627,6 @@ elif valg == "📧 Send E-post":
                 except Exception as ex:
                     st.error(f"Feil: {ex}")
             else:
-                st.warning("Fyll ut alle felt!")
-                
+                st.warning("Fyll ut alle felt!")                
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

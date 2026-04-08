@@ -295,10 +295,11 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
 
-# --- 8. KUNDE ARKIV (HOVEDSØKER DATA FIX) ---
+# --- 8. KUNDE ARKIV (100% DATA MATCHED WITH YOUR SHEET) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
+    # Role-based filter
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
     sok = st.text_input("🔍 Søk (Navn, ID, Tlf)...", placeholder="Skriv her...")
@@ -311,71 +312,84 @@ elif valg == "📂 Kunde Arkiv":
         if edit_key not in st.session_state:
             st.session_state[edit_key] = False
 
-        with st.expander(f"📁 {r.get('Hovedsøker', 'Kunde')} | ID: {sak_id}"):
+        with st.expander(f"📁 {r.get('Navn', 'Kunde')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
             
             if not st.session_state[edit_key]:
-                # VIEW MODE
+                # --- VIEW MODE (Pora sak jese aik file mein ho) ---
                 st.markdown(f"### 📄 Sak Detaljer (ID: {sak_id})")
-                c1, c2 = st.columns(2)
+                c1, c2, c3 = st.columns(3)
                 with c1:
-                    st.write(f"**Hovedsøker:** {r.get('Hovedsøker', '-')}")
-                    st.write(f"**Telefon:** {r.get('Telefon', '-')}")
+                    st.write(f"**Navn:** {r.get('Navn', '-')}")
+                    st.write(f"**Fnr:** {r.get('Fnr', '-')}")
+                    st.write(f"**Epost:** {r.get('Epost', '-')}")
+                    st.write(f"**Tlf:** {r.get('Tlf', '-')}")
                 with c2:
+                    st.write(f"**Produkt:** {r.get('Produkt', '-')}")
                     st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
-                    st.write(f"**Status:** {r.get('Bank_Status', '-')}")
-                
+                    st.write(f"**Lønn:** {r.get('Lønn', '0')} kr")
+                    st.write(f"**EK:** {r.get('EK', '0')} kr")
+                with c3:
+                    st.write(f"**Sivilstatus:** {r.get('Sivilstatus', '-')}")
+                    st.write(f"**Dato:** {r.get('Dato', '-')}")
+                    st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
+
+                st.divider()
                 if st.button(f"🛠️ Endre denne saken (Modify)", key=f"btn_edit_{sak_id}"):
                     st.session_state[edit_key] = True
                     st.rerun()
 
             else:
-                # EDIT MODE (Full Registration Style)
-                with st.form(key=f"full_edit_form_{sak_id}"):
-                    st.subheader("👤 Hovedsøker Detaljer")
+                # --- EDIT MODE (Registration Style - Sab kuch edit karein) ---
+                st.subheader("🛠️ Redigerer Sak (Full Modus)")
+                
+                with st.form(key=f"full_edit_{sak_id}"):
+                    # HOVEDSØKER SECTION
+                    st.markdown("#### 👤 Hovedsøker Detaljer")
                     h1, h2 = st.columns(2)
+                    up_navn = h1.text_input("Fullt Navn", value=str(r.get('Navn', '')))
+                    up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
+                    up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
+                    up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
                     
-                    # Yahan dhyan dein: 'Hovedsøker', 'Fødselsnummer', 'E-post' 
-                    # agar sheet mein yahi naam hain to data lazmi aayega
-                    up_navn = h1.text_input("Fullt Navn (Hovedsøker) *", value=str(r.get('Hovedsøker', '')))
-                    up_fnr = h1.text_input("Fødselsnummer (11 siffer)", value=str(r.get('Fødselsnummer', '')))
-                    up_epost = h2.text_input("E-post", value=str(r.get('E-post', '')))
-                    up_tlf = h2.text_input("Telefon", value=str(r.get('Telefon', '')))
-                    
-                    st.subheader("💼 Arbeid & Inntekt")
+                    h3, h4 = st.columns(2)
+                    up_sivil = h3.text_input("Sivilstatus", value=str(r.get('Sivilstatus', '')))
+                    up_pass = h4.text_input("Pass Info", value=str(r.get('Pass_Info', '')))
+
+                    # INNTEKT & GJELD
+                    st.markdown("#### 💼 Økonomi")
                     a1, a2 = st.columns(2)
-                    # Agar box khali hai, to check karein sheet mein 'Årslønn' likha hai ya 'Inntekt'
-                    up_lonn = a1.text_input("Årslønn Brutto (kr)", value=str(r.get('Årslønn', '0')))
-                    up_arb = a1.text_input("Arbeidsgiver", value=str(r.get('Arbeidsgiver', '')))
-                    
-                    st.subheader("👥 Medsøker Detaljer")
+                    up_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
+                    up_gjeld = a1.text_input("Gjeld (kr)", value=str(r.get('Gjeld', '0')))
+                    up_belop = a2.text_input("Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
+                    up_ek = a2.text_input("EK (kr)", value=str(r.get('EK', '0')))
+
+                    # MEDSØKER SECTION
+                    st.markdown("#### 👥 Medsøker Detaljer")
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Navn", value=str(r.get('Medsøker_Navn', '')))
                     up_m_fnr = m1.text_input("Medsøker Fnr", value=str(r.get('Medsøker_Fnr', '')))
                     up_m_lonn = m2.text_input("Medsøker Lønn", value=str(r.get('Medsøker_Lønn', '0')))
                     up_m_tlf = m2.text_input("Medsøker Tlf", value=str(r.get('Medsøker_Tlf', '')))
 
-                    st.subheader("🏠 Finansiell Status & Gjeld")
-                    f1, f2 = st.columns(2)
-                    up_belop = f1.text_input("Ønsket Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
-                    up_ek = f1.text_input("Egenkapital (kr)", value=str(r.get('Egenkapital', '0')))
-                    up_gjeld = f2.text_input("Samlet Gjeld (kr)", value=str(r.get('Samlet Gjeld', '0')))
-                    
-                    up_notat = st.text_area("Interne Notater", value=str(r.get('Notater', '')))
+                    # STATUS & NOTES
+                    st.markdown("#### ⚙️ System Status")
                     up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
                                          index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
+                    up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
 
                     # Buttons
                     b1, b2 = st.columns(2)
-                    if b1.form_submit_button("💾 Lagre Endringer"):
-                        final_data = {
-                            "Hovedsøker": up_navn, "Fødselsnummer": up_fnr, "E-post": up_epost, "Telefon": up_tlf,
-                            "Årslønn": up_lonn, "Arbeidsgiver": up_arb, "Medsøker_Navn": up_m_navn,
-                            "Medsøker_Fnr": up_m_fnr, "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
-                            "Lånebeløp": up_belop, "Egenkapital": up_ek, "Samlet Gjeld": up_gjeld,
+                    if b1.form_submit_button("💾 Lagre Alle Endringer"):
+                        final_updates = {
+                            "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
+                            "Sivilstatus": up_sivil, "Pass_Info": up_pass, "Lønn": up_lonn, 
+                            "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
+                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, 
+                            "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
                             "Bank_Status": up_st, "Notater": up_notat
                         }
-                        if update_sak_in_sheet(sak_id, final_data):
-                            st.success("Sak oppdatert!")
+                        if update_sak_in_sheet(sak_id, final_updates):
+                            st.success("✅ Sak oppdatert!")
                             st.session_state[edit_key] = False
                             st.rerun()
                     

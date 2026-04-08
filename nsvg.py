@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (MUKAMMAL CODE) ---
+# --- 11. E-POST & KONTAKTER (FIXED FOR SERVICE ACCOUNT) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -567,11 +567,14 @@ elif valg == "📧 Send E-post":
     # Google Sheets se connection establish karna
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # Contacts load karne ki koshish (ttl=0 taake naya data foran aaye)
+    # Secrets se spreadsheet URL uthana
+    sheet_url = st.secrets["spreadsheet"]
+    
+    # Contacts load karne ki koshish (Force Service Account using URL)
     try:
-        contacts_df = conn.read(worksheet="Contacts", ttl=0)
+        contacts_df = conn.read(spreadsheet=sheet_url, worksheet="Contacts", ttl=0)
     except Exception:
-        # Agar tab nahi milta to khali list bana do
+        # Agar tab nahi milta ya koi masla hai to khali list bana do
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
     # 1. Naya Contact Save karne ka Form
@@ -589,11 +592,13 @@ elif valg == "📧 Send E-post":
                     # Purane data mein naya banda add karna
                     updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
                     try:
-                        conn.update(worksheet="Contacts", data=updated_df)
+                        # Force Service Account update using URL
+                        conn.update(spreadsheet=sheet_url, worksheet="Contacts", data=updated_df)
                         st.success(f"✅ {new_e} er lagret i Google Sheets!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Kunne ikke lagre til Google Sheets: {e}")
+                        st.info("Mashwara: Check karein ke aapne Robot Email ko 'Editor' banaya hai ya nahi.")
                 else:
                     st.error("E-post er obligatorisk (Email is required)!")
 
@@ -649,7 +654,8 @@ elif valg == "📧 Send E-post":
                     if auto_save and final_recipient not in contacts_df["E-post"].values:
                         new_auto_entry = pd.DataFrame([{"Navn": "Auto-Saved", "E-post": final_recipient, "Telefon": "-"}])
                         updated_df_auto = pd.concat([contacts_df, new_auto_entry], ignore_index=True)
-                        conn.update(worksheet="Contacts", data=updated_df_auto)
+                        # Force Service Account update here too
+                        conn.update(spreadsheet=sheet_url, worksheet="Contacts", data=updated_df_auto)
                         st.info("E-posten ble lagret i listen.")
 
                 except Exception as e:

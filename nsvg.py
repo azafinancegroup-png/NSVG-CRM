@@ -612,5 +612,6 @@ elif valg == "📧 Send E-post":
                     # Agar ab bhi error aaye, to yahan se check hoga
                     st.error(f"❌ Login Feil: {e}")
                     st.warning("Tips: Sjekk om App Password er riktig i Secrets.")
+                    
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

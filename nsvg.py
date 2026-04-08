@@ -86,7 +86,7 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- 6. DASHBORD (100% PURANA CODE + LIVE MESSAGING & STATUS) ---
+# --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
@@ -107,44 +107,63 @@ if valg == "📊 Dashbord":
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
-        # --- SAKER LIST SECTION (With Live Status & Mangler Message) ---
+        # --- SAKER LIST SECTION ---
         for i, r in view_data.tail(15).iterrows():
-            # Data fetch with .get for safety (KeyError fix)
+            # Data fetch with .get for safety
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
             b_status = r.get('Bank_Status', 'Mottatt')
-            mangler_msg = r.get('Mangler', '') # Naya column for messages
+            mangler_msg = r.get('Mangler', '') 
+            sak_id = r.get('ID', i) # Unique ID for update logic
 
             # Status Icons for Live Feel
             st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
-                # --- MESSAGING SYSTEM (Sirf tab dikhega agar Admin ne message likha ho) ---
+                # --- MESSAGING SYSTEM (Admin Message Display) ---
                 if mangler_msg and mangler_msg.strip() != "":
                     st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
                     st.info("💡 Vennligst sjekk dokumentene ya info jo mangler.")
 
-                # --- FULL INFO DISPLAY (Aapka original loop) ---
+                # --- FULL INFO DISPLAY (Aapka original loop - No deletion) ---
                 st.markdown("---")
                 for col_name, value in r.items():
-                    # Status aur Mangler ko highlight karne ke liye loop mein thora change
                     if col_name == 'Bank_Status':
                         st.write(f"**Current Status:** `{value}`")
                     elif col_name == 'Mangler':
-                        continue # Upar error box mein dikha diya hai
+                        continue 
                     else:
                         st.write(f"**{col_name}:** {value}")
                 
-                # --- AGENT UPDATE OPTION (Optional: Agent can reply) ---
+                # --- MODIFICATION SYSTEM (For Ansatt & Admin) ---
+                st.markdown("---")
+                st.write("🔧 **Rediger Sak / Svar til Admin**")
+                
+                # Input boxes for modification
+                new_notater = st.text_area("Oppdater Notater / Legg til info", value=r.get('Notater', ''), key=f"edit_not_{i}")
+                
                 if role == "Ansatt":
-                    st.markdown("---")
-                    update_txt = st.text_input("Svar til Admin / Oppdatering", key=f"reply_{i}")
-                    if st.button("Send Svar", key=f"btn_reply_{i}"):
-                        st.success("Svar sendt!") # Yahan aapka update function aayega
+                    ansatt_reply = st.text_input("Status Melding (Svar)", key=f"ans_rep_{i}")
+                    
+                if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
+                    # Logic to update Google Sheet
+                    # Yahan hum 'Notater' aur 'Mangler' (svar) ko update karenge
+                    updates = {
+                        "Notater": new_notater,
+                        "Mangler": ansatt_reply if role == "Ansatt" else mangler_msg
+                    }
+                    
+                    with st.spinner("Oppdaterer databasen..."):
+                        # update_sak_in_sheet function ko call karein (jo maine pehle diya tha)
+                        success = update_sak_in_sheet(sak_id, updates)
+                        if success:
+                            st.success("✅ Sak er oppdatert!")
+                            st.rerun()
+                        else:
+                            st.error("Kunne ikke koble til databasen.")
     else:
-        st.warning("Ingen data tilgjengelig i databasen.")
-        
+        st.warning("Ingen data tilgjengelig i databasen.")        
 # --- 7. NY REGISTRERING (100% FIELD ACCURACY + MESSAGING SUPPORT) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
@@ -168,7 +187,7 @@ elif valg == "➕ Ny Registrering":
 
         st.subheader("👤 Hovedsøker Detaljer")
         c1, c2 = st.columns(2)
-        navn = c1.text_input("Fullt Navn (Hovedsøker) *") # Hovedsøker ka naam search ke liye zaroori hai
+        navn = c1.text_input("Fullt Navn (Hovedsøker) *") 
         fnr = c1.text_input("Fødselsnummer (11 siffer)")
         epost = c1.text_input("E-post")
         tlf = c2.text_input("Telefon")
@@ -221,12 +240,11 @@ elif valg == "➕ Ny Registrering":
 
         if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
             if not navn:
-                st.error("Vennligst skriv inn navnet på Hovedsøker!")
+                st.error("Vennligst skriv inn navnet na Hovedsøker!")
             else:
                 tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
                 
                 # --- SYNCED COLUMN MAPPING (32 Columns now) ---
-                # Aakhir mein "" (empty string) add ki hai 'Mangler' column ke liye
                 new_row = [
                     len(df)+1, 
                     datetime.now().strftime("%d-%m-%Y"), 
@@ -259,13 +277,12 @@ elif valg == "➕ Ny Registrering":
                     f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
                     current_user, 
                     "Mottatt",
-                    "" # <--- YE HAI MANGLER COLUMN (Initial empty)
+                    "" # <--- YE HAI MANGLER COLUMN (Yahan se modification start hogi)
                 ]
                 
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
-                st.balloons()
-                
+                st.balloons()                
 # --- 8. KUNDE ARKIV ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
@@ -292,7 +309,7 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL (FULL RE-INTEGRATION + MESSAGING & STATUS) ---
+# --- 10. ANSATTE KONTROLL (FULL RE-INTEGRATION + MODIFICATION ENGINE) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
@@ -301,7 +318,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     main_df = df # Global load
 
     if not agents_df.empty:
-        # 1. Search Box (Aapka original search)
+        # 1. Search Box (Aapka original search logic)
         sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...", placeholder="Skriv brukernavn eller navn...")
         
         if sok_agent:
@@ -317,13 +334,13 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
             with st.expander(f"👤 {a_navn} (ID: {a_user})"):
                 col1, col2 = st.columns(2)
                 
-                # Agent Details (PURANA CODE - 100% Same)
+                # --- Agent Details (PURANA CODE - 100% Same) ---
                 with col1:
                     st.markdown(f"**Stilling:** `{row.get('stilling', '-')}`")
                     st.markdown(f"**Vakt:** `{row.get('vakt', '-')}`")
                     st.markdown(f"**Nåværende Status:** `{row.get('status', '-')}`")
                 
-                # Performance Metrics (PURANA CODE - 100% Same)
+                # --- Performance Metrics (PURANA CODE - 100% Same) ---
                 agent_saker = main_df[main_df['Saksbehandler'].astype(str).str.lower() == a_user] if not main_df.empty else pd.DataFrame()
                 
                 with col2:
@@ -339,18 +356,18 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
 
                 st.divider()
                 
-                # Actions (Slette, Se Saker, Endre Status - PURANA CODE)
+                # --- Actions (Slette, Se Saker, Endre Status - PURANA CODE) ---
                 act1, act2, act3 = st.columns(3)
                 
                 with act1:
-                    # UPDATED DETAIL VIEW (With Messaging & Live Status)
+                    # UPDATED DETAIL VIEW (With Messaging & Live Status Modification)
                     if st.button(f"📂 Se Saker", key=f"v_saker_{i}"):
                         if not agent_saker.empty:
                             st.subheader(f"Saker for {a_navn}")
                             for idx, s_row in agent_saker.iterrows():
                                 sak_id = s_row.get('ID', idx)
                                 with st.expander(f"📄 Sak: {s_row.get('Hovedsøker', 'Kunde')} (ID: {sak_id})"):
-                                    # Info Loop (Show 100% data)
+                                    # Info Loop (Show 100% data - Original logic)
                                     cols = st.columns(2)
                                     for count, (col_name, col_val) in enumerate(s_row.items()):
                                         target_col = cols[0] if count % 2 == 0 else cols[1]
@@ -359,27 +376,36 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                                     st.markdown("---")
                                     st.write("🔧 **Admin Action: Status & Messaging**")
                                     
-                                    # 1. Live Status Change (Jo Ansatt ko dikhega)
+                                    # 1. Live Status Change
                                     status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
                                     current_bank_st = s_row.get('Bank_Status', 'Mottatt')
                                     st_idx = status_options.index(current_bank_st) if current_bank_st in status_options else 0
                                     
                                     new_bank_st = st.selectbox("Oppdater Sak Status", status_options, index=st_idx, key=f"st_edit_{idx}_{i}")
                                     
-                                    # 2. Mangler/Messaging Box (Jo Ansatt ko message bhejna hai)
+                                    # 2. Mangler/Messaging Box (Jo Ansatt ko dikhega)
                                     mangler_msg = st.text_area("Mangler dokumenter / Melding til ansatt", 
                                                                value=s_row.get('Mangler', ''), 
                                                                placeholder="Skriv her... (f.eks: Trenger lønnsslipp)",
                                                                key=f"msg_edit_{idx}_{i}")
                                     
-                                    if st.button(f"💾 Lagre & Send Melding (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
-                                        # Yahan function call jo Google Sheets update karega
-                                        st.success(f"✅ Sak {sak_id} oppdatert! Melding er sendt til {a_navn}.")
+                                    if st.button(f"💾 Lagre & Send Live (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
+                                        # Yeh updates dictionary taiyar karega
+                                        updates = {
+                                            "Bank_Status": new_bank_st,
+                                            "Mangler": mangler_msg
+                                        }
+                                        # Function call to Google Sheets
+                                        with st.spinner("Oppdaterer Google Sheets..."):
+                                            success = update_sak_in_sheet(sak_id, updates)
+                                            if success:
+                                                st.success(f"✅ Sak {sak_id} er oppdatert!")
+                                                st.rerun()
                         else:
                             st.warning("Ingen data funnet.")
 
                 with act2:
-                    # Agent Status Update (PURANA CODE - 100% Same)
+                    # Agent Account Status Update (PURANA CODE - 100% Same)
                     status_options = ["Aktiv", "Inaktiv", "Permisjon"]
                     current_s = row.get('status', 'Aktiv')
                     try: idx_s = status_options.index(current_s)

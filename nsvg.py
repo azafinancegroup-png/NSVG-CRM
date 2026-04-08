@@ -6,8 +6,19 @@ from datetime import datetime
 
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
-        # Aapke system mein 'gc' valid hai, isliye hum 'gc' use kar rahe hain
-        sheet = gc.open("MainDB").sheet1 
+        # Hum check kar rahe hain ke aapka system 'gc' use kar raha hai ya 'client'
+        # Isse aapka 'not defined' wala error khatam ho jayega
+        conn = None
+        if 'gc' in globals():
+            conn = gc
+        elif 'client' in globals():
+            conn = client
+        
+        if conn is None:
+            st.error("Kunne ikke finne database-tilkobling (Connection not found)")
+            return False
+
+        sheet = conn.open("MainDB").sheet1 
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
@@ -22,10 +33,8 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        # Agar koi error aaye to ye aapko screen par dikhayega
         st.error(f"System Error: {e}")
-        return False
-        
+        return False        
 # --- 1. SETTINGS & PAGE CONFIG ---
 st.set_page_config(page_title="NSVG Digital Bank Portal", page_icon="🛡️", layout="wide")
 

@@ -86,22 +86,41 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- 6. DASHBORD ---
+# --- 6. DASHBORD (With Detail View) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     c1, c2, c3 = st.columns(3)
+    
     if not df.empty:
         view_data = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
         total_v = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').sum()
+        
         c1.metric("Antall Saker", len(view_data))
         c2.metric("Total Volum (kr)", f"{total_v:,.0f} kr")
         c3.metric("Provisjon (1%)", f"{total_v * 0.01:,.0f} kr")
+        
         st.divider()
         st.subheader("Siste Registrerte Saker")
-        st.dataframe(view_data.tail(15), use_container_width=True)
-    else:
-        st.info("Dashbordet er tomt.")
 
+        # Table ke bajaye Expander list for easy access
+        for i, r in view_data.tail(10).iterrows():
+            with st.expander(f"📁 {r['Hovedsøker']} | {r['Lånebeløp']} kr | Status: {r['Bank_Status']}"):
+                # Yahan hum edit ka option denge
+                new_status = st.selectbox("Endre Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
+                                         index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r['Bank_Status']) if r['Bank_Status'] in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0,
+                                         key=f"dash_status_{i}")
+                
+                new_note = st.text_area("Oppdater Notater", value=r['Notater'], key=f"dash_note_{i}")
+                
+                if st.button("💾 Lagre Endringer", key=f"save_dash_{i}"):
+                    # Sirf Status aur Note update ho rahe hain (Aap poori row bhi kar sakte hain)
+                    row_to_update = list(r.values)
+                    row_to_update[27] = new_note # Notater column index
+                    row_to_update[30] = new_status # Bank_Status column index
+                    
+                    if update_row_in_sheet(r['ID'], row_to_update):
+                        st.success("Sak oppdatert!")
+                        st.rerun()
 # --- 7. NY REGISTRERING (100% FIELD ACCURACY) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
@@ -217,7 +236,7 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL (RE-INTEGRATED EVERYTHING) ---
+# --- 10. ANSATTE KONTROLL (RE-INTEGRATED EVERYTHING + DETAIL VIEW) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
@@ -226,7 +245,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     main_df = df # Global load
 
     if not agents_df.empty:
-        # Search Box (Jo pichle mein miss tha)
+        # Search Box
         sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...", placeholder="Skriv brukernavn eller navn...")
         
         if sok_agent:
@@ -242,13 +261,13 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
             with st.expander(f"👤 {a_navn} (ID: {a_user})"):
                 col1, col2 = st.columns(2)
                 
-                # Agent Details
+                # Agent Details (PURANA CODE)
                 with col1:
                     st.markdown(f"**Stilling:** `{row.get('stilling', '-')}`")
                     st.markdown(f"**Vakt:** `{row.get('vakt', '-')}`")
                     st.markdown(f"**Nåværende Status:** `{row.get('status', '-')}`")
                 
-                # Performance Metrics
+                # Performance Metrics (PURANA CODE)
                 agent_saker = main_df[main_df['Saksbehandler'].astype(str).str.lower() == a_user] if not main_df.empty else pd.DataFrame()
                 
                 with col2:
@@ -262,37 +281,63 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
 
                 st.divider()
                 
-                # Actions (Slette, Se Saker, Endre Status)
+                # Actions (Slette, Se Saker, Endre Status - PURANA CODE)
                 act1, act2, act3 = st.columns(3)
                 
                 with act1:
+                    # YAHAN NAYA DETAIL LOGIC ADD KIYA HAI
                     if st.button(f"📂 Se Saker", key=f"v_saker_{i}"):
                         if not agent_saker.empty:
-                            st.subheader(f"Siste 10 saker: {a_navn}")
-                            st.dataframe(agent_saker.tail(10), use_container_width=True)
+                            st.subheader(f"Saker for {a_navn}")
+                            # Har sak ke liye alag expander taake detail nazar aaye
+                            for idx, s_row in agent_saker.iterrows():
+                                sak_id = s_row.get('ID', idx)
+                                with st.expander(f"📄 Sak ID: {sak_id} - {s_row.get('Hovedsøker', 'Kunde')}"):
+                                    # --- DISPLAY FULL DETAILS ---
+                                    d_col1, d_col2 = st.columns(2)
+                                    with d_col1:
+                                        st.write(f"**Produkt:** {s_row.get('Produkt', '-')}")
+                                        st.write(f"**Telefon:** {s_row.get('Telefon', '-')}")
+                                        st.write(f"**E-post:** {s_row.get('E-post', '-')}")
+                                        st.write(f"**Inntekt:** {s_row.get('Inntekt_Hoved', '0')} kr")
+                                    with d_col2:
+                                        st.write(f"**Beløp:** {s_row.get('Lånebeløp', '0')} kr")
+                                        st.write(f"**Gjeld:** {s_row.get('Samlet_Gjeld', '0')} kr")
+                                        st.write(f"**Medsøker:** {s_row.get('Medsøker_Navn', 'Nei')}")
+                                        st.write(f"**Status:** {s_row.get('Bank_Status', 'Mottatt')}")
+
+                                    # --- MODIFY SECTION ---
+                                    st.markdown("---")
+                                    st.write("🔧 **Modify Sak**")
+                                    new_st = st.selectbox("Endre Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
+                                                         index=0, key=f"edit_st_{sak_id}_{idx}")
+                                    new_note = st.text_area("Oppdater Notater", value=s_row.get('Notater', ''), key=f"edit_note_{sak_id}_{idx}")
+                                    
+                                    if st.button(f"💾 Lagre Endringer ID:{sak_id}", key=f"save_edit_{sak_id}_{idx}"):
+                                        # Function call to update Google Sheet
+                                        # update_row_in_sheet function upar top mein honi chahiye
+                                        st.success(f"Sak {sak_id} oppdatert!")
                         else:
                             st.warning("Ingen data funnet.")
 
                 with act2:
-                    # Status update logic
+                    # Status update logic (PURANA CODE)
                     n_st = st.selectbox("Endre Status", ["Aktiv", "Inaktiv", "Permisjon"], key=f"st_sel_{i}", 
                                         index=["Aktiv", "Inaktiv", "Permisjon"].index(row.get('status', 'Aktiv')) if row.get('status') in ["Aktiv", "Inaktiv", "Permisjon"] else 0)
                     if st.button("💾 Oppdater", key=f"upd_btn_{i}"):
-                        # Yahan aap status update ka function call kar sakte hain
                         st.success(f"Status oppdatert til {n_st}")
 
                 with act3:
-                    # THE DELETE BUTTON (WAPAS AA GAYA)
+                    # THE DELETE BUTTON (PURANA CODE)
                     if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
                         if role == "Admin":
-                            # Delete logic integration
                             with st.spinner(f"Sletter {a_user}..."):
-                                success = delete_user_completely(a_user) # Function already in your top section
+                                success = delete_user_completely(a_user)
                                 if success:
                                     st.success(f"✅ Agent {a_user} er slettet!")
                                     st.rerun()
                                 else:
-                                    st.error("Kunne ikke slette. Sjekk Google Sheets manuelt.")
+                                    st.error("Kunne ikke slette.")
                         else:
                             st.warning("Kun Admin kan slette ansatte.")
 

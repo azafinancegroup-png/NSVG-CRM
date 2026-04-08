@@ -555,63 +555,86 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST SYSTEM (FINAL SIMPLIFIED) ---
+# --- 11. E-POST & KONTAKTER (NYESTE VERSJON) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    # Simple dictionary for contacts
-    mottaker_presets = {
-        "Admin (nsvg.no)": "info@nsvg.no",
-        "Aggi (oest.no)": "aggi@oest.no",
-        "Kredittnova": "info@kredittnova.no"
-    }
+    # 1. Contacts fetching (Google Sheets se)
+    try:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        contacts_df = conn.read(worksheet="Contacts")
+    except Exception:
+        # Agar sheet nahi bani to khali list dikhaye
+        contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    with st.form("email_form"):
-        # Dropdown se select karein
-        valgt_navn = st.selectbox("Velg mottaker", list(mottaker_presets.keys()))
+    # 2. Add New Contact Expander
+    with st.expander("➕ Legg til ny kontakt (Save New Contact)"):
+        with st.form("new_contact_form"):
+            new_n = st.text_input("Navn (Name)")
+            new_e = st.text_input("E-post (Email)")
+            new_t = st.text_input("Telefon")
+            if st.form_submit_button("Lagre i systemet"):
+                if new_e:
+                    # Naya data purane data mein add karna
+                    new_entry = pd.DataFrame([{"Navn": new_n, "E-post": new_e, "Telefon": new_t}])
+                    updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
+                    conn.update(worksheet="Contacts", data=updated_df)
+                    st.success("Kontakt lagret!")
+                    st.rerun()
+                else:
+                    st.error("E-post er obligatorisk!")
+
+    st.divider()
+
+    # 3. Main Email Form
+    with st.form("main_email_form"):
+        st.subheader("Skriv Melding")
         
-        # Is line se email address select ho jayega
-        recipient = mottaker_presets[valgt_navn]
+        # Option 1: Manually type email
+        recipient_manual = st.text_input("Mottaker e-post (Skriv inn manuelt)")
         
-        # Display ke liye email dikhayein (Optional)
-        st.info(f"Sender til: {recipient}")
+        # Option 2: Select from saved contacts
+        recipient_select = ""
+        if not contacts_df.empty:
+            recipient_select = st.selectbox("Eller velg fra lagrede kontakter", [""] + contacts_df["E-post"].tolist())
         
-        subject = st.text_input("Emne (Subject)", value="Melding fra CRM")
-        message = st.text_area("Melding (Message)", height=200)
+        # Final Recipient logic: Manual entry takes priority unless empty
+        final_recipient = recipient_manual if recipient_manual else recipient_select
         
-        submit_mail = st.form_submit_button("🚀 Send E-post")
+        subject = st.text_input("Emne (Subject)", value="Viktig melding fra Iqbal Entrepreneur")
+        message = st.text_area("Melding (Message)", height=250)
+        
+        submit_mail = st.form_submit_button("🚀 Send E-post NÅ")
 
         if submit_mail:
-            if not message:
-                st.error("Vennligst skriv en melding.")
+            if not final_recipient or not message:
+                st.error("Mottaker og melding må fylles ut!")
             else:
                 try:
                     import smtplib
                     from email.mime.text import MIMEText
 
-                    # SECRETS CHECK: Ensure these match your Streamlit Secrets exactly
+                    # Wahi settings jo abhi kaam kar rahi hain
                     sender = st.secrets["email_auth"]["sender_email"]
                     pwd = st.secrets["email_auth"]["app_password"]
 
                     msg = MIMEText(message)
                     msg['Subject'] = subject
-                    msg['From'] = sender
-                    msg['To'] = recipient
+                    msg['From'] = f"Iqbal Entrepreneur <{sender}>"
+                    msg['To'] = final_recipient
 
-                    with st.spinner("Kobler til server..."):
-                        # Try Port 587 (Modern Standard)
+                    with st.spinner("Sender e-post..."):
+                        # Port 587 and TLS (Tested & Working)
                         server = smtplib.SMTP('smtp.gmail.com', 587)
-                        server.starttls() 
+                        server.starttls()
                         server.login(sender, pwd)
-                        server.sendmail(sender, recipient, msg.as_string())
+                        server.sendmail(sender, final_recipient, msg.as_string())
                         server.quit()
                     
-                    st.success(f"✅ Suksess! E-post sendt til {recipient}")
+                    st.success(f"✅ Suksess! E-post er sendt til {final_recipient}")
                 
                 except Exception as e:
-                    # Agar ab bhi error aaye, to yahan se check hoga
-                    st.error(f"❌ Login Feil: {e}")
-                    st.warning("Tips: Sjekk om App Password er riktig i Secrets.")
+                    st.error(f"❌ Feil ved sending: {e}")
                     
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

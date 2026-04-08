@@ -314,14 +314,15 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
-# --- 8. KUNDE ARKIV (MODERN EDITABLE SYSTEM) ---
+
+# --- 8. KUNDE ARKIV (AAPKA ORIGINAL CODE + MODIFICATION SYSTEM) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # Role-based filter (Aapka original logic)
+    # --- 100% AAPKA PURANA LOGIC (ROLE FILTER) ---
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # Modern Search Bar
+    # --- 100% AAPKA PURANA LOGIC (SEARCH BAR) ---
     sok = st.text_input("🔍 Søk etter kunde (Navn, Tlf, E-post, ID)...", placeholder="Skriv her for å filtrere...")
     
     if sok:
@@ -330,19 +331,19 @@ elif valg == "📂 Kunde Arkiv":
     # Metrics for Archive
     st.info(f"Totalt **{len(view_df)}** saker funnet i arkivet.")
 
-    # List View with Expanders (Like Modern Banking Apps)
+    # --- LIST VIEW WITH EXPANDERS (AAPKA LAYOUT) ---
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
         hoved = r.get('Hovedsøker', 'Ukjent Kunde')
         status = r.get('Bank_Status', 'Mottatt')
         
-        # Color coding for status
+        # Color coding for status (Aapka logic)
         color = "blue" if status == "Mottatt" else "orange" if status == "Under Behandling" else "green" if status == "Godkjent" else "red"
         
         with st.expander(f"👤 {hoved} | ID: {sak_id} | Status: {status}"):
             st.markdown(f"### 📄 Sak Detaljer")
             
-            # --- VIEW MODE (2 Columns) ---
+            # --- 100% AAPKA VIEW MODE (2 Columns) ---
             c1, c2 = st.columns(2)
             with c1:
                 st.write(f"**Dato:** {r.get('Dato', '-')}")
@@ -355,7 +356,7 @@ elif valg == "📂 Kunde Arkiv":
 
             st.divider()
 
-            # --- EDIT MODE (Banking Modification System) ---
+            # --- NEYA EDIT SYSTEM (JO AAPKO CHAHIYE THA) ---
             st.markdown("### 🔧 **Saksbehandling (Modify System)**")
             
             with st.container():
@@ -366,15 +367,14 @@ elif valg == "📂 Kunde Arkiv":
                 current_st_idx = st_list.index(status) if status in st_list else 0
                 new_st = edit_c1.selectbox("Oppdater Status", st_list, index=current_st_idx, key=f"ark_st_{i}")
                 
-                # 2. Mangler Message (Messaging System)
+                # 2. Mangler Message
                 new_mangler = edit_c2.text_input("Mangler dokumenter? (Melding til Agent)", value=r.get('Mangler', ''), key=f"ark_mng_{i}")
                 
                 # 3. Internal Notes
                 new_notater = st.text_area("Interne Notater (Viktig info)", value=r.get('Notater', ''), key=f"ark_not_{i}")
                 
-                # SAVE BUTTON
+                # SAVE BUTTON (Calls update_sak_in_sheet function)
                 if st.button(f"💾 Lagre Endringer (ID: {sak_id})", key=f"ark_save_btn_{i}"):
-                    # Dictionary of changes
                     updates = {
                         "Bank_Status": new_st,
                         "Mangler": new_mangler,
@@ -382,14 +382,14 @@ elif valg == "📂 Kunde Arkiv":
                     }
                     
                     with st.spinner("Oppdaterer Google Sheets..."):
-                        # ENGINE CALL (Function humne top par rakha hai)
-                        # Yahan hum 'gc' use karenge function ke andar error se bachne ke liye
+                        # Yeh wahi function hai jo humne top par rakha hai
                         success = update_sak_in_sheet(sak_id, updates)
                         if success:
                             st.success(f"✅ Sak {sak_id} er nå oppdatert!")
                             st.rerun()
                         else:
                             st.error("Kunne ikke koble til databasen. Sjekk connection.")
+                            
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

@@ -175,7 +175,8 @@ if valg == "📊 Dashbord":
                             st.error("Kunne ikke koble til databasen.")
     else:
         st.warning("Ingen data tilgjengelig i databasen.")        
-# --- 7. NY REGISTRERING (100% FIELD ACCURACY + MESSAGING SUPPORT) ---
+
+# --- 7. NY REGISTRERING (SYMMETRIC HOVEDSØKER & MEDSØKER) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     countries = get_country_list()
@@ -196,6 +197,7 @@ elif valg == "➕ Ny Registrering":
             f_aksjer = bc2.text_input("Aksjefordeling (%)")
             st.divider()
 
+        # --- 👤 HOVEDSØKER SECTION ---
         st.subheader("👤 Hovedsøker Detaljer")
         c1, c2 = st.columns(2)
         navn = c1.text_input("Fullt Navn (Hovedsøker) *") 
@@ -215,6 +217,31 @@ elif valg == "➕ Ny Registrering":
         ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
+        # --- 👥 MEDSØKER SECTION (100% Symmetric) ---
+        m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
+        m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
+        
+        if has_med:
+            st.divider()
+            st.subheader("👥 Medsøker Detaljer (100% Symmetric Profile)")
+            mc1, mc2 = st.columns(2)
+            m_navn = mc1.text_input("Fullt Navn (Medsøker)")
+            m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
+            m_epost = mc1.text_input("E-post (Medsøker)")
+            m_tlf = mc2.text_input("Telefon (Medsøker)")
+            m_sivil = mc2.selectbox("Sivilstatus (Medsøker)", ["Enslig", "Gift", "Samboer", "Skilt"], key="ms_sivil")
+            m_pass = mc1.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
+            m_botid = mc2.text_input("Botid i Norge (Medsøker)", key="ms_botid")
+
+            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
+            ml1, ml2, ml3 = st.columns(3)
+            m_lonn = ml1.number_input("Årslønn Brutto (Medsøker)", min_value=0, step=1000, format="%d", key="ms_lonn")
+            m_arb = ml2.text_input("Arbeidsgiver (Medsøker)", key="ms_arb")
+            m_ansatt_tid = ml3.text_input("Ansettelsestid (Medsøker)", key="ms_time")
+            m_stilling = ml1.selectbox("Ansettelsesform (Medsøker)", ["Fast ansatt", "Midlertidig", "Selvstendig"], key="ms_form")
+            m_ekstra = ml2.number_input("Bi-inntekt (Medsøker)", 0, key="ms_extra")
+            m_pst = ml3.slider("Stillingsprosent (Medsøker)", 0, 100, 100, key="ms_pst")
+
         st.divider()
         st.subheader("🏠 Finansiell Status & Søknad")
         f1, f2 = st.columns(2)
@@ -232,30 +259,17 @@ elif valg == "➕ Ny Registrering":
         g_kort = g1.number_input("Kredittkort Ramme", 0)
         g_studie = g2.number_input("Studielån", 0)
 
-        m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, m_pass = "", "", "", "", 0, "", "Norge"
-        if has_med:
-            st.divider()
-            st.subheader("👥 Medsøker Detaljer (Symmetric Profile)")
-            mc1, mc2 = st.columns(2)
-            m_navn = mc1.text_input("Fullt Navn (Medsøker)")
-            m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
-            m_epost = mc1.text_input("E-post (Medsøker)")
-            m_tlf = mc2.text_input("Telefon (Medsøker)")
-            m_pass = mc2.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
-            m_lonn = mc1.number_input("Årslønn Brutto (Medsøker)", 0)
-            m_arb = mc2.text_input("Arbeidsgiver (Medsøker)")
-
         st.divider()
         notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
         if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
             if not navn:
-                st.error("Vennligst skriv inn navnet na Hovedsøker!")
+                st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
                 tot_gjeld = g_bolig + g_bil + g_forbruk + g_kort + g_studie
                 
-                # --- SYNCED COLUMN MAPPING (32 Columns now) ---
+                # --- SYNCED COLUMN MAPPING (Hamesha ke liye fixed) ---
                 new_row = [
                     len(df)+1, 
                     datetime.now().strftime("%d-%m-%Y"), 
@@ -288,13 +302,12 @@ elif valg == "➕ Ny Registrering":
                     f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
                     current_user, 
                     "Mottatt",
-                    "" # <--- YE HAI MANGLER COLUMN (Yahan se modification start hogi)
+                    "" # Mangler column
                 ]
                 
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
-                st.balloons()                
-
+                st.balloons()
 # --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")

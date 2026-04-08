@@ -295,7 +295,7 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert for {navn}!")
                 st.balloons()                
 
-# --- 8. KUNDE ARKIV (100% DATA MATCHED WITH YOUR SHEET) ---
+# --- 8. KUNDE ARKIV (FIXED VIEW/EDIT TOGGLE) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
@@ -308,21 +308,25 @@ elif valg == "📂 Kunde Arkiv":
 
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
+        # UNIQUE KEY for each record to prevent state mixing
         edit_key = f"edit_active_{sak_id}"
+        
+        # Force initial state to False if not present
         if edit_key not in st.session_state:
             st.session_state[edit_key] = False
 
         with st.expander(f"📁 {r.get('Navn', 'Kunde')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
             
+            # CHECK: Agar edit_active False hai to sirf View Mode dikhao
             if not st.session_state[edit_key]:
-                # --- VIEW MODE (Pora sak jese aik file mein ho) ---
+                # --- A: VIEW MODE (Pora sak jese aik file mein ho) ---
                 st.markdown(f"### 📄 Sak Detaljer (ID: {sak_id})")
                 c1, c2, c3 = st.columns(3)
                 with c1:
                     st.write(f"**Navn:** {r.get('Navn', '-')}")
                     st.write(f"**Fnr:** {r.get('Fnr', '-')}")
-                    st.write(f"**Epost:** {r.get('Epost', '-')}")
                     st.write(f"**Tlf:** {r.get('Tlf', '-')}")
+                    st.write(f"**Epost:** {r.get('Epost', '-')}")
                 with c2:
                     st.write(f"**Produkt:** {r.get('Produkt', '-')}")
                     st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
@@ -334,67 +338,61 @@ elif valg == "📂 Kunde Arkiv":
                     st.write(f"**Saksbehandler:** {r.get('Saksbehandler', '-')}")
 
                 st.divider()
-                if st.button(f"🛠️ Endre denne saken (Modify)", key=f"btn_edit_{sak_id}"):
+                st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
+
+                # MODIFY BUTTON
+                if st.button(f"🛠️ Endre denne saken (Modify)", key=f"btn_open_mod_{sak_id}_{i}"):
                     st.session_state[edit_key] = True
                     st.rerun()
 
             else:
-                # --- EDIT MODE (Registration Style - Sab kuch edit karein) ---
-                st.subheader("🛠️ Redigerer Sak (Full Modus)")
+                # --- B: MODIFICATION MODE (Form opens only after click) ---
+                st.subheader(f"🛠️ Redigerer Sak: {r.get('Navn')} (ID: {sak_id})")
                 
-                with st.form(key=f"full_edit_{sak_id}"):
-                    # HOVEDSØKER SECTION
-                    st.markdown("#### 👤 Hovedsøker Detaljer")
+                with st.form(key=f"full_edit_form_{sak_id}_{i}"):
+                    # HOVEDSØKER
                     h1, h2 = st.columns(2)
                     up_navn = h1.text_input("Fullt Navn", value=str(r.get('Navn', '')))
                     up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
                     up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
                     up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
                     
-                    h3, h4 = st.columns(2)
-                    up_sivil = h3.text_input("Sivilstatus", value=str(r.get('Sivilstatus', '')))
-                    up_pass = h4.text_input("Pass Info", value=str(r.get('Pass_Info', '')))
-
-                    # INNTEKT & GJELD
-                    st.markdown("#### 💼 Økonomi")
+                    # ØKONOMI
                     a1, a2 = st.columns(2)
                     up_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
                     up_gjeld = a1.text_input("Gjeld (kr)", value=str(r.get('Gjeld', '0')))
                     up_belop = a2.text_input("Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
                     up_ek = a2.text_input("EK (kr)", value=str(r.get('EK', '0')))
 
-                    # MEDSØKER SECTION
-                    st.markdown("#### 👥 Medsøker Detaljer")
+                    # MEDSØKER
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Navn", value=str(r.get('Medsøker_Navn', '')))
                     up_m_fnr = m1.text_input("Medsøker Fnr", value=str(r.get('Medsøker_Fnr', '')))
                     up_m_lonn = m2.text_input("Medsøker Lønn", value=str(r.get('Medsøker_Lønn', '0')))
                     up_m_tlf = m2.text_input("Medsøker Tlf", value=str(r.get('Medsøker_Tlf', '')))
 
-                    # STATUS & NOTES
-                    st.markdown("#### ⚙️ System Status")
+                    # SYSTEM
                     up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
                                          index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
                     up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
 
-                    # Buttons
+                    # SUBMIT
                     b1, b2 = st.columns(2)
                     if b1.form_submit_button("💾 Lagre Alle Endringer"):
                         final_updates = {
                             "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
-                            "Sivilstatus": up_sivil, "Pass_Info": up_pass, "Lønn": up_lonn, 
-                            "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
+                            "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
                             "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, 
                             "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
                             "Bank_Status": up_st, "Notater": up_notat
                         }
                         if update_sak_in_sheet(sak_id, final_updates):
                             st.success("✅ Sak oppdatert!")
-                            st.session_state[edit_key] = False
+                            st.session_state[edit_key] = False # Reset to View Mode after save
                             st.rerun()
                     
                     if b2.form_submit_button("❌ Avbryt"):
-                        st.session_state[edit_key] = False
+                        st.session_state[edit_key] = False # Reset to View Mode
                         st.rerun()
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:

@@ -1,24 +1,24 @@
+import streamlit as st
+import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
+
+# --- 1. DATABASE UPDATE ENGINE ---
 def update_sak_in_sheet(sak_id, updated_values_dict):
-    """
-    Sari ID match karke sirf makhsoos row ko update karta hai. 
-    Data delete nahi hoga, sirf tabdeeli hogi.
-    """
     try:
-        # Har baar fresh connection taake 'gc/client' ka error na aaye
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
-        # NOTE: Agar aapki sheet ka naam 'NSVG_CRM_Data' hai to ye sahi hai. 
-        # Agar sheet ka naam 'MainDB' hai, to yahan naam badal lein.
+        # Sheet ka naam confirm karein (NSVG_CRM_Data)
         sheet = client.open("NSVG_CRM_Data").worksheet("MainDB") 
         
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
         if 'ID' in temp_df.columns:
-            # ID ko match karna
             matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
             if matched_rows:
                 actual_row = matched_rows[0] + 2 
@@ -29,32 +29,41 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                 return True
         return False
     except Exception as e:
-        st.error(f"Database Update Error: {e}")
+        st.error(f"Database Error: {e}")
         return False
 
-# --- 2. GOOGLE SHEETS ENGINE ---
+# --- 2. GOOGLE SHEETS CONNECTION ENGINE ---
 def connect_to_sheet(sheet_name):
-    """
-    Ye function connection banata hai.
-    """
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        
-        # Apni main Google Sheet ka exact naam yahan confirm karein
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
-    except Exception as e:
-        # Agar connection nahi banta to sidebar mein warning dikhayega
-        st.sidebar.warning(f"⚠️ Connection lost: {sheet_name}")
+    except:
         return None
+
+def get_data(sheet_name):
+    sh = connect_to_sheet(sheet_name)
+    if sh:
+        data = sh.get_all_records()
+        df = pd.DataFrame(data)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+    return pd.DataFrame()
+
+def add_data(sheet_name, row_list):
+    sh = connect_to_sheet(sheet_name)
+    if sh: 
+        sh.append_row(row_list)
+
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data
 def get_country_list():
     base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
     others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
     return base + others
+
 # --- 4. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
@@ -70,9 +79,9 @@ if not st.session_state['logged_in']:
             if not match.empty:
                 st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
                 st.rerun()
-            else: st.error("Feil brukernavn ya passord!")
+            else: 
+                st.error("Feil brukernavn ya passord!")
     st.stop()
-
 # --- 5. GLOBAL DATA & SIDEBAR ---
 df = get_data("MainDB")
 role = st.session_state['user_role']

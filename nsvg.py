@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (FINAL) ---
+# --- 11. E-POST & KONTAKTER (MUKAMMAL CODE) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -564,34 +564,96 @@ elif valg == "📧 Send E-post":
     import smtplib
     from email.mime.text import MIMEText
 
-    # Connection build karna
+    # Google Sheets se connection establish karna
     conn = st.connection("gsheets", type=GSheetsConnection)
     
+    # Contacts load karne ki koshish (ttl=0 taake naya data foran aaye)
     try:
-        # Sheet se Contacts uthana (ttl=0 matlab foran naya data laye)
         contacts_df = conn.read(worksheet="Contacts", ttl=0)
     except Exception:
-        st.warning("⚠️ 'Contacts' tab nahi mila. Pehla contact save karne par ye ban jayega.")
+        # Agar tab nahi milta to khali list bana do
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # 1. Naya Contact Save Karein
-    with st.expander("➕ Legg til ny kontakt"):
+    # 1. Naya Contact Save karne ka Form
+    with st.expander("➕ Legg til ny kontakt (Save New Contact)"):
         with st.form("new_contact_form"):
-            n = st.text_input("Navn")
-            e = st.text_input("E-post")
-            t = st.text_input("Telefon")
-            if st.form_submit_button("Lagre"):
-                if e:
-                    new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
-                    updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                    conn.update(worksheet="Contacts", data=updated_df)
-                    st.success("✅ Lagret!")
-                    st.rerun()
+            new_n = st.text_input("Navn (Name)")
+            new_e = st.text_input("E-post (Email)")
+            new_t = st.text_input("Telefon")
+            
+            submit_contact = st.form_submit_button("Lagre Kontakt")
+            
+            if submit_contact:
+                if new_e:
+                    new_entry = pd.DataFrame([{"Navn": new_n, "E-post": new_e, "Telefon": new_t}])
+                    # Purane data mein naya banda add karna
+                    updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
+                    try:
+                        conn.update(worksheet="Contacts", data=updated_df)
+                        st.success(f"✅ {new_e} er lagret i Google Sheets!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Kunne ikke lagre til Google Sheets: {e}")
                 else:
-                    st.error("E-post er obligatorisk!")
+                    st.error("E-post er obligatorisk (Email is required)!")
 
     st.divider()
-    # ... (Aage ka Email form wahi rahega)
-    
+
+    # 2. E-post bhejne ka Form
+    with st.form("main_email_form"):
+        st.subheader("Skriv og Send E-post")
+        
+        # Manually email likhne ka khana
+        recipient_manual = st.text_input("Mottaker e-post (Skriv inn manuelt)")
+        
+        # Dropdown agar contacts maujood hain
+        recipient_select = ""
+        if not contacts_df.empty:
+            recipient_select = st.selectbox("Eller velg fra lagrede kontakter", [""] + contacts_df["E-post"].tolist())
+        
+        # Dono mein se jo bhara ho usey select karo
+        final_recipient = recipient_manual if recipient_manual else recipient_select
+        
+        subject = st.text_input("Emne (Subject)", value="Melding fra Iqbal Entrepreneur")
+        message = st.text_area("Melding (Message)", height=200)
+        
+        # Auto-save option
+        auto_save = st.checkbox("Lagre denne e-posten automatisk i kontakter", value=True)
+        
+        submit_mail = st.form_submit_button("🚀 Send E-post")
+
+        if submit_mail:
+            if not final_recipient or not message:
+                st.error("Mottaker og melding må fylles ut!")
+            else:
+                try:
+                    # Secrets se email details uthana
+                    sender = st.secrets["email_auth"]["sender_email"]
+                    pwd = st.secrets["email_auth"]["app_password"]
+
+                    msg = MIMEText(message)
+                    msg['Subject'] = subject
+                    msg['From'] = f"Iqbal Entrepreneur <{sender}>"
+                    msg['To'] = final_recipient
+
+                    with st.spinner("Sender e-post..."):
+                        server = smtplib.SMTP('smtp.gmail.com', 587)
+                        server.starttls()
+                        server.login(sender, pwd)
+                        server.sendmail(sender, final_recipient, msg.as_string())
+                        server.quit()
+                    
+                    st.success(f"✅ E-post sendt til {final_recipient}!")
+
+                    # Agar naya email hai aur auto-save on hai
+                    if auto_save and final_recipient not in contacts_df["E-post"].values:
+                        new_auto_entry = pd.DataFrame([{"Navn": "Auto-Saved", "E-post": final_recipient, "Telefon": "-"}])
+                        updated_df_auto = pd.concat([contacts_df, new_auto_entry], ignore_index=True)
+                        conn.update(worksheet="Contacts", data=updated_df_auto)
+                        st.info("E-posten ble lagret i listen.")
+
+                except Exception as e:
+                    st.error(f"Det oppstod en feil: {e}")
+                    
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

@@ -3,7 +3,6 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import urllib.parse  # <--- Yeh line add karein
 
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
@@ -83,25 +82,21 @@ if not st.session_state['logged_in']:
             else: st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (UPDATED) ---
+# --- 5. GLOBAL DATA & SIDEBAR ---
 df = get_data("MainDB")
 role = st.session_state['user_role']
 current_user = st.session_state['user_id']
 
 st.sidebar.title(f"👤 {current_user.capitalize()}")
-
-# Purana list delete kar ke yeh naya list yahan paste karein
-options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💬 WhatsApp"]
-
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "🕵️ Master Kontrollpanel"])
-
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
-    
+
 # --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
@@ -552,47 +547,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                         else:
                             st.warning("Kun Admin kan slette ansatte.")
 
- # --- 11. WHATSAPP MESSAGING SECTION ---
-elif valg == "💬 WhatsApp":
-    st.header("💬 Send WhatsApp Melding")
-    
-    # Numbers updated as per your list
-    ansatte_numbers = {
-        "Amina": "+4748654372", 
-        "Bedi": "+4746670152",
-        "Ali": "+4798624688",
-        "Admin": "+4746370847"
-    }
-
-    with st.form("wa_form"):
-        target_list = list(ansatte_numbers.keys()) if role in ["Admin", "Director"] else ["Admin"]
-        mottaker = st.selectbox("Hvem vil du sende melding til?", target_list)
-        msg_body = st.text_area("Skriv din melding...", placeholder="Hei, sjekk denne saken...")
-        submit_wa = st.form_submit_button("🔗 Lag WhatsApp Link")
-
-        if submit_wa:
-            if not msg_body:
-                st.error("Meldingen kan ikke være tom!")
-            else:
-                target_nr = ansatte_numbers[mottaker]
-                encoded_msg = urllib.parse.quote(msg_body)
-                wa_url = f"https://wa.me/{target_nr}?text={encoded_msg}"
-                
-                st.success(f"Klar til å sende til {mottaker}!")
-                st.markdown(f"""
-                    <a href="{wa_url}" target="_blank">
-                        <button style="background-color:#25D366; color:white; border:none; padding:12px 24px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px;">
-                            📱 Åpne WhatsApp & Send
-                        </button>
-                    </a>
-                """, unsafe_allow_html=True)
-
-# --- YE ELSE AB BILKUL SAHI LINE MEIN HAI ---
-else:
-    if 'agents_df' in locals() and agents_df.empty:
-        st.warning("Ingen ansatte funnet i databasen.")
     else:
-        st.info("Velg et alternativ fra menyen til venstre.")
-
+        st.warning("Ingen ansatte funnet i databasen.")
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (NORSK - FINAL FIX) ---
+# --- 11. E-POST & KONTAKTER (NORSK VERSION) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -564,84 +564,71 @@ elif valg == "📧 Send E-post":
     import smtplib
     from email.mime.text import MIMEText
 
-    # Koble til med strengere sikkerhet
+    # Koble til Google Sheets
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        sheet_url = st.secrets["spreadsheet"]
-        
-        # Forsøk å lese data
-        contacts_df = conn.read(spreadsheet=sheet_url, worksheet="Contacts", ttl=0)
+        url = st.secrets["spreadsheet"]
+        # Leser kontakter
+        contacts_df = conn.read(spreadsheet=url, worksheet="Contacts", ttl=0)
     except Exception as e:
         st.error(f"Tilkoblingsfeil: {e}")
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # 1. Skjema for å legge til kontakt
+    # --- Legg til ny kontakt ---
     with st.expander("➕ Legg til ny kontakt"):
-        with st.form("new_contact_form", clear_on_submit=True):
-            new_n = st.text_input("Navn")
-            new_e = st.text_input("E-post")
-            new_t = st.text_input("Telefon")
+        with st.form("kontakt_form", clear_on_submit=True):
+            n = st.text_input("Navn")
+            e = st.text_input("E-post")
+            t = st.text_input("Telefon")
             
-            submit_contact = st.form_submit_button("Lagre Kontakt")
-            
-            if submit_contact:
-                if new_e:
-                    new_entry = pd.DataFrame([{"Navn": new_n, "E-post": new_e, "Telefon": new_t}])
-                    updated_df = pd.concat([contacts_df, new_entry], ignore_index=True)
+            if st.form_submit_button("Lagre Kontakt"):
+                if e:
+                    new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
+                    updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
                     try:
-                        # VIKTIG: Bruker 'spreadsheet' parameteren direkte
-                        conn.update(spreadsheet=sheet_url, worksheet="Contacts", data=updated_df)
-                        st.success(f"✅ {new_e} er lagret!")
+                        conn.update(spreadsheet=url, worksheet="Contacts", data=updated_df)
+                        st.success("✅ Lagret!")
                         st.rerun()
                     except Exception as err:
-                        st.error("Kunne ikke lagre. Sjekk Editor-tilgang for robot-eposten.")
+                        st.error(f"Kunne ikke lagre: {err}")
                 else:
-                    st.error("E-post er obligatorisk!")
+                    st.error("E-post er påkrevd!")
 
     st.divider()
 
-    # 2. Skriv og send e-post
-    with st.form("main_email_form"):
-        st.subheader("Skriv og Send E-post")
+    # --- Send E-post ---
+    with st.form("send_mail_form"):
+        st.subheader("Skriv Melding")
         
-        recipient_manual = st.text_input("Mottaker e-post (Manuell)")
-        
-        recipient_select = ""
+        # Velg mottaker
         if not contacts_df.empty:
-            # Fjerner duplikater hvis de finnes
-            email_list = contacts_df["E-post"].unique().tolist()
-            recipient_select = st.selectbox("Eller velg fra kontakter", [""] + email_list)
+            chosen_email = st.selectbox("Velg mottaker", [""] + contacts_df["E-post"].tolist())
+        else:
+            chosen_email = st.text_input("Mottaker e-post (Manuell)")
+            
+        subj = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
+        msg_text = st.text_area("Melding", height=150)
         
-        final_recipient = recipient_manual if recipient_manual else recipient_select
-        
-        subject = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
-        message = st.text_area("Melding", height=200)
-        
-        submit_mail = st.form_submit_button("🚀 Send E-post")
-
-        if submit_mail:
-            if not final_recipient or not message:
-                st.error("Vennligst fyll ut mottaker og melding!")
-            else:
+        if st.form_submit_button("🚀 Send"):
+            if chosen_email and msg_text:
                 try:
-                    sender = st.secrets["email_auth"]["sender_email"]
-                    pwd = st.secrets["email_auth"]["app_password"]
-
-                    msg = MIMEText(message)
-                    msg['Subject'] = subject
-                    msg['From'] = f"Iqbal Entrepreneur <{sender}>"
-                    msg['To'] = final_recipient
-
-                    with st.spinner("Sender e-post..."):
-                        server = smtplib.SMTP('smtp.gmail.com', 587)
-                        server.starttls()
-                        server.login(sender, pwd)
-                        server.sendmail(sender, final_recipient, msg.as_string())
-                        server.quit()
+                    s_email = st.secrets["email_auth"]["sender_email"]
+                    s_pwd = st.secrets["email_auth"]["app_password"]
                     
-                    st.success(f"✅ E-post sendt til {final_recipient}!")
-
-                except Exception as e:
-                    st.error(f"Kunne ikke sende e-post: {e}")                    
+                    msg = MIMEText(msg_text)
+                    msg['Subject'] = subj
+                    msg['From'] = s_email
+                    msg['To'] = chosen_email
+                    
+                    server = smtplib.SMTP('smtp.gmail.com', 587)
+                    server.starttls()
+                    server.login(s_email, s_pwd)
+                    server.sendmail(s_email, chosen_email, msg.as_string())
+                    server.quit()
+                    st.success(f"✅ Sendt til {chosen_email}")
+                except Exception as ex:
+                    st.error(f"Feil: {ex}")
+            else:
+                st.warning("Fyll ut alle felt!")        
                     st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

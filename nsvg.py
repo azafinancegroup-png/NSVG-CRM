@@ -552,11 +552,11 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                         else:
                             st.warning("Kun Admin kan slette ansatte.")
 
-    # --- 11. WHATSAPP MESSAGING SECTION ---
+ # --- 11. WHATSAPP MESSAGING SECTION ---
 elif valg == "💬 WhatsApp":
     st.header("💬 Send WhatsApp Melding")
     
-    # Numbers ko apne real numbers se replace kar lein
+    # Numbers updated as per your list
     ansatte_numbers = {
         "Amina": "+4748654372", 
         "Bedi": "+4746670152",
@@ -587,8 +587,12 @@ elif valg == "💬 WhatsApp":
                     </a>
                 """, unsafe_allow_html=True)
 
-            
-    else:
+# --- YE ELSE AB BILKUL SAHI LINE MEIN HAI ---
+else:
+    if 'agents_df' in locals() and agents_df.empty:
         st.warning("Ingen ansatte funnet i databasen.")
+    else:
+        st.info("Velg et alternativ fra menyen til venstre.")
+
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

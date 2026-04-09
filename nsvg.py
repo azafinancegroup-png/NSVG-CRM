@@ -83,21 +83,36 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (STABLE OLD VERSION) ---
+# --- 5. GLOBAL DATA & SIDEBAR (PROTECTED VERSION) ---
 
-# Sabse pehle role aur user ko session se uthao taake NameError khatam ho
+# 1. Sabse pehle user ka data check karein (taake NameError na aaye)
 role = st.session_state.get('role', 'Guest')
-current_user = st.session_state.get('username', 'Guest')
+username = st.session_state.get('username', 'Guest')
+current_user = username
 
-# Sab users ke liye basic options
+# 2. Database (df) ko load karein (taake Line 109 wala error khatam ho)
+import pandas as pd
+try:
+    # 'get_data' aapka purana function hai jo Sheet se data lata hai
+    df = get_data("Kunder") 
+except Exception:
+    # Agar data na mile to khali table bana do taake app crash na ho
+    df = pd.DataFrame()
+
+# 3. Sidebar Menu Options (Wahi purane wale)
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 
-# Admin aur Director ke liye makhsoos options (Ab 'role' yahan error nahi dega)
+# Admin aur Director ke liye buttons wapis lana
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
+    # Sirf tabhi add karo agar pehle se list mein nahi hain
+    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for item in extra:
+        if item not in options:
+            options.append(item)
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
+# 4. Logg ut
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

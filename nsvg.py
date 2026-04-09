@@ -576,6 +576,7 @@ elif valg == "📇 Kontakter":
             sh = client.open_by_url(st.secrets["spreadsheet"])
             worksheet = sh.worksheet(worksheet_name)
             worksheet.clear()
+            # DataFrame ko wapis sheet mein dalna
             worksheet.update([df.columns.values.tolist()] + df.values.tolist())
             return True
         except Exception as e:
@@ -585,39 +586,46 @@ elif valg == "📇 Kontakter":
     # DATA HENTING
     try:
         contacts_df = get_data("Contacts")
-        # Agar "Sist Endret" column nahi hai to bana do
+        # Check if timestamp column exists
         if "Sist Endret" not in contacts_df.columns:
             contacts_df["Sist Endret"] = "N/A"
     except:
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon", "Sist Endret"])
 
-    tab1, tab2, tab3 = st.tabs(["📇 Kontaktliste & Redigering", "📩 Send E-post", "➕ Ny Kontakt"])
+    # Tabs with clean names as requested
+    tab1, tab2, tab3 = st.tabs(["📇 Kontaktliste", "📩 Send E-post", "➕ Ny Kontakt"])
 
-    # --- TAB 1: LISTE + CLICK TO EDIT ---
+    # --- TAB 1: KONTAKTLISTE (With built-in Editing) ---
     with tab1:
-        st.subheader("Klikk på en kontakt for å endre")
+        st.subheader("Oversikt over kontakter")
         
         if not contacts_df.empty:
-            # Table view for quick look
+            # Displaying the list
             st.dataframe(contacts_df, use_container_width=True, hide_index=True)
             
-            # Selection for Editing
-            selected_name = st.selectbox("Velg kontakt du vil modifisere:", ["-- Velg --"] + contacts_df["Navn"].tolist())
+            st.divider()
+            
+            # Selection for Editing - Built inside the list tab
+            selected_name = st.selectbox("Velg en kontakt for å endre detaljer:", ["-- Velg --"] + contacts_df["Navn"].tolist())
             
             if selected_name != "-- Velg --":
                 idx = contacts_df[contacts_df["Navn"] == selected_name].index[0]
                 last_time = contacts_df.at[idx, "Sist Endret"]
                 
-                st.markdown(f"⏱️ **Sist endret:** `{last_time}`")
+                # Showing the last modified time clearly
+                st.info(f"⏱️ **Sist endret:** {last_time}")
                 
                 with st.expander(f"✏️ Redigerer: {selected_name}", expanded=True):
                     with st.form(f"edit_form_{selected_name}"):
-                        new_n = st.text_input("Navn", value=str(contacts_df.at[idx, "Navn"]))
-                        new_e = st.text_input("E-post", value=str(contacts_df.at[idx, "E-post"]))
-                        new_t = st.text_input("Telefon", value=str(contacts_df.at[idx, "Telefon"]))
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            new_n = st.text_input("Navn", value=str(contacts_df.at[idx, "Navn"]))
+                            new_e = st.text_input("E-post", value=str(contacts_df.at[idx, "E-post"]))
+                        with col2:
+                            new_t = st.text_input("Telefon", value=str(contacts_df.at[idx, "Telefon"]))
                         
-                        if st.form_submit_button("💾 Oppdater og lagre tidspunkt"):
-                            # Time and Date update
+                        if st.form_submit_button("💾 Lagre endringer"):
+                            # Update timestamp automatically
                             now_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                             
                             contacts_df.at[idx, "Navn"] = new_n
@@ -626,19 +634,20 @@ elif valg == "📇 Kontakter":
                             contacts_df.at[idx, "Sist Endret"] = now_time
                             
                             if update_sheet_data_internal("Contacts", contacts_df):
-                                st.success(f"✅ Oppdatert! Ny tid: {now_time}")
+                                st.success(f"✅ Oppdatert! Tidspunkt: {now_time}")
                                 st.cache_data.clear()
                                 st.rerun()
         else:
-            st.info("Listen er tom.")
+            st.info("Listen er tom. Legg til en kontakt i 'Ny Kontakt' fanen.")
 
-    # --- TAB 2: SEND E-POST (Simple) ---
+    # --- TAB 2: SEND E-POST ---
     with tab2:
+        st.subheader("Send e-post til kontakt")
         with st.form("quick_mail"):
             rec = st.selectbox("Mottaker", [""] + contacts_df["E-post"].tolist())
             sub = st.text_input("Emne", "Melding fra Iqbal Entrepreneur")
-            bod = st.text_area("Melding")
-            if st.form_submit_button("🚀 Send"):
+            bod = st.text_area("Melding", height=200)
+            if st.form_submit_button("🚀 Send E-post"):
                 if rec and bod:
                     try:
                         s_mail = st.secrets["email_auth"]["sender_email"]
@@ -649,23 +658,30 @@ elif valg == "📇 Kontakter":
                             server.starttls()
                             server.login(s_mail, s_pass)
                             server.sendmail(s_mail, rec, msg.as_string())
-                        st.success("Sendt!")
-                    except Exception as e: st.error(e)
+                        st.success(f"✅ E-post sendt til {rec}")
+                    except Exception as e: 
+                        st.error(f"Kunne ikke sende e-post: {e}")
+                else:
+                    st.warning("Vennligst fyll ut mottaker og melding.")
 
     # --- TAB 3: NY KONTAKT ---
     with tab3:
+        st.subheader("Registrer ny kontakt")
         with st.form("new_con"):
             nn = st.text_input("Navn")
             ne = st.text_input("E-post")
             nt = st.text_input("Telefon")
-            if st.form_submit_button("Legg til"):
-                now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                new_row = pd.DataFrame([{"Navn":nn, "E-post":ne, "Telefon":nt, "Sist Endret":now}])
-                contacts_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                if update_sheet_data_internal("Contacts", contacts_df):
-                    st.success("Lagt til!")
-                    st.cache_data.clear()
-                    st.rerun()
+            if st.form_submit_button("➕ Legg til i systemet"):
+                if nn and ne:
+                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                    new_row = pd.DataFrame([{"Navn":nn, "E-post":ne, "Telefon":nt, "Sist Endret":now}])
+                    contacts_df = pd.concat([contacts_df, new_row], ignore_index=True)
+                    if update_sheet_data_internal("Contacts", contacts_df):
+                        st.success("✅ Kontakt er lagret!")
+                        st.cache_data.clear()
+                        st.rerun()
+                else:
+                    st.warning("Navn og e-post er påkrevd.")
                     
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")

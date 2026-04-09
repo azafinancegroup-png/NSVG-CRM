@@ -83,36 +83,61 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (PROTECTED VERSION) ---
+# --- 5. GLOBAL DATA & SIDEBAR (CONNECTED TO SECTION 4) ---
 
-# 1. Sabse pehle user ka data check karein (taake NameError na aaye)
-role = st.session_state.get('role', 'Guest')
-username = st.session_state.get('username', 'Guest')
-current_user = username
+# 1. Variables ko Section 4 ke mutabiq set karna
+# Aapke Section 4 mein 'user_role' aur 'user_id' use ho raha hai
+if st.session_state.get('logged_in'):
+    role = st.session_state.get('user_role', 'Guest')
+    username = st.session_state.get('user_id', 'Guest')
+    current_user = username # Dashboard ke liye
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
 
-# 2. Database (df) ko load karein (taake Line 109 wala error khatam ho)
+# 2. Global Function for Saving Data (Safe place)
+def update_sheet_data_internal(worksheet_name, df_to_save):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+# 3. Data Loading (Force Load for Dashboard)
 import pandas as pd
 try:
-    # 'get_data' aapka purana function hai jo Sheet se data lata hai
-    df = get_data("Kunder") 
-except Exception:
-    # Agar data na mile to khali table bana do taake app crash na ho
+    if role != "Guest":
+        df = get_data("Kunder")
+    else:
+        df = pd.DataFrame()
+except:
     df = pd.DataFrame()
 
-# 3. Sidebar Menu Options (Wahi purane wale)
+# 4. Sidebar Menu Options
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 
-# Admin aur Director ke liye buttons wapis lana
+# Admin aur Director ke liye buttons (user_role ke mutabiq)
 if role in ["Admin", "Director"]:
-    # Sirf tabhi add karo agar pehle se list mein nahi hain
-    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
-    for item in extra:
-        if item not in options:
-            options.append(item)
+    # Check taake double add na hon
+    extra_options = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for opt in extra_options:
+        if opt not in options:
+            options.append(opt)
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# 4. Logg ut
+# 5. Logg ut button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

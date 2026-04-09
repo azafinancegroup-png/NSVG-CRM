@@ -89,12 +89,12 @@ current_user = st.session_state['user_id']
 
 st.sidebar.title(f"👤 {current_user.capitalize()}")
 
-# Base options jo sab ko dikhenge
+# --- 5. GLOBAL DATA & SIDEBAR (UPDATED MENU) ---
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 
 # Admin aur Director ke liye makhsoos options
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "📧 Send E-post", "🕵️ Master Kontrollpanel"])
+    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. KONTAKTER (MODIFISERING OG OVERSIKT) ---
+# --- 11. KONTAKTER (FIXED & MATCHED) ---
 elif valg == "📇 Kontakter":
     st.header("📇 Kontaktadministrasjon")
     
@@ -565,7 +565,7 @@ elif valg == "📇 Kontakter":
     from google.oauth2.service_account import Credentials
     from email.mime.text import MIMEText
 
-    # --- INTERNAL SAVE/UPDATE FUNCTION ---
+    # INTERNAL SAVE FUNCTION
     def update_sheet_data_internal(worksheet_name, df):
         try:
             creds_dict = st.secrets["gcp_service_account"]
@@ -578,116 +578,80 @@ elif valg == "📇 Kontakter":
             worksheet.update([df.columns.values.tolist()] + df.values.tolist())
             return True
         except Exception as e:
-            st.error(f"Kunne ikke lagre til Google Sheets: {e}")
+            st.error(f"Kunne ikke lagre: {e}")
             return False
 
     # DATA HENTING
     try:
-        # get_data function aapke main code mein hona chahiye
         contacts_df = get_data("Contacts")
-    except Exception as e:
-        st.error(f"Tilkoblingsfeil: {e}")
+    except:
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # --- TABS FOR ORGANISERING (NORSK) ---
-    tab1, tab2, tab3, tab4 = st.tabs(["📇 Oversikt", "📩 Send E-post", "➕ Ny Kontakt", "✏️ Rediger Kontakt"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📇 Oversikt", "📩 Send E-post", "➕ Ny Kontakt", "✏️ Rediger"])
 
-    # TAB 1: OVERSIKT (Kontaktliste)
     with tab1:
-        st.subheader("Alle dine lagrede kontakter")
-        if not contacts_df.empty:
-            st.dataframe(contacts_df, use_container_width=True, hide_index=True)
-            st.write(f"Totalt: **{len(contacts_df)}** kontakter")
-        else:
-            st.info("Ingen kontakter funnet.")
+        st.subheader("Alle kontakter")
+        st.dataframe(contacts_df, use_container_width=True, hide_index=True)
 
-    # TAB 2: SEND E-POST
     with tab2:
         with st.form("send_mail_form"):
-            st.subheader("Send melding til kontakt")
-            if not contacts_df.empty:
-                chosen_email = st.selectbox("Velg mottaker", [""] + contacts_df["E-post"].tolist())
-            else:
-                chosen_email = st.text_input("Mottaker e-post (Manuell)")
-                
+            st.subheader("Send melding")
+            email_list = contacts_df["E-post"].tolist() if not contacts_df.empty else []
+            chosen_email = st.selectbox("Velg fra kontakter", [""] + email_list)
+            manual_email = st.text_input("Eller skriv inn e-post manuelt")
+            
+            final_recipient = manual_email if manual_email else chosen_email
             subj = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
             msg_text = st.text_area("Melding", height=150)
             
-            if st.form_submit_button("🚀 Send E-post"):
-                if (chosen_email or manual_email) and msg_text:
+            if st.form_submit_button("🚀 Send"):
+                if final_recipient and msg_text:
                     try:
                         s_email = st.secrets["email_auth"]["sender_email"]
                         s_pwd = st.secrets["email_auth"]["app_password"]
                         msg = MIMEText(msg_text)
                         msg['Subject'] = subj
                         msg['From'] = s_email
-                        msg['To'] = chosen_email
+                        msg['To'] = final_recipient
                         
-                        server = smtplib.SMTP('smtp.gmail.com', 587)
-                        server.starttls()
-                        server.login(s_email, s_pwd)
-                        server.sendmail(s_email, chosen_email, msg.as_string())
-                        server.quit()
-                        st.success(f"✅ Sendt til {chosen_email}")
+                        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+                            server.starttls()
+                            server.login(s_email, s_pwd)
+                            server.sendmail(s_email, final_recipient, msg.as_string())
+                        st.success(f"✅ Sendt til {final_recipient}")
                     except Exception as ex:
                         st.error(f"Feil: {ex}")
                 else:
-                    st.warning("Vennligst fyll ut mottaker og melding.")
+                    st.warning("Fyll ut mottaker og melding!")
 
-    # TAB 3: NY KONTAKT
     with tab3:
-        with st.form("kontakt_form_new", clear_on_submit=True):
-            st.subheader("Legg til ny person")
+        with st.form("new_contact"):
             n = st.text_input("Navn")
             e = st.text_input("E-post")
             t = st.text_input("Telefon")
-            
-            if st.form_submit_button("Lagre Ny Kontakt"):
+            if st.form_submit_button("Lagre"):
                 if e:
-                    new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
-                    updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                    if update_sheet_data_internal("Contacts", updated_df):
-                        st.success("✅ Lagret!")
+                    new_df = pd.concat([contacts_df, pd.DataFrame([{"Navn":n,"E-post":e,"Telefon":t}])], ignore_index=True)
+                    if update_sheet_data_internal("Contacts", new_df):
+                        st.success("Lagret!")
                         st.cache_data.clear()
                         st.rerun()
-                else:
-                    st.error("E-post er obligatorisk!")
 
-    # TAB 4: REDIGER KONTAKT (MODIFIED SYSTEM)
     with tab4:
-        st.subheader("Endre eksisterende kontakt")
         if not contacts_df.empty:
-            contact_to_edit = st.selectbox("Velg kontakt som skal endres", contacts_df["Navn"].tolist())
-            
-            # Extract current data for selected contact
-            idx = contacts_df[contacts_df["Navn"] == contact_to_edit].index[0]
-            current_name = contacts_df.at[idx, "Navn"]
-            current_email = contacts_df.at[idx, "E-post"]
-            current_phone = contacts_df.at[idx, "Telefon"]
-
-            with st.form("edit_form"):
-                new_n = st.text_input("Navn", value=current_name)
-                new_e = st.text_input("E-post", value=current_email)
-                new_t = st.text_input("Telefon", value=current_phone)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.form_submit_button("💾 Oppdater Kontakt"):
-                        contacts_df.at[idx, "Navn"] = new_n
-                        contacts_df.at[idx, "E-post"] = new_e
-                        contacts_df.at[idx, "Telefon"] = new_t
+            name_to_edit = st.selectbox("Velg for å redigere", contacts_df["Navn"].tolist())
+            idx = contacts_df[contacts_df["Navn"] == name_to_edit].index[0]
+            with st.form("edit_contact"):
+                en = st.text_input("Navn", value=contacts_df.at[idx, "Navn"])
+                ee = st.text_input("E-post", value=contacts_df.at[idx, "E-post"])
+                et = st.text_input("Telefon", value=contacts_df.at[idx, "Telefon"])
+                if st.form_submit_button("Oppdater"):
+                    contacts_df.at[idx, "Navn"], contacts_df.at[idx, "E-post"], contacts_df.at[idx, "Telefon"] = en, ee, et
+                    if update_sheet_data_internal("Contacts", contacts_df):
+                        st.success("Oppdatert!")
+                        st.cache_data.clear()
+                        st.rerun()
                         
-                        if update_sheet_data_internal("Contacts", contacts_df):
-                            st.success(f"✅ {new_n} er oppdatert!")
-                            st.cache_data.clear()
-                            st.rerun()
-                
-                with col2:
-                    # Optional: Delete button logic can be added here
-                    st.write("") 
-        else:
-            st.info("Ingen kontakter å redigere.")
-            
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

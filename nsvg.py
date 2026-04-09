@@ -707,8 +707,6 @@ elif valg == "📇 Kontakter":
                 else:
                     st.warning("Navn og e-post er påkrevd.")
 
-
-                        
-    # --- FOOTER (FIXED Error Line) ---
+# --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

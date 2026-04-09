@@ -698,13 +698,14 @@ elif valg == "📧 Melding til Admin":
                 try:
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     
-                    # ERROR FIX: Hum session_state se user ka naam nikal rahe hain
-                    # Agar 'name' nahi milta to 'username' use karega
-                    sender_name = st.session_state.get('name', st.session_state.get('username', 'Ukjent Bruker'))
+                    # SAFE SESSION RETRIEVAL
+                    # Aapki sheet ke mutabiq 'username' aur 'role' check kar rahe hain
+                    s_name = st.session_state.get('username', 'Ukjent Bruker')
+                    s_role = st.session_state.get('role', 'Worker') 
                     
                     new_msg = pd.DataFrame([{
-                        "Fra_Navn": sender_name, 
-                        "Fra_Rolle": st.session_state.role, 
+                        "Fra_Navn": s_name, 
+                        "Fra_Rolle": s_role, 
                         "Melding": msg_text, 
                         "Tidspunkt": now
                     }])
@@ -723,21 +724,19 @@ elif valg == "📧 Melding til Admin":
                 except Exception as e:
                     st.error(f"Systemfeil: {e}")
 
-# --- 13. ADMIN INBOX & SEND MELDING TIL ANSATTE ---
+# --- 13. ADMIN INBOX & SEND MELDING ---
 elif valg == "📥 Inbox (Meldinger)":
-    st.header("📥 Inbox & Send Melding")
+    st.header("📥 Inbox & Kommunikation")
     
     tab_inbox, tab_send = st.tabs(["📥 Mottatte meldinger", "📤 Send melding til ansatt"])
 
-    # --- TAB: MOTTATTE MELDINGER ---
     with tab_inbox:
         try:
             inbox_df = get_data("Messages")
             if not inbox_df.empty:
-                inbox_display = inbox_df.iloc[::-1] 
-                for i, row in inbox_display.iterrows():
-                    with st.expander(f"✉️ Fra: {row['Fra_Navn']} | ⏱️ {row['Tidspunkt']}"):
-                        st.caption(f"Rolle: {row['Fra_Rolle']}")
+                # Sirf wo messages dikhana jo Admin ke liye hain ya Admin ne bheje hain
+                for i, row in inbox_df.iloc[::-1].iterrows():
+                    with st.expander(f"✉️ Fra: {row['Fra_Navn']} | {row['Tidspunkt']}"):
                         st.write(row['Melding'])
                 
                 if st.button("🗑️ Tøm Inboxen"):
@@ -745,48 +744,50 @@ elif valg == "📥 Inbox (Meldinger)":
                     update_sheet_data_internal("Messages", empty_df)
                     st.rerun()
             else:
-                st.info("Ingen meldinger.")
+                st.info("Inboxen er tom.")
         except:
-            st.info("Inboxen er tom.")
+            st.info("Ingen meldinger funnet.")
 
-    # --- TAB: SEND MELDING (ADMIN SE ANSATT KO) ---
     with tab_send:
         st.subheader("Send melding til en ansatt eller direktør")
-        
-        # Ansatte ki list nikalna (Users sheet se)
         try:
-            users_df = get_data("Users") # Aapki user list wali sheet ka naam
-            ansatt_list = users_df["Navn"].tolist() # Ya "Brukernavn" jo bhi aapne rakha hai
-        except:
+            # Aapki sheet ka naam "Users" hai
+            users_df = get_data("Users") 
+            # Column ka naam "username" hai
+            ansatt_list = users_df["username"].tolist()
+        except Exception as e:
             ansatt_list = []
-            st.error("Kunne ikke hente ansattliste.")
+            st.warning(f"⚠️ Kunne ikke hente liste: {e}")
 
         if ansatt_list:
-            with st.form("admin_send_form"):
-                target_user = st.selectbox("Velg mottaker:", ansatt_list)
-                admin_msg = st.text_area("Din melding:")
+            with st.form("admin_to_user"):
+                target = st.selectbox("Velg mottaker (Ansatt):", ansatt_list)
+                mld = st.text_area("Din melding:")
                 
-                if st.form_submit_button("🚀 Send melding til ansatt"):
-                    # NOTE: Ansatt ko melding dikhane ke liye aapko unke dashboard par bhi ek 
-                    # "Mottatte meldinger" ka section banana hoga.
-                    # Filhal ye sirf "Messages" sheet mein save karega:
-                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                    admin_name = st.session_state.get('name', st.session_state.get('username', 'Admin'))
-                    
-                    admin_reply = pd.DataFrame([{
-                        "Fra_Navn": f"ADMIN ({admin_name})", 
-                        "Fra_Rolle": "Admin", 
-                        "Melding": f"TIL {target_user}: {admin_msg}", 
-                        "Tidspunkt": now
-                    }])
-                    
-                    all_msgs = get_data("Messages")
-                    updated_msgs = pd.concat([all_msgs, admin_reply], ignore_index=True)
-                    
-                    if update_sheet_data_internal("Messages", updated_msgs):
-                        st.success(f"✅ Melding sendt til {target_user}!")
+                if st.form_submit_button("🚀 Send"):
+                    if mld.strip():
+                        now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                        admin_user = st.session_state.get('username', 'Admin')
+                        
+                        # Data prepare kar rahe hain
+                        reply = pd.DataFrame([{
+                            "Fra_Navn": f"ADMIN ({admin_user})", 
+                            "Fra_Rolle": "Admin", 
+                            "Melding": f"TIL {target}: {mld}", 
+                            "Tidspunkt": now
+                        }])
+                        
+                        try:
+                            all_m = get_data("Messages")
+                        except:
+                            all_m = pd.DataFrame(columns=["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
+                            
+                        update_sheet_data_internal("Messages", pd.concat([all_m, reply], ignore_index=True))
+                        st.success(f"✅ Melding sendt til {target}!")
+                    else:
+                        st.warning("Skriv en melding først.")
         else:
-            st.warning("Ingen ansatte funnet i systemet.")
+            st.error("Ingen ansatte ble funnet i 'Users' sheeten.")
             
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")

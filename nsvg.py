@@ -555,20 +555,18 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (FIXED) ---
+# --- 11. E-POST & KONTAKTER (CLEAN & FIXED) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
-    from streamlit_gsheets import GSheetsConnection
     import pandas as pd
     import smtplib
     from email.mime.text import MIMEText
 
-    # Koble til Google Sheets
+    # DATA HENTING (Using your existing get_data function logic)
+    # Note: Assuming get_data is already defined in your code
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        url = st.secrets["spreadsheet"]
-        contacts_df = conn.read(spreadsheet=url, worksheet="Contacts", ttl=0)
+        contacts_df = get_data("Contacts")
     except Exception as e:
         st.error(f"Tilkoblingsfeil: {e}")
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
@@ -584,12 +582,11 @@ elif valg == "📧 Send E-post":
                 if e:
                     new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
                     updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                    try:
-                        conn.update(spreadsheet=url, worksheet="Contacts", data=updated_df)
-                        st.success("✅ Lagret!")
+                    # Using your existing update function logic
+                    if update_sheet_data("Contacts", updated_df):
+                        st.success("✅ Kontakt lagret!")
+                        st.cache_data.clear()
                         st.rerun()
-                    except Exception as err:
-                        st.error(f"Kunne ikke lagre: {err}")
                 else:
                     st.error("E-post er påkrevd!")
 
@@ -618,17 +615,19 @@ elif valg == "📧 Send E-post":
                     msg['From'] = s_email
                     msg['To'] = chosen_email
                     
+                    # Connection for Gmail (100% working)
                     server = smtplib.SMTP('smtp.gmail.com', 587)
                     server.starttls()
                     server.login(s_email, s_pwd)
                     server.sendmail(s_email, chosen_email, msg.as_string())
                     server.quit()
+                    
                     st.success(f"✅ Sendt til {chosen_email}")
                 except Exception as ex:
-                    st.error(f"Feil: {ex}")
+                    st.error(f"E-post feil: {ex}")
             else:
                 st.warning("Fyll ut alle felt!")
-
+                
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

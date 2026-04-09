@@ -149,12 +149,16 @@ if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
-        # Role wise filter (Aapka original logic)
-        view_data = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
+        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak
+        if role in ["Admin", "Director"]:
+            view_data = df
+        else:
+            view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
         
-        # --- METRICS SECTION (100% Purana Code) ---
+        # --- METRICS SECTION (Oversikt bars) ---
         c1, c2, c3 = st.columns(3)
-        # Safe numeric conversion
+        
+        # Lånebeløp column check aur numeric conversion
         loan_col = 'Lånebeløp' if 'Lånebeløp' in view_data.columns else view_data.columns[0] 
         total_v = pd.to_numeric(view_data[loan_col], errors='coerce').sum()
         
@@ -165,63 +169,80 @@ if valg == "📊 Dashbord":
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
-        # --- SAKER LIST SECTION ---
+        # --- SAKER LIST SECTION (Displaying last 15 cases) ---
         for i, r in view_data.tail(15).iterrows():
-            # Data fetch with .get for safety
+            # Data extraction with safety
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
             b_status = r.get('Bank_Status', 'Mottatt')
             mangler_msg = r.get('Mangler', '') 
-            sak_id = r.get('ID', i) # Unique ID for update logic
+            sak_id = r.get('ID', i)
 
-            # Status Icons for Live Feel
-            st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
+            # Status Icons based on current status
+            if b_status == "Mottatt":
+                st_icon = "🔵"
+            elif b_status == "Under Behandling":
+                st_icon = "🟡"
+            elif b_status == "Godkjent":
+                st_icon = "🟢"
+            else:
+                st_icon = "🔴"
             
+            # Har case ke liye ek Expander
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
                 # --- MESSAGING SYSTEM (Admin Message Display) ---
-                if mangler_msg and mangler_msg.strip() != "":
+                # Agar Admin ne koi message likha hai toh yahan Red Box mein dikhega
+                if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
                     st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
-                    st.info("💡 Vennligst sjekk dokumentene ya info jo mangler.")
+                    st.info("💡 Vennligst sjekk dokumentene ya info jo mangler aur niche reply karein.")
 
-                # --- FULL INFO DISPLAY (Aapka original loop - No deletion) ---
-                st.markdown("---")
-                for col_name, value in r.items():
-                    if col_name == 'Bank_Status':
-                        st.write(f"**Current Status:** `{value}`")
-                    elif col_name == 'Mangler':
-                        continue 
-                    else:
-                        st.write(f"**{col_name}:** {value}")
+                # --- FULL INFO DISPLAY (Aapka loop jo saara data dikhata hai) ---
+                st.markdown("### 📄 Saksinformasjon")
+                
+                # Data ko 2 columns mein dikhane ke liye (Beautiful look)
+                inf_c1, inf_c2 = st.columns(2)
+                for count, (col_name, value) in enumerate(r.items()):
+                    if col_name == 'Mangler': # Message upar dikha diya hai, yahan skip karenge
+                        continue
+                    
+                    target_col = inf_c1 if count % 2 == 0 else inf_c2
+                    target_col.write(f"**{col_name}:** {value}")
                 
                 # --- MODIFICATION SYSTEM (For Ansatt & Admin) ---
                 st.markdown("---")
                 st.write("🔧 **Rediger Sak / Svar til Admin**")
                 
-                # Input boxes for modification
-                new_notater = st.text_area("Oppdater Notater / Legg til info", value=r.get('Notater', ''), key=f"edit_not_{i}")
+                # 1. Notater update karne ka box
+                old_notater = str(r.get('Notater', ''))
+                new_notater = st.text_area("Oppdater Notater / Legg til info", value=old_notater, key=f"edit_not_{i}")
                 
+                # 2. Agar user Ansatt hai toh reply box dikhao
+                ansatt_reply = ""
                 if role == "Ansatt":
-                    ansatt_reply = st.text_input("Status Melding (Svar)", key=f"ans_rep_{i}")
+                    ansatt_reply = st.text_input("Skriv svar til Admin (Status update)", key=f"ans_rep_{i}")
                     
+                # 3. Save Button
                 if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
-                    # Logic to update Google Sheet
-                    # Yahan hum 'Notater' aur 'Mangler' (svar) ko update karenge
+                    # Updates dictionary taiyar karein
+                    final_msg = ansatt_reply if role == "Ansatt" and ansatt_reply.strip() != "" else mangler_msg
+                    
                     updates = {
                         "Notater": new_notater,
-                        "Mangler": ansatt_reply if role == "Ansatt" else mangler_msg
+                        "Mangler": final_msg
                     }
                     
                     with st.spinner("Oppdaterer databasen..."):
-                        # update_sak_in_sheet function ko call karein (jo maine pehle diya tha)
                         success = update_sak_in_sheet(sak_id, updates)
                         if success:
-                            st.success("✅ Sak er oppdatert!")
+                            st.success(f"✅ Sak {sak_id} er oppdatert!")
                             st.rerun()
                         else:
-                            st.error("Kunne ikke koble til databasen.")
+                            st.error("Kunne ikke koble til Google Sheets.")
+                            
     else:
-        st.warning("Ingen data tilgjengelig i databasen.")        
+        st.warning("Ingen data tilgjengelig i databasen ennå.")
+        
 
 # --- 7. NY REGISTRERING (100000% SYMMETRIC + SEPARATE FINANCIALS) ---
 elif valg == "➕ Ny Registrering":
@@ -535,8 +556,9 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                                     # Info Loop (Show 100% data - Original logic)
                                     cols = st.columns(2)
                                     for count, (col_name, col_val) in enumerate(s_row.items()):
-                                        target_col = cols[0] if count % 2 == 0 else cols[1]
-                                        target_col.write(f"**{col_name}:** {col_val}")
+                                        if col_name != 'Mangler': # Duplicate avoid karne ke liye
+                                            target_col = cols[0] if count % 2 == 0 else cols[1]
+                                            target_col.write(f"**{col_name}:** {col_val}")
 
                                     st.markdown("---")
                                     st.write("🔧 **Admin Action: Status & Messaging**")
@@ -549,18 +571,17 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                                     new_bank_st = st.selectbox("Oppdater Sak Status", status_options, index=st_idx, key=f"st_edit_{idx}_{i}")
                                     
                                     # 2. Mangler/Messaging Box (Jo Ansatt ko dikhega)
+                                    mangler_msg_val = s_row.get('Mangler', '')
                                     mangler_msg = st.text_area("Mangler dokumenter / Melding til ansatt", 
-                                                               value=s_row.get('Mangler', ''), 
+                                                               value=str(mangler_msg_val) if str(mangler_msg_val).lower() != 'nan' else "", 
                                                                placeholder="Skriv her... (f.eks: Trenger lønnsslipp)",
                                                                key=f"msg_edit_{idx}_{i}")
                                     
-                                    if st.button(f"💾 Lagre & Send Live (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
-                                        # Yeh updates dictionary taiyar karega
+                                    if st.button(f"🚀 Lagre & Send Live (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
                                         updates = {
                                             "Bank_Status": new_bank_st,
                                             "Mangler": mangler_msg
                                         }
-                                        # Function call to Google Sheets
                                         with st.spinner("Oppdaterer Google Sheets..."):
                                             success = update_sak_in_sheet(sak_id, updates)
                                             if success:
@@ -585,18 +606,19 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                     if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
                         if role == "Admin":
                             with st.spinner(f"Sletter {a_user}..."):
-                                success = delete_user_completely(a_user)
-                                if success:
-                                    st.success(f"✅ Agent {a_user} er slettet!")
-                                    st.rerun()
-                                else:
-                                    st.error("Kunne ikke slette.")
+                                # Assuming this function exists in your system
+                                try:
+                                    success = delete_user_completely(a_user)
+                                    if success:
+                                        st.success(f"✅ Agent {a_user} er slettet!")
+                                        st.rerun()
+                                except:
+                                    st.error("Kunne ikke slette. Sjekk om funksjonen 'delete_user_completely' finnes.")
                         else:
                             st.warning("Kun Admin kan slette ansatte.")
-
     else:
         st.warning("Ingen ansatte funnet i databasen.")
-
+        
 # --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---
 elif valg == "📇 Kontakter":
     st.header("📇 Kontaktadministrasjon")

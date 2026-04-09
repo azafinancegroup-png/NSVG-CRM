@@ -555,7 +555,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (FIXED SAVE FUNCTION) ---
+# --- 11. E-POST & KONTAKTER (MED KONTAKTLISTE) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
@@ -565,18 +565,15 @@ elif valg == "📧 Send E-post":
     from google.oauth2.service_account import Credentials
     from email.mime.text import MIMEText
 
-    # --- INTERNAL SAVE FUNCTION (To fix NameError) ---
+    # --- INTERNAL SAVE FUNCTION ---
     def update_sheet_data_internal(worksheet_name, df):
         try:
             creds_dict = st.secrets["gcp_service_account"]
-            # Ensure scopes are correct
             scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
             client = gspread.authorize(creds)
             sh = client.open_by_url(st.secrets["spreadsheet"])
             worksheet = sh.worksheet(worksheet_name)
-            
-            # Clear and update with new data
             worksheet.clear()
             worksheet.update([df.columns.values.tolist()] + df.values.tolist())
             return True
@@ -591,9 +588,46 @@ elif valg == "📧 Send E-post":
         st.error(f"Tilkoblingsfeil: {e}")
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
 
-    # 1. Legg til ny kontakt
-    with st.expander("➕ Legg til ny kontakt"):
+    # --- TABS FOR ORGANISERING (NORSK) ---
+    tab1, tab2, tab3 = st.tabs(["📩 Send E-post", "➕ Ny Kontakt", "📇 Kontaktliste"])
+
+    # TAB 1: SEND E-POST
+    with tab1:
+        with st.form("send_mail_form"):
+            st.subheader("Skriv Melding")
+            if not contacts_df.empty:
+                chosen_email = st.selectbox("Velg mottaker", [""] + contacts_df["E-post"].tolist())
+            else:
+                chosen_email = st.text_input("Mottaker e-post (Manuell)")
+                
+            subj = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
+            msg_text = st.text_area("Melding", height=150)
+            
+            if st.form_submit_button("🚀 Send"):
+                if chosen_email and msg_text:
+                    try:
+                        s_email = st.secrets["email_auth"]["sender_email"]
+                        s_pwd = st.secrets["email_auth"]["app_password"]
+                        msg = MIMEText(msg_text)
+                        msg['Subject'] = subj
+                        msg['From'] = s_email
+                        msg['To'] = chosen_email
+                        
+                        server = smtplib.SMTP('smtp.gmail.com', 587)
+                        server.starttls()
+                        server.login(s_email, s_pwd)
+                        server.sendmail(s_email, chosen_email, msg.as_string())
+                        server.quit()
+                        st.success(f"✅ Sendt til {chosen_email}")
+                    except Exception as ex:
+                        st.error(f"E-post feil: {ex}")
+                else:
+                    st.warning("Fyll ut alle felt!")
+
+    # TAB 2: NY KONTAKT
+    with tab2:
         with st.form("kontakt_form", clear_on_submit=True):
+            st.subheader("Legg til ny kontakt i databasen")
             n = st.text_input("Navn")
             e = st.text_input("E-post")
             t = st.text_input("Telefon")
@@ -601,54 +635,24 @@ elif valg == "📧 Send E-post":
             if st.form_submit_button("Lagre Kontakt"):
                 if e:
                     new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
-                    # Purane contacts aur naya contact jama karein
                     updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                    
-                    # AB YEH FUNCTION KAAM KAREGA
                     if update_sheet_data_internal("Contacts", updated_df):
-                        st.success("✅ Kontakt lagret!")
+                        st.success("✅ Kontakt er lagret!")
                         st.cache_data.clear()
                         st.rerun()
                 else:
                     st.error("E-post er påkrevd!")
 
-    st.divider()
-
-    # 2. Skriv og send e-post (Baqi logic same rahegi)
-    with st.form("send_mail_form"):
-        st.subheader("Skriv Melding")
-        
+    # TAB 3: KONTAKTLISTE (SHOW DATA IN CRM)
+    with tab3:
+        st.subheader("Oversikt over alle kontakter")
         if not contacts_df.empty:
-            chosen_email = st.selectbox("Velg mottaker", [""] + contacts_df["E-post"].tolist())
+            # Table formatting for a clean look
+            st.dataframe(contacts_df, use_container_width=True, hide_index=True)
+            st.write(f"Totalt antall kontakter: **{len(contacts_df)}**")
         else:
-            chosen_email = st.text_input("Mottaker e-post (Manuell)")
+            st.info("Ingen kontakter funnet i databasen.")
             
-        subj = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
-        msg_text = st.text_area("Melding", height=150)
-        
-        if st.form_submit_button("🚀 Send"):
-            if chosen_email and msg_text:
-                try:
-                    s_email = st.secrets["email_auth"]["sender_email"]
-                    s_pwd = st.secrets["email_auth"]["app_password"]
-                    
-                    msg = MIMEText(msg_text)
-                    msg['Subject'] = subj
-                    msg['From'] = s_email
-                    msg['To'] = chosen_email
-                    
-                    server = smtplib.SMTP('smtp.gmail.com', 587)
-                    server.starttls()
-                    server.login(s_email, s_pwd)
-                    server.sendmail(s_email, chosen_email, msg.as_string())
-                    server.quit()
-                    
-                    st.success(f"✅ Sendt til {chosen_email}")
-                except Exception as ex:
-                    st.error(f"E-post feil: {ex}")
-            else:
-                st.warning("Fyll ut alle felt!")
-                
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

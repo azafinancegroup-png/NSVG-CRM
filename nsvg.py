@@ -83,13 +83,18 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (UPDATED MENU) ---
-# Sab users ke liye basic options
-options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE OLD VERSION) ---
 
-# Admin aur Director ke liye makhsoos options
+# Sabse pehle role aur user ko session se uthao taake NameError khatam ho
+role = st.session_state.get('role', 'Guest')
+current_user = st.session_state.get('username', 'Guest')
+
+# Sab users ke liye basic options
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+# Admin aur Director ke liye makhsoos options (Ab 'role' yahan error nahi dega)
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
+    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 

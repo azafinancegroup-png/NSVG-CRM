@@ -83,52 +83,16 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (STABLE VERSION) ---
-
-# 1. Session State Variables
-if "role" in st.session_state:
-    role = st.session_state.role
-    current_user = st.session_state.get('username', 'Ukjent')
-    username = current_user
-else:
-    role = "Guest"
-    current_user = "Guest"
-    username = "Guest"
-
-# 2. Global Function for Saving Data
-def update_sheet_data_internal(worksheet_name, df_to_save):
-    try:
-        creds_dict = st.secrets["gcp_service_account"]
-        from google.oauth2.service_account import Credentials
-        import gspread
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(st.secrets["spreadsheet"])
-        worksheet = sh.worksheet(worksheet_name)
-        worksheet.clear()
-        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
-        return True
-    except Exception as e:
-        st.error(f"Feil ved lagring: {e}")
-        return False
-
-# 3. Data Loading Safety (Fix for 'df.empty' error)
-try:
-    df = get_data("Kunder") # Ya jo bhi aapki main sheet ka naam hai
-except:
-    import pandas as pd
-    df = pd.DataFrame() # Agar data na mile to khali DataFrame bana do taake crash na ho
-
-# 4. Sidebar Menu Options
+# --- 5. GLOBAL DATA & SIDEBAR (UPDATED MENU) ---
+# Sab users ke liye basic options
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
+# Admin aur Director ke liye makhsoos options
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# 5. Logg ut button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

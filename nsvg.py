@@ -90,11 +90,12 @@ current_user = st.session_state['user_id']
 st.sidebar.title(f"👤 {current_user.capitalize()}")
 
 # --- 5. GLOBAL DATA & SIDEBAR (UPDATED MENU) ---
-options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+# Sab users ke liye basic options
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
 # Admin aur Director ke liye makhsoos options
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
+    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
@@ -682,7 +683,82 @@ elif valg == "📇 Kontakter":
                         st.rerun()
                 else:
                     st.warning("Navn og e-post er påkrevd.")
+
+# --- 12. MELDING TIL ADMIN (FOR ALLE ANSATTE) ---
+elif valg == "📧 Melding til Admin":
+    st.header("📧 Send melding til Admin")
+    st.info("Her kan du sende en direkte beskjed til Admin. Ingen andre ansatte kan se din melding.")
+
+    with st.form("send_msg_to_admin"):
+        msg_text = st.text_area("Din melding", placeholder="Skriv din beskjed her...", height=150)
+        submit_msg = st.form_submit_button("🚀 Send Melding")
+
+        if submit_msg:
+            if msg_text.strip():
+                try:
+                    # Current Time and Date
+                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     
+                    # Naya Message Data
+                    new_msg = pd.DataFrame([{
+                        "Fra_Navn": st.session_state.name, 
+                        "Fra_Rolle": st.session_state.role, 
+                        "Melding": msg_text, 
+                        "Tidspunkt": now
+                    }])
+                    
+                    # Google Sheet "Messages" se purana data lena
+                    try:
+                        all_msgs = get_data("Messages")
+                    except:
+                        all_msgs = pd.DataFrame(columns=["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
+                    
+                    # Naya message purane list mein niche add karna
+                    updated_msgs = pd.concat([all_msgs, new_msg], ignore_index=True)
+                    
+                    # Save to Google Sheets (using your internal function)
+                    if update_sheet_data_internal("Messages", updated_msgs):
+                        st.success("✅ Meldingen er sendt til Admin!")
+                    else:
+                        st.error("Kunne ikke lagre meldingen i systemet.")
+                except Exception as e:
+                    st.error(f"Systemfeil: {e}")
+            else:
+                st.warning("Vennligst skriv noe i feltet før du sender.")
+
+# --- 13. ADMIN INBOX (KUN FOR ADMIN & DIRECTOR) ---
+elif valg == "📥 Inbox (Meldinger)":
+    st.header("📥 Inbox - Mottatte meldinger")
+    
+    try:
+        # Messages load karna
+        inbox_df = get_data("Messages")
+        
+        if not inbox_df.empty:
+            # Newest messages sabse upar dikhane ke liye reverse kar rahe hain
+            inbox_display = inbox_df.iloc[::-1] 
+            
+            st.write(f"Du har totalt {len(inbox_df)} meldinger.")
+            
+            for i, row in inbox_display.iterrows():
+                # Har message ek box (expander) mein dikhega
+                with st.expander(f"✉️ Fra: {row['Fra_Navn']} | ⏱️ {row['Tidspunkt']}"):
+                    st.caption(f"Avsender Rolle: {row['Fra_Rolle']}")
+                    st.write(row['Melding'])
+            
+            st.divider()
+            # Inbox saaf karne ka option
+            if st.button("🗑️ Tøm hele Inboxen"):
+                empty_df = pd.DataFrame(columns=["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
+                if update_sheet_data_internal("Messages", empty_df):
+                    st.success("Inboxen er tømt!")
+                    st.cache_data.clear()
+                    st.rerun()
+        else:
+            st.info("Inboxen er tom. Ingen meldinger fra ansatte ennå.")
+    except Exception as e:
+        st.info("Kunne ikke hente meldinger. Sjekk om 'Messages' fanen finnes i Google Sheets.")
+        
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

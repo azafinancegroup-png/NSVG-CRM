@@ -726,6 +726,120 @@ elif valg == "📇 Kontakter":
                     st.warning("Navn og e-post er påkrevd.")
 
 
+# --- 12. MELDING TIL ADMIN (FOR ALLE ANSATTE) ---
+elif valg == "📧 Melding til Admin":
+    st.header("📧 Send melding til Admin")
+    st.info("Her kan du sende en direkte beskjed til Admin.")
+
+    with st.form("send_msg_to_admin"):
+        msg_text = st.text_area("Din melding", placeholder="Skriv din beskjed her...", height=150)
+        submit_msg = st.form_submit_button("🚀 Send Melding")
+
+        if submit_msg:
+            if msg_text.strip():
+                try:
+                    # Connection setup
+                    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                    creds_dict = st.secrets["gcp_service_account"]
+                    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                    client = gspread.authorize(creds)
+                    # Sheet open karna (Make sure "Messages" sheet exist karti ho)
+                    sheet = client.open("NSVG_CRM_Data").worksheet("Messages")
+
+                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                    s_name = st.session_state.get('user_id', 'Ukjent Bruker') # user_id use kiya hai jo aapke login mein hai
+                    s_role = st.session_state.get('user_role', 'Worker')
+                    
+                    # Direct append logic (Zyada stable hai)
+                    new_row = [s_name, s_role, msg_text, now]
+                    sheet.append_row(new_row)
+                    
+                    st.success("✅ Meldingen er sendt til Admin!")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"Kunne ikke sende melding: {e}")
+            else:
+                st.warning("Vennligst skriv en melding før du sender.")
+
+# --- 13. ADMIN INBOX & SEND MELDING ---
+elif valg == "📥 Inbox (Meldinger)":
+    # Sirf Admin aur Director hi dekh sakte hain
+    if role not in ["Admin", "Director"]:
+        st.error("Du har ikke tilgang til denne siden.")
+        st.stop()
+
+    st.header("📥 Inbox & Kommunikation")
+    
+    tab_inbox, tab_send = st.tabs(["📥 Mottatte meldinger", "📤 Send melding til ansatt"])
+
+    with tab_inbox:
+        try:
+            # Data fetch karna
+            inbox_df = get_data("Messages")
+            if not inbox_df.empty:
+                # Latest message sab se upar dikhane ke liye reverse kiya (.iloc[::-1])
+                for i, row in inbox_df.iloc[::-1].iterrows():
+                    with st.expander(f"✉️ Fra: {row['Fra_Navn']} ({row['Fra_Rolle']}) | {row['Tidspunkt']}"):
+                        st.write(f"**Melding:** {row['Melding']}")
+                
+                st.divider()
+                if st.button("🗑️ Tøm Inboxen (Slett alle)"):
+                    try:
+                        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                        creds_dict = st.secrets["gcp_service_account"]
+                        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                        client = gspread.authorize(creds)
+                        sheet = client.open("NSVG_CRM_Data").worksheet("Messages")
+                        
+                        # Pehli row (Headers) chor kar baqi sab clear karna
+                        rows_to_delete = len(inbox_df) + 1
+                        if rows_to_delete > 1:
+                            # Sab rows delete kar ke header wapis likhna ya range clear karna
+                            sheet.clear()
+                            sheet.append_row(["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
+                            st.success("Inboxen er tømt!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Feil ved sletting: {e}")
+            else:
+                st.info("Inboxen er tom.")
+        except:
+            st.info("Ingen meldinger funnet. Sjekk om 'Messages' fanen finnes i Google Sheets.")
+
+    with tab_send:
+        st.subheader("Send melding til en ansatt eller direktør")
+        users_df = get_data("Users")
+        if not users_df.empty:
+            ansatt_list = users_df["username"].tolist()
+            
+            with st.form("admin_to_user"):
+                target = st.selectbox("Velg mottaker (Ansatt):", ansatt_list)
+                mld = st.text_area("Din melding:")
+                
+                if st.form_submit_button("🚀 Send"):
+                    if mld.strip():
+                        try:
+                            now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                            admin_user = st.session_state.get('user_id', 'Admin')
+                            
+                            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                            creds_dict = st.secrets["gcp_service_account"]
+                            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                            client = gspread.authorize(creds)
+                            sheet = client.open("NSVG_CRM_Data").worksheet("Messages")
+                            
+                            # Admin reply row
+                            reply_row = [f"ADMIN ({admin_user})", "Admin", f"TIL {target}: {mld}", now]
+                            sheet.append_row(reply_row)
+                            
+                            st.success(f"✅ Melding sendt til {target}!")
+                        except Exception as e:
+                            st.error(f"Kunne ikke sende: {e}")
+                    else:
+                        st.warning("Skriv en melding først.")
+        else:
+            st.warning("Kunne ikke laste brukerlisten.")
+
                         
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")

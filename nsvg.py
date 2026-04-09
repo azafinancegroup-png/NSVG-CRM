@@ -82,23 +82,38 @@ if not st.session_state['logged_in']:
             else: 
                 st.error("Feil brukernavn ya passord!")
     st.stop()
-# --- 5. GLOBAL DATA & SIDEBAR ---
-df = get_data("MainDB")
-role = st.session_state['user_role']
-current_user = st.session_state['user_id']
 
-st.sidebar.title(f"👤 {current_user.capitalize()}")
+# --- 5. GLOBAL DATA & SIDEBAR (UPDATED WITH GLOBAL FUNCTION) ---
 
-# --- 5. GLOBAL DATA & SIDEBAR (UPDATED MENU) ---
+# 1. Global Function (Isko yahan rakhne se 'Defined' ka error khatam ho jayega)
+def update_sheet_data_internal(worksheet_name, df):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+# 2. Sidebar Menu Options
 # Sab users ke liye basic options
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
-# Admin aur Director ke liye makhsoos options
+# Admin aur Director ke liye makhsoos options (Inbox yahan add kiya hai)
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
+# 3. Logg ut button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
@@ -697,9 +712,6 @@ elif valg == "📧 Melding til Admin":
             if msg_text.strip():
                 try:
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                    
-                    # SAFE SESSION RETRIEVAL
-                    # Aapki sheet ke mutabiq 'username' aur 'role' check kar rahe hain
                     s_name = st.session_state.get('username', 'Ukjent Bruker')
                     s_role = st.session_state.get('role', 'Worker') 
                     
@@ -717,6 +729,7 @@ elif valg == "📧 Melding til Admin":
                     
                     updated_msgs = pd.concat([all_msgs, new_msg], ignore_index=True)
                     
+                    # Ab ye function global hai, to error nahi aayega
                     if update_sheet_data_internal("Messages", updated_msgs):
                         st.success("✅ Meldingen er sendt til Admin!")
                     else:
@@ -734,7 +747,6 @@ elif valg == "📥 Inbox (Meldinger)":
         try:
             inbox_df = get_data("Messages")
             if not inbox_df.empty:
-                # Sirf wo messages dikhana jo Admin ke liye hain ya Admin ne bheje hain
                 for i, row in inbox_df.iloc[::-1].iterrows():
                     with st.expander(f"✉️ Fra: {row['Fra_Navn']} | {row['Tidspunkt']}"):
                         st.write(row['Melding'])
@@ -742,6 +754,7 @@ elif valg == "📥 Inbox (Meldinger)":
                 if st.button("🗑️ Tøm Inboxen"):
                     empty_df = pd.DataFrame(columns=["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
                     update_sheet_data_internal("Messages", empty_df)
+                    st.cache_data.clear()
                     st.rerun()
             else:
                 st.info("Inboxen er tom.")
@@ -751,9 +764,7 @@ elif valg == "📥 Inbox (Meldinger)":
     with tab_send:
         st.subheader("Send melding til en ansatt eller direktør")
         try:
-            # Aapki sheet ka naam "Users" hai
             users_df = get_data("Users") 
-            # Column ka naam "username" hai
             ansatt_list = users_df["username"].tolist()
         except Exception as e:
             ansatt_list = []
@@ -769,7 +780,6 @@ elif valg == "📥 Inbox (Meldinger)":
                         now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                         admin_user = st.session_state.get('username', 'Admin')
                         
-                        # Data prepare kar rahe hain
                         reply = pd.DataFrame([{
                             "Fra_Navn": f"ADMIN ({admin_user})", 
                             "Fra_Rolle": "Admin", 
@@ -782,13 +792,12 @@ elif valg == "📥 Inbox (Meldinger)":
                         except:
                             all_m = pd.DataFrame(columns=["Fra_Navn", "Fra_Rolle", "Melding", "Tidspunkt"])
                             
-                        update_sheet_data_internal("Messages", pd.concat([all_m, reply], ignore_index=True))
-                        st.success(f"✅ Melding sendt til {target}!")
+                        if update_sheet_data_internal("Messages", pd.concat([all_m, reply], ignore_index=True)):
+                            st.success(f"✅ Melding sendt til {target}!")
+                            st.cache_data.clear()
                     else:
                         st.warning("Skriv en melding først.")
-        else:
-            st.error("Ingen ansatte ble funnet i 'Users' sheeten.")
-            
+                        
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

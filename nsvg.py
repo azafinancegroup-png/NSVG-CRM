@@ -83,21 +83,20 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (FINAL STABLE VERSION) ---
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE VERSION) ---
 
-# 1. Variables ko Dashboard ke mutabiq set karna
+# 1. Session State Variables
 if "role" in st.session_state:
     role = st.session_state.role
-    # Dashboard 'current_user' dhoond raha hai, isliye hum dono naam set kar dete hain
     current_user = st.session_state.get('username', 'Ukjent')
-    username = current_user 
+    username = current_user
 else:
     role = "Guest"
     current_user = "Guest"
     username = "Guest"
 
-# 2. Global Function (Taki messaging aur contacts dono mein kaam kare)
-def update_sheet_data_internal(worksheet_name, df):
+# 2. Global Function for Saving Data
+def update_sheet_data_internal(worksheet_name, df_to_save):
     try:
         creds_dict = st.secrets["gcp_service_account"]
         from google.oauth2.service_account import Credentials
@@ -108,23 +107,28 @@ def update_sheet_data_internal(worksheet_name, df):
         sh = client.open_by_url(st.secrets["spreadsheet"])
         worksheet = sh.worksheet(worksheet_name)
         worksheet.clear()
-        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
         return True
     except Exception as e:
         st.error(f"Feil ved lagring: {e}")
         return False
 
-# 3. Sidebar Menu Options
-# Sab ke liye basic buttons
+# 3. Data Loading Safety (Fix for 'df.empty' error)
+try:
+    df = get_data("Kunder") # Ya jo bhi aapki main sheet ka naam hai
+except:
+    import pandas as pd
+    df = pd.DataFrame() # Agar data na mile to khali DataFrame bana do taake crash na ho
+
+# 4. Sidebar Menu Options
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
-# Admin/Director ke liye makhsoos buttons
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# 4. Logg ut button
+# 5. Logg ut button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

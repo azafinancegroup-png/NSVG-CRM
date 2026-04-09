@@ -144,7 +144,7 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
     
-# --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION) ---
+# --- 6. DASHBORD (100% PURANA CODE + STABLE MODIFICATION) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
@@ -168,23 +168,23 @@ if valg == "📊 Dashbord":
         # --- SAKER LIST SECTION ---
         for i, r in view_data.tail(15).iterrows():
             # Data fetch with .get for safety
-            hoved = r.get('Hovedsøker', 'N/A')
+            hoved = r.get('Hovedsøker', r.get('Navn', 'N/A')) # Dono check kar raha hai
             belop = r.get('Lånebeløp', '0')
             b_status = r.get('Bank_Status', 'Mottatt')
             mangler_msg = r.get('Mangler', '') 
-            sak_id = r.get('ID', i) # Unique ID for update logic
+            sak_id = r.get('ID', i) 
 
-            # Status Icons for Live Feel
+            # Status Icons for Live Feel (Aapka Original Style)
             st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
                 # --- MESSAGING SYSTEM (Admin Message Display) ---
-                if mangler_msg and mangler_msg.strip() != "":
-                    st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
-                    st.info("💡 Vennligst sjekk dokumentene ya info jo mangler.")
+                if mangler_msg and str(mangler_msg).strip() != "":
+                    st.error(f"⚠️ **MELDING:** {mangler_msg}")
+                    st.info("💡 Vennligst oppdater saken nedenfor.")
 
-                # --- FULL INFO DISPLAY (Aapka original loop - No deletion) ---
+                # --- FULL INFO DISPLAY (100% Purana Loop - Kuch delete nahi hua) ---
                 st.markdown("---")
                 for col_name, value in r.items():
                     if col_name == 'Bank_Status':
@@ -198,30 +198,34 @@ if valg == "📊 Dashbord":
                 st.markdown("---")
                 st.write("🔧 **Rediger Sak / Svar til Admin**")
                 
-                # Input boxes for modification
-                new_notater = st.text_area("Oppdater Notater / Legg til info", value=r.get('Notater', ''), key=f"edit_not_{i}")
+                # Inputs with unique keys
+                new_notater = st.text_area("Oppdater Notater", value=str(r.get('Notater', '')), key=f"edit_not_{sak_id}")
                 
+                # Agar Ansatt hai to reply box dikhao
+                ansatt_reply = ""
                 if role == "Ansatt":
-                    ansatt_reply = st.text_input("Status Melding (Svar)", key=f"ans_rep_{i}")
+                    ansatt_reply = st.text_input("Svar på mangler / Statusmelding", key=f"ans_rep_{sak_id}")
                     
-                if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
-                    # Logic to update Google Sheet
-                    # Yahan hum 'Notater' aur 'Mangler' (svar) ko update karenge
+                if st.button("💾 Lagre Endringer", key=f"save_mod_{sak_id}"):
+                    # Agar Ansatt ne reply likha hai to wo 'Mangler' column mein jayega
+                    # Agar Admin hai to wo purana message hi rahega jab tak Admin khud change na kare
+                    final_mangler = ansatt_reply if (role == "Ansatt" and ansatt_reply) else mangler_msg
+                    
                     updates = {
                         "Notater": new_notater,
-                        "Mangler": ansatt_reply if role == "Ansatt" else mangler_msg
+                        "Mangler": final_mangler
                     }
                     
                     with st.spinner("Oppdaterer databasen..."):
-                        # update_sak_in_sheet function ko call karein (jo maine pehle diya tha)
                         success = update_sak_in_sheet(sak_id, updates)
                         if success:
                             st.success("✅ Sak er oppdatert!")
                             st.rerun()
                         else:
-                            st.error("Kunne ikke koble til databasen.")
+                            st.error("Kunne ikke koble til databasen. Sjekk ID kolonnen.")
     else:
-        st.warning("Ingen data tilgjengelig i databasen.")        
+        st.warning("Ingen data tilgjengelig i databasen.")
+        
 
 # --- 7. NY REGISTRERING (100000% SYMMETRIC + SEPARATE FINANCIALS) ---
 elif valg == "➕ Ny Registrering":

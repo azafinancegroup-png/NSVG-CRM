@@ -555,16 +555,36 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. E-POST & KONTAKTER (CLEAN & FIXED) ---
+# --- 11. E-POST & KONTAKTER (FIXED SAVE FUNCTION) ---
 elif valg == "📧 Send E-post":
     st.header("📧 Send Direkte E-post")
     
     import pandas as pd
     import smtplib
+    import gspread
+    from google.oauth2.service_account import Credentials
     from email.mime.text import MIMEText
 
-    # DATA HENTING (Using your existing get_data function logic)
-    # Note: Assuming get_data is already defined in your code
+    # --- INTERNAL SAVE FUNCTION (To fix NameError) ---
+    def update_sheet_data_internal(worksheet_name, df):
+        try:
+            creds_dict = st.secrets["gcp_service_account"]
+            # Ensure scopes are correct
+            scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+            client = gspread.authorize(creds)
+            sh = client.open_by_url(st.secrets["spreadsheet"])
+            worksheet = sh.worksheet(worksheet_name)
+            
+            # Clear and update with new data
+            worksheet.clear()
+            worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+            return True
+        except Exception as e:
+            st.error(f"Kunne ikke lagre til Google Sheets: {e}")
+            return False
+
+    # DATA HENTING
     try:
         contacts_df = get_data("Contacts")
     except Exception as e:
@@ -581,9 +601,11 @@ elif valg == "📧 Send E-post":
             if st.form_submit_button("Lagre Kontakt"):
                 if e:
                     new_row = pd.DataFrame([{"Navn": n, "E-post": e, "Telefon": t}])
+                    # Purane contacts aur naya contact jama karein
                     updated_df = pd.concat([contacts_df, new_row], ignore_index=True)
-                    # Using your existing update function logic
-                    if update_sheet_data("Contacts", updated_df):
+                    
+                    # AB YEH FUNCTION KAAM KAREGA
+                    if update_sheet_data_internal("Contacts", updated_df):
                         st.success("✅ Kontakt lagret!")
                         st.cache_data.clear()
                         st.rerun()
@@ -592,7 +614,7 @@ elif valg == "📧 Send E-post":
 
     st.divider()
 
-    # 2. Skriv og send e-post
+    # 2. Skriv og send e-post (Baqi logic same rahegi)
     with st.form("send_mail_form"):
         st.subheader("Skriv Melding")
         
@@ -615,7 +637,6 @@ elif valg == "📧 Send E-post":
                     msg['From'] = s_email
                     msg['To'] = chosen_email
                     
-                    # Connection for Gmail (100% working)
                     server = smtplib.SMTP('smtp.gmail.com', 587)
                     server.starttls()
                     server.login(s_email, s_pwd)

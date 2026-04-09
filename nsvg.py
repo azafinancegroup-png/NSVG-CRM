@@ -83,9 +83,17 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (UPDATED WITH GLOBAL FUNCTION) ---
+# --- 5. GLOBAL DATA & SIDEBAR (FIXED ORDER) ---
 
-# 1. Global Function (Isko yahan rakhne se 'Defined' ka error khatam ho jayega)
+# Pehle check karein ke user login hai aur uski details session mein hain
+if "role" in st.session_state:
+    role = st.session_state.role
+    username = st.session_state.get('username', 'Ukjent')
+else:
+    role = "Guest"
+    username = "Guest"
+
+# 1. Global Function (Ab ye poori file mein kaam karega)
 def update_sheet_data_internal(worksheet_name, df):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -104,10 +112,9 @@ def update_sheet_data_internal(worksheet_name, df):
         return False
 
 # 2. Sidebar Menu Options
-# Sab users ke liye basic options
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
-# Admin aur Director ke liye makhsoos options (Inbox yahan add kiya hai)
+# Ab 'role' define ho chuka hai, to ye error nahi dega
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 

@@ -83,28 +83,45 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (BACK TO ORIGINAL LOGIC) ---
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
 
-# 1. Login check aur role identify karna (As per your Section 4)
-role = st.session_state.get('user_role', 'Guest')
-username = st.session_state.get('user_id', 'Guest')
-current_user = username
+# 1. User identification from Session State (Section 4 compatibility)
+if st.session_state.get('logged_in'):
+    role = st.session_state.get('user_role', 'Guest')
+    username = st.session_state.get('user_id', 'Guest')
+    current_user = username
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
 
-# 2. Data Loading (Exactly like your old system)
-# Hum direct get_data call kar rahe hain bina kisi extra condition ke
-df = get_data("Kunder")
+# 2. Database Loading (Using MainDB as seen in your Section 1 & 2)
+import pandas as pd
+try:
+    # Aapka original function get_data use kar rahe hain
+    df = get_data("MainDB") 
+    
+    if df is None or df.empty:
+        # Agar MainDB khali hai to Kunder check karein (Just in case)
+        df = get_data("Kunder")
+except Exception as e:
+    st.error(f"Data loading error: {e}")
+    df = pd.DataFrame()
 
-# 3. Sidebar Menu Options
+# 3. Sidebar Menu
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 
-# Admin/Director ke buttons wapis lana
+# Admin/Director privileges
 if role in ["Admin", "Director"]:
-    if "👥 Ansatte Kontroll" not in options:
-        options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
+    # Check for duplicates before adding
+    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for item in extra:
+        if item not in options:
+            options.append(item)
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# 4. Global Function (For later use, keeping it out of blocks)
+# 4. Universal Update Function (Simplified)
 def update_sheet_data_internal(worksheet_name, df_to_save):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -118,10 +135,11 @@ def update_sheet_data_internal(worksheet_name, df_to_save):
         worksheet.clear()
         worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
         return True
-    except:
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
         return False
 
-# 5. Logg ut
+# 5. Log out logic
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

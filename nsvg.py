@@ -381,11 +381,12 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
-# --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST) ---
+
+# --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST + ADMIN MESSAGING) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # Filtering logic for Admin/Director vs Ansatt
+    # Filtering logic for Admin/Director vs Ansatt (100% Same)
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", placeholder="Skriv her...")
@@ -396,15 +397,21 @@ elif valg == "📂 Kunde Arkiv":
 
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
+        mangler_msg = r.get('Mangler', '') # Sheet se Admin ki melding uthayega
         
         # Har sak ke liye expander hamesha normal view dikhayega
         with st.expander(f"📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
             
+            # --- NEW: ADMIN MELDING DISPLAY (Sub se pehle nazar aayegi) ---
+            if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
+                st.error(f"⚠️ **MELDING FRA ADMIN:** {mangler_msg}")
+                st.markdown("---")
+
             # Ye checkbox button ki tarah kaam karega modification mode kholne ke liye
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (Hamesha pehle ye dikhega) ---
+                # --- A: VIEW MODE (Hamesha pehle ye dikhega - 100% Same) ---
                 st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
                 v1, v2, v3 = st.columns(3)
                 with v1:
@@ -433,7 +440,7 @@ elif valg == "📂 Kunde Arkiv":
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
             else:
-                # --- B: MODIFICATION MODE (Sirf tick karne par open hoga) ---
+                # --- B: MODIFICATION MODE (Sirf tick karne par open hoga - 100% Same) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
                 
                 with st.form(key=f"edit_form_final_{sak_id}"):
@@ -463,8 +470,11 @@ elif valg == "📂 Kunde Arkiv":
 
                     # SYSTEM STATUS
                     st.markdown("#### ⚙️ Status & Notater")
+                    # Admin message (Mangler) update karne ka box yahan bhi de dete hain
+                    up_mangler = st.text_area("Admin Melding (Mangler)", value=str(mangler_msg))
+                    
                     up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
-                                         index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
+                                           index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
                     up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
 
                     if st.form_submit_button("💾 Lagre Alle Endringer"):
@@ -472,12 +482,12 @@ elif valg == "📂 Kunde Arkiv":
                             "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
                             "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
                             "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
-                            "Bank_Status": up_st, "Notater": up_notat
+                            "Bank_Status": up_st, "Notater": up_notat, "Mangler": up_mangler
                         }
-                        # update_sak_in_sheet function lazmi upar define honi chahiye
                         if update_sak_in_sheet(sak_id, final_data):
                             st.success("✅ Sak oppdatert!")
                             st.rerun()
+                            
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.header("🕵️ Ny Agent Registrering")

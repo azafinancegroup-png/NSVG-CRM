@@ -83,17 +83,20 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# --- 5. GLOBAL DATA & SIDEBAR (FIXED ORDER) ---
+# --- 5. GLOBAL DATA & SIDEBAR (FINAL STABLE VERSION) ---
 
-# Pehle check karein ke user login hai aur uski details session mein hain
+# 1. Variables ko Dashboard ke mutabiq set karna
 if "role" in st.session_state:
     role = st.session_state.role
-    username = st.session_state.get('username', 'Ukjent')
+    # Dashboard 'current_user' dhoond raha hai, isliye hum dono naam set kar dete hain
+    current_user = st.session_state.get('username', 'Ukjent')
+    username = current_user 
 else:
     role = "Guest"
+    current_user = "Guest"
     username = "Guest"
 
-# 1. Global Function (Ab ye poori file mein kaam karega)
+# 2. Global Function (Taki messaging aur contacts dono mein kaam kare)
 def update_sheet_data_internal(worksheet_name, df):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -111,16 +114,17 @@ def update_sheet_data_internal(worksheet_name, df):
         st.error(f"Feil ved lagring: {e}")
         return False
 
-# 2. Sidebar Menu Options
+# 3. Sidebar Menu Options
+# Sab ke liye basic buttons
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "📧 Melding til Admin"]
 
-# Ab 'role' define ho chuka hai, to ye error nahi dega
+# Admin/Director ke liye makhsoos buttons
 if role in ["Admin", "Director"]:
     options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel", "📥 Inbox (Meldinger)"])
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# 3. Logg ut button
+# 4. Logg ut button
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()

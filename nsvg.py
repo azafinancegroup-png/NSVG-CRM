@@ -555,20 +555,21 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     else:
         st.warning("Ingen ansatte funnet i databasen.")
 
-# --- 11. KONTAKTER (FIXED & MATCHED) ---
+# --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---
 elif valg == "📇 Kontakter":
     st.header("📇 Kontaktadministrasjon")
     
     import pandas as pd
     import smtplib
-    import gspread
-    from google.oauth2.service_account import Credentials
+    from datetime import datetime
     from email.mime.text import MIMEText
 
-    # INTERNAL SAVE FUNCTION
+    # INTERNAL SAVE/UPDATE FUNCTION
     def update_sheet_data_internal(worksheet_name, df):
         try:
             creds_dict = st.secrets["gcp_service_account"]
+            from google.oauth2.service_account import Credentials
+            import gspread
             scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
             client = gspread.authorize(creds)
@@ -578,80 +579,94 @@ elif valg == "📇 Kontakter":
             worksheet.update([df.columns.values.tolist()] + df.values.tolist())
             return True
         except Exception as e:
-            st.error(f"Kunne ikke lagre: {e}")
+            st.error(f"Feil ved lagring: {e}")
             return False
 
     # DATA HENTING
     try:
         contacts_df = get_data("Contacts")
+        # Agar "Sist Endret" column nahi hai to bana do
+        if "Sist Endret" not in contacts_df.columns:
+            contacts_df["Sist Endret"] = "N/A"
     except:
-        contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon"])
+        contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon", "Sist Endret"])
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📇 Oversikt", "📩 Send E-post", "➕ Ny Kontakt", "✏️ Rediger"])
+    tab1, tab2, tab3 = st.tabs(["📇 Kontaktliste & Redigering", "📩 Send E-post", "➕ Ny Kontakt"])
 
+    # --- TAB 1: LISTE + CLICK TO EDIT ---
     with tab1:
-        st.subheader("Alle kontakter")
-        st.dataframe(contacts_df, use_container_width=True, hide_index=True)
-
-    with tab2:
-        with st.form("send_mail_form"):
-            st.subheader("Send melding")
-            email_list = contacts_df["E-post"].tolist() if not contacts_df.empty else []
-            chosen_email = st.selectbox("Velg fra kontakter", [""] + email_list)
-            manual_email = st.text_input("Eller skriv inn e-post manuelt")
+        st.subheader("Klikk på en kontakt for å endre")
+        
+        if not contacts_df.empty:
+            # Table view for quick look
+            st.dataframe(contacts_df, use_container_width=True, hide_index=True)
             
-            final_recipient = manual_email if manual_email else chosen_email
-            subj = st.text_input("Emne", value="Melding fra Iqbal Entrepreneur")
-            msg_text = st.text_area("Melding", height=150)
+            # Selection for Editing
+            selected_name = st.selectbox("Velg kontakt du vil modifisere:", ["-- Velg --"] + contacts_df["Navn"].tolist())
             
-            if st.form_submit_button("🚀 Send"):
-                if final_recipient and msg_text:
-                    try:
-                        s_email = st.secrets["email_auth"]["sender_email"]
-                        s_pwd = st.secrets["email_auth"]["app_password"]
-                        msg = MIMEText(msg_text)
-                        msg['Subject'] = subj
-                        msg['From'] = s_email
-                        msg['To'] = final_recipient
+            if selected_name != "-- Velg --":
+                idx = contacts_df[contacts_df["Navn"] == selected_name].index[0]
+                last_time = contacts_df.at[idx, "Sist Endret"]
+                
+                st.markdown(f"⏱️ **Sist endret:** `{last_time}`")
+                
+                with st.expander(f"✏️ Redigerer: {selected_name}", expanded=True):
+                    with st.form(f"edit_form_{selected_name}"):
+                        new_n = st.text_input("Navn", value=str(contacts_df.at[idx, "Navn"]))
+                        new_e = st.text_input("E-post", value=str(contacts_df.at[idx, "E-post"]))
+                        new_t = st.text_input("Telefon", value=str(contacts_df.at[idx, "Telefon"]))
                         
+                        if st.form_submit_button("💾 Oppdater og lagre tidspunkt"):
+                            # Time and Date update
+                            now_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                            
+                            contacts_df.at[idx, "Navn"] = new_n
+                            contacts_df.at[idx, "E-post"] = new_e
+                            contacts_df.at[idx, "Telefon"] = new_t
+                            contacts_df.at[idx, "Sist Endret"] = now_time
+                            
+                            if update_sheet_data_internal("Contacts", contacts_df):
+                                st.success(f"✅ Oppdatert! Ny tid: {now_time}")
+                                st.cache_data.clear()
+                                st.rerun()
+        else:
+            st.info("Listen er tom.")
+
+    # --- TAB 2: SEND E-POST (Simple) ---
+    with tab2:
+        with st.form("quick_mail"):
+            rec = st.selectbox("Mottaker", [""] + contacts_df["E-post"].tolist())
+            sub = st.text_input("Emne", "Melding fra Iqbal Entrepreneur")
+            bod = st.text_area("Melding")
+            if st.form_submit_button("🚀 Send"):
+                if rec and bod:
+                    try:
+                        s_mail = st.secrets["email_auth"]["sender_email"]
+                        s_pass = st.secrets["email_auth"]["app_password"]
+                        msg = MIMEText(bod)
+                        msg['Subject'], msg['From'], msg['To'] = sub, s_mail, rec
                         with smtplib.SMTP('smtp.gmail.com', 587) as server:
                             server.starttls()
-                            server.login(s_email, s_pwd)
-                            server.sendmail(s_email, final_recipient, msg.as_string())
-                        st.success(f"✅ Sendt til {final_recipient}")
-                    except Exception as ex:
-                        st.error(f"Feil: {ex}")
-                else:
-                    st.warning("Fyll ut mottaker og melding!")
+                            server.login(s_mail, s_pass)
+                            server.sendmail(s_mail, rec, msg.as_string())
+                        st.success("Sendt!")
+                    except Exception as e: st.error(e)
 
+    # --- TAB 3: NY KONTAKT ---
     with tab3:
-        with st.form("new_contact"):
-            n = st.text_input("Navn")
-            e = st.text_input("E-post")
-            t = st.text_input("Telefon")
-            if st.form_submit_button("Lagre"):
-                if e:
-                    new_df = pd.concat([contacts_df, pd.DataFrame([{"Navn":n,"E-post":e,"Telefon":t}])], ignore_index=True)
-                    if update_sheet_data_internal("Contacts", new_df):
-                        st.success("Lagret!")
-                        st.cache_data.clear()
-                        st.rerun()
-
-    with tab4:
-        if not contacts_df.empty:
-            name_to_edit = st.selectbox("Velg for å redigere", contacts_df["Navn"].tolist())
-            idx = contacts_df[contacts_df["Navn"] == name_to_edit].index[0]
-            with st.form("edit_contact"):
-                en = st.text_input("Navn", value=contacts_df.at[idx, "Navn"])
-                ee = st.text_input("E-post", value=contacts_df.at[idx, "E-post"])
-                et = st.text_input("Telefon", value=contacts_df.at[idx, "Telefon"])
-                if st.form_submit_button("Oppdater"):
-                    contacts_df.at[idx, "Navn"], contacts_df.at[idx, "E-post"], contacts_df.at[idx, "Telefon"] = en, ee, et
-                    if update_sheet_data_internal("Contacts", contacts_df):
-                        st.success("Oppdatert!")
-                        st.cache_data.clear()
-                        st.rerun()
-                        
+        with st.form("new_con"):
+            nn = st.text_input("Navn")
+            ne = st.text_input("E-post")
+            nt = st.text_input("Telefon")
+            if st.form_submit_button("Legg til"):
+                now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                new_row = pd.DataFrame([{"Navn":nn, "E-post":ne, "Telefon":nt, "Sist Endret":now}])
+                contacts_df = pd.concat([contacts_df, new_row], ignore_index=True)
+                if update_sheet_data_internal("Contacts", contacts_df):
+                    st.success("Lagt til!")
+                    st.cache_data.clear()
+                    st.rerun()
+                    
 # --- FOOTER (Outside the if/elif block) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

@@ -3,10 +3,18 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import json  # <--- Maya: Yeh add kar diya hai networking ke liye
+import json
 import smtplib
 from email.mime.text import MIMEText
+import pytz  # <--- Maya: Norway time zone support ke liye
 
+# --- GLOBAL SETTINGS ---
+# Yeh function ab poore CRM mein sahi Norway time supply karega
+def get_norway_time():
+    tz = pytz.timezone('Europe/Oslo')
+    return datetime.now(tz).strftime("%d.%m.%Y %H:%M")
+
+# Iske baad aapka baaki code (Section 1, 2, etc.) shuru hoga
 # --- 1 & 2. DATABASE UPDATE ENGINE (Updated with Chat Support) ---
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
@@ -198,17 +206,16 @@ if st.sidebar.button("🔴 Logg ut"):
     st.rerun()
 
 # =================================================================
-# 🏦 FINAL BANKING MESSAGING HUB (ONLY ONE VERSION NEEDED)
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (UPGRADED)
 # =================================================================
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
-    
-    # 1. Dynamic Title (Norsk)
-    target_label = agent_name.upper() if role in ["Admin", "Director"] else "BANKEN"
+    # Professional Labeling: Ansatt ko sirf "BANK" dikhega
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
 
-    # Professional CSS
+    # Professional Chat Styling
     st.markdown("""
         <style>
         .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
@@ -221,69 +228,84 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # 2. Display Messages & Delete Option (For Admin)
+    # --- SMART LOGIC: Auto-Mark as Read when opened ---
+    has_unread = False
+    for m in messages:
+        if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
+        elif role in ["Admin", "Director"] and m.get('role') == "Agent" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
+
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
+    # Display Messages
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
+        # Sender identity protection
+        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         
-        st.markdown(f'<div class="{div_class}"><b>{msg["sender"]}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
-        
-        # Slette-knapp (Admin only)
-        if role in ["Admin", "Director"]:
-            if st.button(f"🗑️ Slett", key=f"del_{sak_id}_{idx}"):
-                messages.pop(idx)
-                update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
-                st.rerun()
+        st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
     st.divider()
 
-    # 3. Message Input & File Attachment
+    # Input Section
     col_msg, col_file = st.columns([3, 1])
-    
-    prompt_text = f"Skriv melding til {target_label}..."
-    msg_input = col_msg.text_input(prompt_text, key=f"input_{sak_id}")
-    uploaded_file = col_file.file_uploader("📎 Vedlegg", key=f"file_{sak_id}")
+    msg_input = col_msg.text_input(f"Skriv melding til {target_label}...", key=f"input_{sak_id}")
+    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
     if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
-        if msg_input or uploaded_file:
-            full_text = msg_input
-            if uploaded_file:
-                full_text += f"\n\n📎 **Vedlegg:** {uploaded_file.name}"
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
             
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": "BANK CENTRAL" if role in ["Admin", "Director"] else username.upper(),
-                "text": full_text,
-                "time": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                "sender": "BANK" if role in ["Admin", "Director"] else username.upper(),
+                "text": full_txt,
+                "time": get_norway_time(), # Exact Norway Time
                 "read": False 
             }
             messages.append(new_msg)
-            
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-
-# --- 6. DASHBORD (100% PURANA CODE + NEW NOTIFICATIONS & BANKING HUB) ---
+                
+# --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
-        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak
+        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak (100% SAME)
         if role in ["Admin", "Director"]:
             view_data = df
         else:
             view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
         
-        # --- NEW: NOTIFICATION CHECKER (Oper chotta sa button) ---
+        # --- NEW: ADVANCED NOTIFICATION SYSTEM (Professional Jump Logic) ---
         unread_saker = []
-        for idx, row in view_data.iterrows():
-            history = row.get('Chat_History', '')
-            if history and 'false' in str(history).lower(): # Simple check for unread
-                unread_saker.append(row.get('Hovedsøker', 'Ukjent'))
-        
-        if unread_saker:
-            st.warning(f"🔔 **Varsel:** Du har nye meldinger i {len(unread_saker)} saker!")
+        for i, r in view_data.iterrows():
+            chat_h = str(r.get('Chat_History', ''))
+            # Check unread messages based on role
+            if role in ["Admin", "Director"]:
+                if '"role": "Agent"' in chat_h and '"read": false' in chat_h.lower():
+                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
+            else:
+                if '"role": "Bank"' in chat_h and '"read": false' in chat_h.lower():
+                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
 
-        # --- METRICS SECTION (Oversikt bars - 100% SAME) ---
+        if unread_saker:
+            st.markdown("### 🔔 Varsler")
+            for sak in unread_saker:
+                # Jab is button par click hoga, system "Kunde Arkiv" par jump karega aur sak filter kar dega
+                if st.button(f"📩 Ny melding i sak: {sak['navn']} (ID: {sak['id']})", key=f"notif_{sak['id']}"):
+                    st.session_state.search_query = str(sak['id']) 
+                    st.session_state.active_tab = "📂 Kunde Arkiv" 
+                    st.rerun()
+
+        # --- METRICS SECTION (Oversikt bars - 100% SAME AS YOURS) ---
         c1, c2, c3 = st.columns(3)
         
         loan_col = 'Lånebeløp' if 'Lånebeløp' in view_data.columns else view_data.columns[0] 
@@ -305,9 +327,9 @@ if valg == "📊 Dashbord":
             mangler_msg = r.get('Mangler', '') 
             sak_id = r.get('ID', i)
             chat_h = r.get('Chat_History', '')
-            agent_navn = r.get('Saksbehandler', 'Agent') # Admin ko dikhane ke liye
+            agent_navn = r.get('Saksbehandler', 'Agent')
 
-            # Status Icons based on current status
+            # Status Icons (100% SAME)
             if b_status == "Mottatt":
                 st_icon = "🔵"
             elif b_status == "Under Behandling":
@@ -320,13 +342,12 @@ if valg == "📊 Dashbord":
             # Har case ke liye ek Expander
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
-                # --- NEW: BANKING CHAT HUB (Updated with Agent Name) ---
-                # Humne function ko agent ka naam bhi bhej diya hai dynamic label ke liye
+                # --- BANKING CHAT HUB (Integrated) ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
                 st.divider()
 
-                # --- MESSAGING SYSTEM (Admin Message Display - Old Style) ---
+                # --- MESSAGING SYSTEM (Admin Message Display - 100% SAME) ---
                 if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
                     st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
                     st.info("💡 Vennligst sjekk dokumentene ya info jo mangler aur niche reply karein.")
@@ -335,9 +356,8 @@ if valg == "📊 Dashbord":
                 st.markdown("### 📄 Saksinformasjon")
                 
                 inf_c1, inf_c2 = st.columns(2)
-                # Purana data display logic loop
                 for count, (col_name, value) in enumerate(r.items()):
-                    if col_name in ['Mangler', 'Chat_History']: # Inko list mein skip karenge
+                    if col_name in ['Mangler', 'Chat_History']: 
                         continue
                     
                     target_col = inf_c1 if count % 2 == 0 else inf_c2
@@ -372,6 +392,8 @@ if valg == "📊 Dashbord":
                             
     else:
         st.warning("Ingen data tilgjengelig i databasen ennå.")
+
+
 
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
@@ -519,41 +541,58 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
                 
-# --- 8. KUNDE ARKIV (100% PURANA CODE + CHAT & NOTIFICATIONS) ---
+# --- 8. KUNDE ARKIV (PRO UPGRADE: SMART JUMP & AUTO-OPEN) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # Filtering logic for Admin/Director vs Ansatt (100% Same)
+    # --- SMART JUMP LOGIC: Dashboard se click karke aane walon ke liye ---
+    jump_id = st.session_state.get('search_query', "")
+    
+    # 1. Filtering logic (100% Same as your original)
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", placeholder="Skriv her...")
+    # 2. Search Box (Pre-filled if coming from notification)
+    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
+    
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
     st.info(f"Antall saker funnet: {len(view_df)}")
 
+    # Clear jump query after first use so it doesn't lock the search
+    if 'search_query' in st.session_state:
+        st.session_state.search_query = ""
+
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
-        mangler_msg = r.get('Mangler', '') # Sheet se Admin ki melding uthayega
-        chat_h = r.get('Chat_History', '') # Maya: Fetching existing chat history
-        agent_navn = r.get('Saksbehandler', 'Agent') # Dynamic naming ke liye
+        mangler_msg = r.get('Mangler', '') 
+        chat_h = r.get('Chat_History', '') 
+        agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- NEW: NOTIFICATION TAG IN EXPANDER TITLE ---
-        alert_tag = "🔴 NY MELDING | " if chat_h and '"read": false' in str(chat_h).lower() else ""
-        
-        # Har sak ke liye expander hamesha normal view dikhayega
-        with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
+        # --- SMART NOTIFICATION TAG ---
+        # "read": false check karega role ke mutabiq
+        is_unread = False
+        if role in ["Admin", "Director"] and '"role": "Agent"' in str(chat_h) and '"read": false' in str(chat_h).lower():
+            is_unread = True
+        elif role not in ["Admin", "Director"] and '"role": "Bank"' in str(chat_h) and '"read": false' in str(chat_h).lower():
+            is_unread = True
             
-            # --- NEW: ADMIN MELDING DISPLAY (Sub se pehle nazar aayegi) ---
+        alert_tag = "🔴 NY MELDING | " if is_unread else ""
+        
+        # --- AUTO-EXPAND LOGIC ---
+        # Agar user notification se aaya hai, to expander khud khul jaye
+        expand_me = True if str(sak_id) == str(sok) else False
+
+        with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
+            
             if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
                 st.error(f"⚠️ **MELDING FRA ADMIN:** {mangler_msg}")
                 st.markdown("---")
 
-            # Ye checkbox button ki tarah kaam karega modification mode kholne ke liye
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (100% Purana Look - No Changes) ---
+                # --- A: VIEW MODE (100% Purana Look - Not a single dot changed) ---
                 st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
                 v1, v2, v3 = st.columns(3)
                 with v1:
@@ -572,7 +611,6 @@ elif valg == "📂 Kunde Arkiv":
                     st.write(f"**Dato:** {r.get('Dato', '-')}")
 
                 st.divider()
-                # Medsøker View
                 if r.get('Medsøker_Navn'):
                     st.markdown("**👥 Medsøker Info:**")
                     mv1, mv2 = st.columns(2)
@@ -581,15 +619,15 @@ elif valg == "📂 Kunde Arkiv":
                 
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
-                # --- NEW: CHAT HUB (Integrated in View Mode) ---
+                # --- INTEGRATED MESSAGING HUB ---
+                # Jab expander khulega, messaging hub unread ko automatically read kar dega
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
-                # --- B: MODIFICATION MODE (100% Purana Look - No Changes) ---
+                # --- B: MODIFICATION MODE (100% Purana Look) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
                 
                 with st.form(key=f"edit_form_final_{sak_id}"):
-                    # HOVEDSØKER
                     st.markdown("#### 👤 Hovedsøker Detaljer")
                     h1, h2 = st.columns(2)
                     up_navn = h1.text_input("Fullt Navn", value=str(r.get('Navn', '')))
@@ -597,7 +635,6 @@ elif valg == "📂 Kunde Arkiv":
                     up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
                     up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
                     
-                    # ØKONOMI
                     st.markdown("#### 💼 Økonomi")
                     a1, a2 = st.columns(2)
                     up_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
@@ -605,7 +642,6 @@ elif valg == "📂 Kunde Arkiv":
                     up_belop = a2.text_input("Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
                     up_ek = a2.text_input("EK (kr)", value=str(r.get('EK', '0')))
 
-                    # MEDSØKER
                     st.markdown("#### 👥 Medsøker")
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Navn", value=str(r.get('Medsøker_Navn', '')))
@@ -613,7 +649,6 @@ elif valg == "📂 Kunde Arkiv":
                     up_m_lonn = m2.text_input("Medsøker Lønn", value=str(r.get('Medsøker_Lønn', '0')))
                     up_m_tlf = m2.text_input("Medsøker Tlf", value=str(r.get('Medsøker_Tlf', '')))
 
-                    # SYSTEM STATUS
                     st.markdown("#### ⚙️ Status & Notater")
                     up_mangler = st.text_area("Admin Melding (Mangler)", value=str(mangler_msg))
                     

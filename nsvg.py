@@ -354,10 +354,8 @@ if valg == "📊 Dashbord":
                 
                 st.divider()
 
-                # --- MESSAGING SYSTEM (Admin Message Display - 100% SAME) ---
-                if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
-                    st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
-                    st.info("💡 Vennligst sjekk dokumentene ya info jo mangler aur niche reply karein.")
+                # --- OLD MESSAGING SYSTEM REMOVED (As requested) ---
+                # Purana error aur info block yahan se delete kar diya gaya hai.
 
                 # --- FULL INFO DISPLAY (Aapka loop jo saara data dikhata hai - 100% SAME) ---
                 st.markdown("### 📄 Saksinformasjon")
@@ -399,7 +397,6 @@ if valg == "📊 Dashbord":
                             
     else:
         st.warning("Ingen data tilgjengelig i databasen ennå.")
-
 
 
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
@@ -577,7 +574,6 @@ elif valg == "📂 Kunde Arkiv":
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
         # --- SMART NOTIFICATION TAG ---
-        # "read": false check karega role ke mutabiq
         is_unread = False
         if role in ["Admin", "Director"] and '"role": "Agent"' in str(chat_h) and '"read": false' in str(chat_h).lower():
             is_unread = True
@@ -587,14 +583,12 @@ elif valg == "📂 Kunde Arkiv":
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- AUTO-EXPAND LOGIC ---
-        # Agar user notification se aaya hai, to expander khud khul jaye
         expand_me = True if str(sak_id) == str(sok) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
-                st.error(f"⚠️ **MELDING FRA ADMIN:** {mangler_msg}")
-                st.markdown("---")
+            # --- OLD MELDING SYSTEM REMOVED ---
+            # Yahan se woh st.error aur st.markdown delete kar diye gaye hain.
 
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
@@ -627,11 +621,10 @@ elif valg == "📂 Kunde Arkiv":
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
                 # --- INTEGRATED MESSAGING HUB ---
-                # Jab expander khulega, messaging hub unread ko automatically read kar dega
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
-                # --- B: MODIFICATION MODE (100% Purana Look) ---
+                # --- B: MODIFICATION MODE (100% Purana Look - Safe & Intact) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
                 
                 with st.form(key=f"edit_form_final_{sak_id}"):

@@ -6,36 +6,28 @@ from datetime import datetime
 import json
 import smtplib
 from email.mime.text import MIMEText
-import pytz  # <--- Maya: Norway time zone support ke liye
+import pytz 
 
 # --- GLOBAL SETTINGS ---
-# Yeh function ab poore CRM mein sahi Norway time supply karega
 def get_norway_time():
     tz = pytz.timezone('Europe/Oslo')
     return datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
-# Iske baad aapka baaki code (Section 1, 2, etc.) shuru hoga
-# --- 1 & 2. DATABASE UPDATE ENGINE (Updated with Chat Support) ---
+# --- 1 & 2. DATABASE UPDATE ENGINE (Stable & Fast) ---
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
-        # Google API setup
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
-        # Sheet ka naam (NSVG_CRM_Data) aur Worksheet (MainDB)
         sheet = client.open("NSVG_CRM_Data").worksheet("MainDB") 
-        
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
-        # Sahi Case (ID) dhoond kar update karna
         if 'ID' in temp_df.columns:
-            # ID ko string mein convert karke match karte hain taake error na aaye
             matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
             if matched_rows:
-                # Actual row = index + 2 (1 for header, 1 for 0-indexing)
                 actual_row = matched_rows[0] + 2 
                 for col_name, new_val in updated_values_dict.items():
                     if col_name in temp_df.columns:
@@ -47,11 +39,12 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
         st.error(f"Database Error: {e}")
         return False
 
-# --- MAYA'S HUB: THE MESSAGING INTERFACE ---
-# Yeh function aap Number 5 ke baad kahin bhi rakh sakte hain
-def display_bank_messaging_hub(sak_id, chat_data, role, username):
+# --- MAYA'S HUB: THE PROFESSIONAL MESSAGING INTERFACE ---
+def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Agent"):
     st.markdown("---")
-    st.subheader("🏦 Bank - Agent Messaging Portal")
+    # Identity: Ansatt ko sirf BANK nazar aaye
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
+    st.subheader(f"💬 Meldinger med {target_label}")
     
     # Professional Styling
     st.markdown("""
@@ -61,31 +54,45 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username):
         </style>
     """, unsafe_allow_html=True)
 
-    # Load Messages safely
     try:
         messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
     except:
         messages = []
 
+    # --- SMART LOGIC: Auto-Mark as Read when opened ---
+    has_unread = False
+    for m in messages:
+        if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
+        elif role in ["Admin", "Director"] and m.get('role') == "Agent" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
+
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
     # Show History
     for msg in messages:
-        div_class = "bank-bubble" if msg['role'] == "Bank" else "agent-bubble"
-        st.markdown(f'<div class="{div_class}"><b>{msg["sender"]}</b><br>{msg["text"]}<br><small>{msg["time"]}</small></div>', unsafe_allow_html=True)
+        is_bank = msg['role'] == "Bank"
+        div_class = "bank-bubble" if is_bank else "agent-bubble"
+        # Display Name logic
+        sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
+        st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
-    # Input for new message
-    msg_text = st.text_input("Skriv melding...", key=f"chat_in_{sak_id}")
+    # Message Input
+    msg_text = st.text_input(f"Skriv til {target_label}...", key=f"chat_in_{sak_id}")
     if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
         if msg_text:
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": "BANK CENTRAL" if role in ["Admin", "Director"] else username.upper(),
+                "sender": "BANK" if role in ["Admin", "Director"] else username.upper(),
                 "text": msg_text,
-                "time": datetime.now().strftime("%d-%m-%Y %H:%M")
+                "time": get_norway_time(), # <--- Correct Norway Time
+                "read": False # <--- For Notifications
             }
             messages.append(new_msg)
-            # Update the Sheet
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
-                st.success("Sendt!")
                 st.rerun()
                 
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---

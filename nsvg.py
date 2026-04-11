@@ -582,7 +582,6 @@ elif valg == "📂 Kunde Arkiv":
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
                 # --- NEW: CHAT HUB (Integrated in View Mode) ---
-                # Passing agent_navn for dynamic label "Skriv melding til..."
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
@@ -626,7 +625,13 @@ elif valg == "📂 Kunde Arkiv":
                         final_data = {
                             "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
                             "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
-                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, "Medsøker_Lø
+                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, 
+                            "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
+                            "Bank_Status": up_st, "Notater": up_notat, "Mangler": up_mangler
+                        }
+                        if update_sak_in_sheet(sak_id, final_data):
+                            st.success("✅ Sak oppdatert!")
+                            st.rerun()
                             
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:

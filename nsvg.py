@@ -222,7 +222,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
 
-    # Professional Chat Styling
+    # Professional Chat Styling (Updated for Delete button alignment)
     st.markdown("""
         <style>
         .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
@@ -235,7 +235,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # --- SMART LOGIC: Auto-Mark as Read when opened ---
+    # --- SMART LOGIC: Auto-Mark as Read ---
     has_unread = False
     for m in messages:
         if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
@@ -248,18 +248,29 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # Display Messages
+    # --- DISPLAY MESSAGES WITH DELETE CONTROL ---
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
-        # Sender identity protection
         display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         
-        st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        # Grid for Message + Delete Button
+        m_col, d_col = st.columns([0.9, 0.1])
+        
+        with m_col:
+            st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        
+        with d_col:
+            # SIRF ADMIN SAB KUCH DELETE KAR SAKTA HAI
+            if role in ["Admin", "Director"]:
+                if st.button("🗑️", key=f"del_{sak_id}_{idx}", help="Slett denne meldingen permanent"):
+                    messages.pop(idx)
+                    if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                        st.rerun()
 
     st.divider()
 
-    # Input Section
+    # Input Section (100% Same)
     col_msg, col_file = st.columns([3, 1])
     msg_input = col_msg.text_input(f"Skriv melding til {target_label}...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
@@ -273,7 +284,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
                 "sender": "BANK" if role in ["Admin", "Director"] else username.upper(),
                 "text": full_txt,
-                "time": get_norway_time(), # Exact Norway Time
+                "time": get_norway_time(), 
                 "read": False 
             }
             messages.append(new_msg)

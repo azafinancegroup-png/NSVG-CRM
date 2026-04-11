@@ -408,7 +408,7 @@ if valg == "📊 Dashbord":
                             
     else:
         st.warning("Ingen data tilgjengelig i databasen ennå.")
-
+        
 
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
@@ -593,14 +593,12 @@ elif valg == "📂 Kunde Arkiv":
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
-        # --- AUTO-EXPAND LOGIC ---
-        expand_me = True if str(sak_id) == str(sok) else False
+        # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
+        expand_me = True if (sok and str(sak_id) == str(sok)) or (jump_id and str(sak_id) == str(jump_id)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            # --- OLD MELDING SYSTEM REMOVED ---
-            # Yahan se woh st.error aur st.markdown delete kar diye gaye hain.
-
+            # Checkbox for switching between View and Edit mode
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
@@ -663,8 +661,14 @@ elif valg == "📂 Kunde Arkiv":
                     st.markdown("#### ⚙️ Status & Notater")
                     up_mangler = st.text_area("Admin Melding (Mangler)", value=str(mangler_msg))
                     
-                    up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 
-                                           index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(r.get('Bank_Status', 'Mottatt')) if r.get('Bank_Status') in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0)
+                    current_status = r.get('Bank_Status', 'Mottatt')
+                    status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                    try:
+                        status_idx = status_options.index(current_status)
+                    except:
+                        status_idx = 0
+
+                    up_st = st.selectbox("Bank Status", status_options, index=status_idx)
                     up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
 
                     if st.form_submit_button("💾 Lagre Alle Endringer"):

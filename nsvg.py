@@ -3,24 +3,31 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import json  # <--- Maya: Yeh add kar diya hai networking ke liye
+import smtplib
+from email.mime.text import MIMEText
 
-# --- 1. DATABASE UPDATE ENGINE ---
+# --- 1 & 2. DATABASE UPDATE ENGINE (Updated with Chat Support) ---
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
+        # Google API setup
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
-        # Sheet ka naam confirm karein (NSVG_CRM_Data)
+        # Sheet ka naam (NSVG_CRM_Data) aur Worksheet (MainDB)
         sheet = client.open("NSVG_CRM_Data").worksheet("MainDB") 
         
         data = sheet.get_all_records()
         temp_df = pd.DataFrame(data)
         
+        # Sahi Case (ID) dhoond kar update karna
         if 'ID' in temp_df.columns:
+            # ID ko string mein convert karke match karte hain taake error na aaye
             matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
             if matched_rows:
+                # Actual row = index + 2 (1 for header, 1 for 0-indexing)
                 actual_row = matched_rows[0] + 2 
                 for col_name, new_val in updated_values_dict.items():
                     if col_name in temp_df.columns:
@@ -32,31 +39,87 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
         st.error(f"Database Error: {e}")
         return False
 
-# --- 2. GOOGLE SHEETS CONNECTION ENGINE ---
+# --- MAYA'S HUB: THE MESSAGING INTERFACE ---
+# Yeh function aap Number 5 ke baad kahin bhi rakh sakte hain
+def display_bank_messaging_hub(sak_id, chat_data, role, username):
+    st.markdown("---")
+    st.subheader("🏦 Bank - Agent Messaging Portal")
+    
+    # Professional Styling
+    st.markdown("""
+        <style>
+        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 10px; border-radius: 10px; margin: 5px; color: black; }
+        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 10px; border-radius: 10px; margin: 5px; text-align: right; color: black; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Load Messages safely
+    try:
+        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
+    except:
+        messages = []
+
+    # Show History
+    for msg in messages:
+        div_class = "bank-bubble" if msg['role'] == "Bank" else "agent-bubble"
+        st.markdown(f'<div class="{div_class}"><b>{msg["sender"]}</b><br>{msg["text"]}<br><small>{msg["time"]}</small></div>', unsafe_allow_html=True)
+
+    # Input for new message
+    msg_text = st.text_input("Skriv melding...", key=f"chat_in_{sak_id}")
+    if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
+        if msg_text:
+            new_msg = {
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": "BANK CENTRAL" if role in ["Admin", "Director"] else username.upper(),
+                "text": msg_text,
+                "time": datetime.now().strftime("%d-%m-%Y %H:%M")
+            }
+            messages.append(new_msg)
+            # Update the Sheet
+            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                st.success("Sendt!")
+                st.rerun()
+                
+# --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
+        # Yeh aapki main spreadsheet file ko open karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
-    except:
+    except Exception as e:
+        # Agar connection fail ho toh error show karega
+        st.error(f"Tilkoblingsfeil (Connection Error): {e}")
         return None
 
 def get_data(sheet_name):
     sh = connect_to_sheet(sheet_name)
     if sh:
-        data = sh.get_all_records()
-        df = pd.DataFrame(data)
-        df.columns = [str(c).strip() for c in df.columns]
-        return df
+        try:
+            data = sh.get_all_records()
+            df = pd.DataFrame(data)
+            # Column names se extra spaces khatam karne ke liye
+            df.columns = [str(c).strip() for c in df.columns]
+            return df
+        except Exception as e:
+            st.warning(f"Kunne ikke hente data fra {sheet_name}: {e}")
+            return pd.DataFrame()
     return pd.DataFrame()
 
 def add_data(sheet_name, row_list):
     sh = connect_to_sheet(sheet_name)
     if sh: 
-        sh.append_row(row_list)
-
+        try:
+            # Nayi row append karne ke liye
+            sh.append_row(row_list)
+            return True
+        except Exception as e:
+            st.error(f"Feil ved lagring av data: {e}")
+            return False
+    return False
+    
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data
 def get_country_list():
@@ -143,8 +206,87 @@ def update_sheet_data_internal(worksheet_name, df_to_save):
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
+
+# ==========================================
+# MAYA'S GLOBAL BANKING HUB (Insert here)
+# ==========================================
+
+def display_bank_messaging_hub(sak_id, chat_data, role, username):
+    """
+    Professional Banking Chat Interface
+    DASHBORD (Number 6) aur ARKIV (Number 8) dono isse call karte hain.
+    """
+    st.markdown("---")
+    st.subheader("🏦 Bank - Agent Messaging Portal")
     
-# --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION) ---
+    # CSS for Professional Chat Style (Clean & Modern)
+    st.markdown("""
+        <style>
+        .bank-bubble { 
+            background-color: #E1F5FE; 
+            border-left: 5px solid #0288D1; 
+            padding: 12px; 
+            border-radius: 10px; 
+            margin: 8px 0; 
+            color: black; 
+            font-family: sans-serif;
+        }
+        .agent-bubble { 
+            background-color: #F5F5F5; 
+            border-right: 5px solid #757575; 
+            padding: 12px; 
+            border-radius: 10px; 
+            margin: 8px 0; 
+            text-align: right; 
+            color: black; 
+            font-family: sans-serif;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Load existing messages from JSON string
+    try:
+        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
+    except:
+        messages = []
+
+    # Scrollable container for chat history
+    chat_container = st.container()
+    with chat_container:
+        for msg in messages:
+            div_class = "bank-bubble" if msg['role'] == "Bank" else "agent-bubble"
+            st.markdown(f'<div class="{div_class}"><b>{msg["sender"]}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+
+    # Message input field
+    # Har sak_id ke liye unique key lazmi hai
+    msg_text = st.text_input("Skriv melding til banken...", key=f"chat_input_{sak_id}")
+    
+    if st.button("🚀 Send Melding", key=f"chat_btn_{sak_id}"):
+        if msg_text:
+            # Determine role for label
+            current_role = "Bank" if role in ["Admin", "Director"] else "Agent"
+            display_name = "BANK CENTRAL" if role in ["Admin", "Director"] else username.upper()
+            
+            new_msg = {
+                "role": current_role,
+                "sender": display_name,
+                "text": msg_text,
+                "time": datetime.now().strftime("%d-%m-%Y %H:%M")
+            }
+            messages.append(new_msg)
+            
+            # Save back to Google Sheet
+            with st.spinner("Sender..."):
+                if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                    st.rerun()
+                else:
+                    st.error("Kunne ikke sende melding. Sjekk tilkoblingen.")
+
+# ==========================================
+# --- 6. DASHBORD STARTS HERE ---
+# ==========================================
+
+# --- 6. DASHBORD (100% PURANA CODE + LIVE MODIFICATION + BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
@@ -177,6 +319,7 @@ if valg == "📊 Dashbord":
             b_status = r.get('Bank_Status', 'Mottatt')
             mangler_msg = r.get('Mangler', '') 
             sak_id = r.get('ID', i)
+            chat_h = r.get('Chat_History', '') # Maya: Fetching the new column
 
             # Status Icons based on current status
             if b_status == "Mottatt":
@@ -191,8 +334,13 @@ if valg == "📊 Dashbord":
             # Har case ke liye ek Expander
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
-                # --- MESSAGING SYSTEM (Admin Message Display) ---
-                # Agar Admin ne koi message likha hai toh yahan Red Box mein dikhega
+                # --- NEW: MAYA'S BANKING CHAT HUB (Integrated here) ---
+                # Yeh naya professional chat system hai
+                display_bank_messaging_hub(sak_id, chat_h, role, current_user)
+                
+                st.divider()
+
+                # --- MESSAGING SYSTEM (Admin Message Display - Old Style) ---
                 if mangler_msg and str(mangler_msg).strip() != "" and str(mangler_msg).lower() != 'nan':
                     st.error(f"⚠️ **ADMIN MELDING:** {mangler_msg}")
                     st.info("💡 Vennligst sjekk dokumentene ya info jo mangler aur niche reply karein.")
@@ -200,31 +348,27 @@ if valg == "📊 Dashbord":
                 # --- FULL INFO DISPLAY (Aapka loop jo saara data dikhata hai) ---
                 st.markdown("### 📄 Saksinformasjon")
                 
-                # Data ko 2 columns mein dikhane ke liye (Beautiful look)
                 inf_c1, inf_c2 = st.columns(2)
+                # Purana data display logic loop
                 for count, (col_name, value) in enumerate(r.items()):
-                    if col_name == 'Mangler': # Message upar dikha diya hai, yahan skip karenge
+                    if col_name in ['Mangler', 'Chat_History']: # Inko list mein skip karenge
                         continue
                     
                     target_col = inf_c1 if count % 2 == 0 else inf_c2
                     target_col.write(f"**{col_name}:** {value}")
                 
-                # --- MODIFICATION SYSTEM (For Ansatt & Admin) ---
+                # --- MODIFICATION SYSTEM (Aapka purana system) ---
                 st.markdown("---")
                 st.write("🔧 **Rediger Sak / Svar til Admin**")
                 
-                # 1. Notater update karne ka box
                 old_notater = str(r.get('Notater', ''))
                 new_notater = st.text_area("Oppdater Notater / Legg til info", value=old_notater, key=f"edit_not_{i}")
                 
-                # 2. Agar user Ansatt hai toh reply box dikhao
                 ansatt_reply = ""
                 if role == "Ansatt":
                     ansatt_reply = st.text_input("Skriv svar til Admin (Status update)", key=f"ans_rep_{i}")
                     
-                # 3. Save Button
                 if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
-                    # Updates dictionary taiyar karein
                     final_msg = ansatt_reply if role == "Ansatt" and ansatt_reply.strip() != "" else mangler_msg
                     
                     updates = {
@@ -241,10 +385,9 @@ if valg == "📊 Dashbord":
                             st.error("Kunne ikke koble til Google Sheets.")
                             
     else:
-        st.warning("Ingen data tilgjengelig i databasen ennå.")
-        
+        st.warning("Ingen data tilgjengelig i databasen ennå.")        
 
-# --- 7. NY REGISTRERING (100000% SYMMETRIC + SEPARATE FINANCIALS) ---
+# --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")
     countries = get_country_list()
@@ -292,7 +435,7 @@ elif valg == "➕ Ny Registrering":
         h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
         h_gjeld = hf3.number_input("Eksisterende Gjeld (kr) - Hoved", 0, step=10000, format="%d")
 
-        # --- 👥 MEDSØKER SECTION (100% Symmetric) ---
+        # --- 👥 MEDSØKER SECTION ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
         m_ek, m_sfo, m_gjeld = 0, "Nei", 0
@@ -318,7 +461,6 @@ elif valg == "➕ Ny Registrering":
             m_ekstra = ml2.number_input("Bi-inntekt (Medsøker)", 0, key="ms_extra")
             m_pst = ml3.slider("Stillingsprosent (Medsøker)", 0, 100, 100, key="ms_pst")
 
-            # NEW: Symmetric Finansiell Status for Medsøker
             st.markdown("#### 🏠 Finansiell Status & Gjeld (Medsøker)")
             mf1, mf2, mf3 = st.columns(3)
             m_ek = mf1.number_input("Egenkapital (kr) - Medsøker", 0, step=10000, format="%d", key="ms_ek")
@@ -343,6 +485,14 @@ elif valg == "➕ Ny Registrering":
                 tot_ek = h_ek + m_ek
                 tot_gjeld = h_gjeld + m_gjeld
                 
+                # --- NEW: Initial Banking Chat Message ---
+                initial_chat = json.dumps([{
+                    "role": "Bank",
+                    "sender": "BANK CENTRAL",
+                    "text": "Velkommen! Vi har mottatt din søknad og vil behandle den fortløpende. Sjekk denne chatten for oppdateringer.",
+                    "time": datetime.now().strftime("%d-%m-%Y %H:%M")
+                }])
+                
                 new_row = [
                     len(df)+1, 
                     datetime.now().strftime("%d-%m-%Y"), 
@@ -357,7 +507,7 @@ elif valg == "➕ Ny Registrering":
                     f_navn if is_bedrift else "", 
                     lonn,
                     barn, 
-                    h_sfo, # Using Main applicant's SFO for primary column
+                    h_sfo, 
                     tot_ek, 
                     tot_gjeld, 
                     biler, 
@@ -375,14 +525,15 @@ elif valg == "➕ Ny Registrering":
                     f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
                     current_user, 
                     "Mottatt",
-                    "" # Mangler column
+                    "", # Mangler column
+                    initial_chat # Maya: New Chat_History column data
                 ]
                 
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
-
-# --- 8. KUNDE ARKIV (FIXED: ALWAYS VIEW MODE FIRST + ADMIN MESSAGING) ---
+                
+# --- 8. KUNDE ARKIV (100% PURANA CODE + CHAT INTEGRATION) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
@@ -398,6 +549,7 @@ elif valg == "📂 Kunde Arkiv":
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
         mangler_msg = r.get('Mangler', '') # Sheet se Admin ki melding uthayega
+        chat_h = r.get('Chat_History', '') # Maya: Fetching existing chat history
         
         # Har sak ke liye expander hamesha normal view dikhayega
         with st.expander(f"📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}"):
@@ -411,7 +563,7 @@ elif valg == "📂 Kunde Arkiv":
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (Hamesha pehle ye dikhega - 100% Same) ---
+                # --- A: VIEW MODE (100% Purana Look) ---
                 st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
                 v1, v2, v3 = st.columns(3)
                 with v1:
@@ -439,8 +591,12 @@ elif valg == "📂 Kunde Arkiv":
                 
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
 
+                # --- NEW: CHAT SYSTEM INTEGRATED IN ARCHIVE ---
+                # Yeh View Mode mein sabse niche dikhega taake documents ke saath baat ho sake
+                display_bank_messaging_hub(sak_id, chat_h, role, current_user)
+
             else:
-                # --- B: MODIFICATION MODE (Sirf tick karne par open hoga - 100% Same) ---
+                # --- B: MODIFICATION MODE (100% Purana Look) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
                 
                 with st.form(key=f"edit_form_final_{sak_id}"):
@@ -470,7 +626,6 @@ elif valg == "📂 Kunde Arkiv":
 
                     # SYSTEM STATUS
                     st.markdown("#### ⚙️ Status & Notater")
-                    # Admin message (Mangler) update karne ka box yahan bhi de dete hain
                     up_mangler = st.text_area("Admin Melding (Mangler)", value=str(mangler_msg))
                     
                     up_st = st.selectbox("Bank Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], 

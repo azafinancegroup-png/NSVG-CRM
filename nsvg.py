@@ -80,24 +80,6 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
-if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
-        if msg_input or u_file:
-            full_txt = msg_input
-            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
-            
-            # --- THE MAGIC FIX: FORCE LOWERCASE ON SAVE ---
-            save_user = str(username).lower().strip()
-            
-            new_msg = {
-                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": save_user,  # Hamesha lowercase save hoga
-                "text": full_txt,
-                "time": get_norway_time(), 
-                "read": False 
-            }
-            messages.append(new_msg)
-            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
-                st.rerun()
                 
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
 def connect_to_sheet(sheet_name):

@@ -597,14 +597,13 @@ elif valg == "📂 Kunde Arkiv":
         chat_historikk = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # MODERN FEATURE: Status Color Indicator
+        # STATUS ICON LOGIKK
         status_ikon = "🔵"
         if gjeldende_status == "Godkjent": status_ikon = "🟢"
         elif gjeldende_status == "Avslått": status_ikon = "🔴"
         elif gjeldende_status == "Under Behandling": status_ikon = "🟡"
         elif gjeldende_status == "Utbetalt": status_ikon = "🟣"
 
-        # Sjekk for uleste meldinger
         har_ulest = False
         if '"read": false' in chat_historikk.lower():
             try:
@@ -620,18 +619,17 @@ elif valg == "📂 Kunde Arkiv":
         # --- EKSPANDERBAR BOKS (KUNDE KORT) ---
         with st.expander(f"{varsel}{status_ikon} **{r.get('Navn', 'Ukjent')}** | ID: {sak_id} | STATUS: {gjeldende_status}", expanded=skal_utvides):
             
-            # MODERN QUICK VIEW
-            if gjeldende_status == "Godkjent": st.success(f"✅ **Saken er Godkjent**")
-            elif gjeldende_status == "Avslått": st.error(f"❌ **Saken er Avslått**")
-            elif gjeldende_status == "Under Behandling": st.warning(f"⏳ **Saken er til vurdering (Under Behandling)**")
-            else: st.info(f"📩 **Saken er Mottatt**")
+            if gjeldende_status == "Godkjent": st.success(f"✅ **Saken er Godkjent av Banken**")
+            elif gjeldende_status == "Avslått": st.error(f"❌ **Saken er Avslått av Banken**")
+            elif gjeldende_status == "Under Behandling": st.warning(f"⏳ **Saken er til vurdering hos Banken**")
+            else: st.info(f"📩 **Søknaden er Mottatt**")
 
             st.divider()
-            vis_redigering = st.checkbox(f"🛠️ Rediger / Modifiser sak (Full tilgang)", key=f"mod_sjekk_{sak_id}")
+            vis_redigering = st.checkbox(f"🛠️ Modifiser søknadsdata (Full tilgang)", key=f"mod_sjekk_{sak_id}")
 
             if not vis_redigering:
                 # --- VISNINGSMODUS (CLEAN VIEW) ---
-                st.markdown(f"#### 📄 Saksdetaljer")
+                st.markdown(f"#### 📄 Søknadsdetaljer")
                 v1, v2, v3 = st.columns(3)
                 with v1:
                     st.write(f"**👤 Navn:** {r.get('Navn')}")
@@ -641,26 +639,23 @@ elif valg == "📂 Kunde Arkiv":
                     st.write(f"**💰 Lånebeløp:** {r.get('Lånebeløp')} kr")
                 with v3:
                     st.write(f"**📅 Dato:** {r.get('Dato')}")
-                    st.write(f"**👨‍💼 Saksbehandler:** {agent_navn}")
+                    st.write(f"**👨‍💼 Ansvarlig:** {agent_navn}")
 
-                st.write(f"**📝 Interne notater:** {r.get('Notater', 'Ingen notater')}")
-                
-                # Banking Hub (Chat)
+                st.write(f"**📝 Kommentarer:** {r.get('Notater', 'Ingen kommentarer lagret.')}")
                 display_bank_messaging_hub(sak_id, chat_historikk, role, current_user, agent_navn)
 
             else:
-                # --- FULL REDIGERING (SYMMETRIC WITH SECTION 7) ---
+                # --- FULL REDIGERING (BANK PORTAL STIL) ---
                 with st.form(key=f"full_edit_form_{sak_id}"):
-                    st.subheader("🛠️ Full Sakshåndtering")
+                    st.subheader("📝 Oppdater Søknadsinformasjon")
                     
-                    # Produktvalg
                     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"], 
                                       index=["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"].index(r.get('Produkt', 'Boliglån')))
                     
                     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
                     
                     if is_bedrift:
-                        st.markdown("#### 🏢 Bedrift / Firma Detaljer")
+                        st.markdown("#### 🏢 Bedriftinformasjon")
                         bc1, bc2 = st.columns(2)
                         up_f_navn = bc1.text_input("Firma Navn", value=str(r.get('Firma_Navn', '')))
                         up_f_org = bc1.text_input("Organisasjonsnummer", value=str(r.get('Org_Nr', '')))
@@ -668,24 +663,21 @@ elif valg == "📂 Kunde Arkiv":
                         up_f_aksjer = bc2.text_input("Aksjefordeling (%)", value=str(r.get('Aksjer', '')))
                         st.divider()
 
-                    # Hovedsøker
-                    st.markdown("#### 👤 Hovedsøker Detaljer")
+                    st.markdown("#### 👤 Hovedsøker")
                     h1, h2 = st.columns(2)
                     up_navn = h1.text_input("Fullt Navn *", value=str(r.get('Navn', '')))
                     up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
                     up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
                     up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
-                    up_sivil = h1.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt", "Enke/Enkemann"], index=0)
                     
-                    st.markdown("#### 💼 Inntekt & Økonomi (Hoved)")
+                    st.markdown("#### 💼 Økonomisk Profil")
                     l1, l2, l3 = st.columns(3)
                     up_lonn = l1.number_input("Årslønn Brutto (kr)", value=int(r.get('Lønn', 0)), step=1000)
                     up_ek = l2.number_input("Egenkapital (kr)", value=int(r.get('EK', 0)), step=1000)
                     up_gjeld = l3.number_input("Total Gjeld (kr)", value=int(r.get('Gjeld', 0)), step=1000)
 
-                    # Medsøker
                     st.divider()
-                    st.markdown("#### 👥 Medsøker Detaljer")
+                    st.markdown("#### 👥 Medsøker")
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Fullt Navn", value=str(r.get('Medsøker_Navn', '')))
                     up_m_fnr = m1.text_input("Medsøker Fødselsnummer", value=str(r.get('Medsøker_Fnr', '')))
@@ -693,36 +685,33 @@ elif valg == "📂 Kunde Arkiv":
                     up_m_tlf = m2.text_input("Medsøker Telefon", value=str(r.get('Medsøker_Tlf', '')))
 
                     st.divider()
-                    st.markdown("#### ⚙️ Administrativ Behandling")
-                    up_belop = st.number_input("Ønsket Lånebeløp (kr)", value=int(r.get('Lånebeløp', 0)), step=10000)
-                    up_mangler = st.text_area("Beskjed om dokumenter som mangler", value=str(r.get('Mangler', '')))
-                    up_notat = st.text_area("Interne Notater (Kun for oss)", value=str(r.get('Notater', '')))
+                    st.markdown("#### 🏦 Bankbehandling & Godkjenning")
+                    up_belop = st.number_input("Søkt Lånebeløp (kr)", value=int(r.get('Lånebeløp', 0)), step=10000)
+                    up_mangler = st.text_area("Mangler fra kunden (Beskjed sendes via portalen)", value=str(r.get('Mangler', '')))
+                    up_notat = st.text_area("Bankens interne notater", value=str(r.get('Notater', '')))
 
-                    # 🛡️ STATUS LOCK LOGIC
                     if role in ["Admin", "Director"]:
                         status_valg = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
                         try: s_idx = status_valg.index(gjeldende_status)
                         except: s_idx = 0
-                        up_st = st.selectbox("Oppdater Sak Status (KUN ADMIN/DIRECTOR)", status_valg, index=s_idx)
+                        up_st = st.selectbox("Oppdater Endelig Saksstatus", status_valg, index=s_idx)
                     else:
                         up_st = gjeldende_status
-                        st.info(f"📊 **Nåværende status:** {gjeldende_status}")
-                        st.caption("Kun Admin eller Director kan endre status.")
+                        st.info(f"📊 **Nåværende Bankstatus:** {gjeldende_status}")
 
-                    if st.form_submit_button("💾 LAGRE ALLE ENDRINGER"):
+                    if st.form_submit_button("💾 OPPDATER SØKNAD"):
                         data_til_oppdatering = {
                             "Produkt": prod, "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
                             "Lønn": up_lonn, "EK": up_ek, "Gjeld": up_gjeld, "Bank_Status": up_st,
                             "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, "Medsøker_Lønn": up_m_lonn,
                             "Medsøker_Tlf": up_m_tlf, "Lånebeløp": up_belop, "Notater": up_notat, "Mangler": up_mangler
                         }
-                        # Add business data if applicable
                         if is_bedrift:
                             data_til_oppdatering.update({"Firma_Navn": up_f_navn, "Org_Nr": up_f_org, "Eiere_Info": up_f_eier, "Aksjer": up_f_aksjer})
                         
                         if update_sak_in_sheet(sak_id, data_til_oppdatering):
                             st.cache_data.clear()
-                            st.success(f"✅ Sak {sak_id} er nå oppdatert i skyen!")
+                            st.success(f"✅ Søknad {sak_id} er oppdatert i bankportalen!")
                             st.rerun()
                             
 

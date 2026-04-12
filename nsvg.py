@@ -704,9 +704,18 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # Data Refresh
-    agents_df = get_data("Agents")
-    main_df = df # Global load
+    # --- SMART DATA LOADING (To fix Quota 429 Error) ---
+    # Hum function ko yahan define kar rahe hain taake cache apply ho sake
+    @st.cache_data(ttl=60)
+    def get_agents_cached():
+        return get_data("Agents")
+
+    try:
+        agents_df = get_agents_cached()
+        main_df = df # Global load
+    except Exception as e:
+        st.error(f"Kunne ikke hente agents: {e}")
+        agents_df = pd.DataFrame()
 
     if not agents_df.empty:
         # 1. Search Box (Aapka original search logic)
@@ -737,7 +746,6 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                 with col2:
                     if not agent_saker.empty:
                         antall = len(agent_saker)
-                        # KeyError safety
                         l_col = 'Lånebeløp' if 'Lånebeløp' in agent_saker.columns else agent_saker.columns[0]
                         volum = pd.to_numeric(agent_saker[l_col], errors='coerce').sum()
                         st.metric("📦 Saker Registrert", antall)
@@ -751,42 +759,35 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                 act1, act2, act3 = st.columns(3)
                 
                 with act1:
-                    # UPDATED DETAIL VIEW (With Messaging & Live Status Modification)
                     if st.button(f"📂 Se Saker", key=f"v_saker_{i}"):
                         if not agent_saker.empty:
                             st.subheader(f"Saker for {a_navn}")
                             for idx, s_row in agent_saker.iterrows():
                                 sak_id = s_row.get('ID', idx)
                                 with st.expander(f"📄 Sak: {s_row.get('Hovedsøker', 'Kunde')} (ID: {sak_id})"):
-                                    # Info Loop (Show 100% data - Original logic)
                                     cols = st.columns(2)
                                     for count, (col_name, col_val) in enumerate(s_row.items()):
-                                        if col_name != 'Mangler': # Duplicate avoid karne ke liye
+                                        if col_name != 'Mangler': 
                                             target_col = cols[0] if count % 2 == 0 else cols[1]
                                             target_col.write(f"**{col_name}:** {col_val}")
 
                                     st.markdown("---")
                                     st.write("🔧 **Admin Action: Status & Messaging**")
                                     
-                                    # 1. Live Status Change
                                     status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
                                     current_bank_st = s_row.get('Bank_Status', 'Mottatt')
                                     st_idx = status_options.index(current_bank_st) if current_bank_st in status_options else 0
                                     
                                     new_bank_st = st.selectbox("Oppdater Sak Status", status_options, index=st_idx, key=f"st_edit_{idx}_{i}")
                                     
-                                    # 2. Mangler/Messaging Box (Jo Ansatt ko dikhega)
                                     mangler_msg_val = s_row.get('Mangler', '')
                                     mangler_msg = st.text_area("Mangler dokumenter / Melding til ansatt", 
                                                                value=str(mangler_msg_val) if str(mangler_msg_val).lower() != 'nan' else "", 
-                                                               placeholder="Skriv her... (f.eks: Trenger lønnsslipp)",
+                                                               placeholder="Skriv her...",
                                                                key=f"msg_edit_{idx}_{i}")
                                     
                                     if st.button(f"🚀 Lagre & Send Live (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
-                                        updates = {
-                                            "Bank_Status": new_bank_st,
-                                            "Mangler": mangler_msg
-                                        }
+                                        updates = {"Bank_Status": new_bank_st, "Mangler": mangler_msg}
                                         with st.spinner("Oppdaterer Google Sheets..."):
                                             success = update_sak_in_sheet(sak_id, updates)
                                             if success:
@@ -796,7 +797,6 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                             st.warning("Ingen data funnet.")
 
                 with act2:
-                    # Agent Account Status Update (PURANA CODE - 100% Same)
                     status_options = ["Aktiv", "Inaktiv", "Permisjon"]
                     current_s = row.get('status', 'Aktiv')
                     try: idx_s = status_options.index(current_s)
@@ -807,11 +807,9 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                         st.success(f"Agent status oppdatert til {n_st}")
 
                 with act3:
-                    # DELETE BUTTON (PURANA CODE - 100% Same)
                     if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
                         if role == "Admin":
                             with st.spinner(f"Sletter {a_user}..."):
-                                # Assuming this function exists in your system
                                 try:
                                     success = delete_user_completely(a_user)
                                     if success:

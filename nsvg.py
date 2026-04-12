@@ -555,25 +555,30 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
-# --- 8. KUNDE ARKIV (PRO UPGRADE: SMART JUMP & CACHING FIX) ---
+# --- 8. KUNDE ARKIV (PRO UPGRADE: FULL AUTOMATION & SENDER FIX) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # --- GOOGLE QUOTA DEEP FIX: 10 Seconds Cache ---
-    # Is se Google Sheets par load 90% kam ho jayega
-    @st.cache_data(ttl=10)
-    def get_arkiv_data():
-        return df  # Aapka existing dataframe yahan cache ho raha hai
+    # --- GOOGLE QUOTA PROTECTION (Error 429 Fix) ---
+    @st.cache_data(ttl=15)
+    def safe_data_fetch():
+        return df
+    
+    current_df = safe_data_fetch()
 
-    current_df = get_arkiv_data()
+    # --- 1. LINK & URL LOGIC (Dashboard se Link ka masla hal) ---
+    query_params = st.query_params
+    url_id = query_params.get("search_query", "")
     
-    # --- SMART JUMP LOGIC ---
+    if url_id:
+        st.session_state.search_query = url_id
+
     jump_id = st.session_state.get('search_query', "")
-    
-    # 1. Filtering logic (100% Original)
+
+    # Filtering logic (Original)
     view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # 2. Search Box
+    # Search Box
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
     if sok:
@@ -581,37 +586,44 @@ elif valg == "📂 Kunde Arkiv":
 
     st.info(f"Antall saker funnet: {len(view_df)}")
 
-    # AUTO-EXPAND CLEAR
-    if jump_id and sok != jump_id:
-        st.session_state.search_query = ""
-
     for i, r in view_df.iterrows():
         sak_id = str(r.get('ID', i))
         mangler_msg = r.get('Mangler', '') 
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- FIX 2: SMART NOTIFICATION LOGIC (ONLY LAST MESSAGE SENDER) ---
+        # --- 2. VARSEL LOGIC (SELF-NOTIFICATION FIX) ---
+        # Is se admin ko apna bheja hua varsel nahi dikhega
         is_unread = False
         if '"read": false' in chat_h.lower():
             try:
                 import json
-                messages = json.loads(chat_h)
-                if messages:
-                    last_msg = messages[-1] 
+                msgs = json.loads(chat_h)
+                if msgs:
+                    last_msg = msgs[-1]
                     if last_msg.get('read') == False:
-                        if role in ["Admin", "Director"] and last_msg.get('role') == "agent":
+                        msg_sender_role = last_msg.get('role', '').lower()
+                        
+                        # Admin (Bank) ko sirf tab varsel dikhe jab Agent ne bheja ho
+                        if role in ["Admin", "Director"] and msg_sender_role == "agent":
                             is_unread = True
-                        elif role not in ["Admin", "Director"] and last_msg.get('role') == "bank":
+                        # Agent (Ansatt) ko sirf tab varsel dikhe jab Bank ne bheja ho
+                        elif role not in ["Admin", "Director"] and msg_sender_role == "bank":
                             is_unread = True
             except:
                 pass
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
+        
+        # --- 3. AUTO-EXPAND (THE LINK FIX) ---
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
+            if expand_me and url_id:
+                st.query_params.clear()
+                st.session_state.search_query = ""
+
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
@@ -690,7 +702,7 @@ elif valg == "📂 Kunde Arkiv":
                             "Bank_Status": up_st, "Notater": up_notat, "Mangler": up_mangler
                         }
                         if update_sak_in_sheet(sak_id, final_data):
-                            st.cache_data.clear() # Save ke baad cache clear karna zaroori hai
+                            st.cache_data.clear() 
                             st.success("✅ Sak oppdatert!")
                             st.rerun()
                             

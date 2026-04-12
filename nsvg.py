@@ -562,159 +562,161 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad registrert! Status: {final_status}")
                 st.balloons()
 
+
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # 1. GOOGLE QUOTA PROTECTION
+    # 1. BESKYTTELSE AV DATAHENTING
     @st.cache_data(ttl=60)
-    def safe_data_fetch():
+    def sikker_data_henting():
         return df
     
-    current_df = safe_data_fetch()
+    gjeldende_df = sikker_data_henting()
 
-    # 2. URL PARAMETERS LOGIC
+    # 2. LOGIKK FOR URL-PARAMETERE
     query_params = st.query_params
     url_id = query_params.get("search_query", "")
     
     if url_id:
         st.session_state.search_query = url_id
 
-    jump_id = st.session_state.get('search_query', "")
+    hopp_til_id = st.session_state.get('search_query', "")
 
-    # 3. FILTERING BY USER ROLE
-    # Admin/Director sab dekh sakte hain, baki sirf apna
-    view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
+    # 3. FILTRERING BASERT PÅ BRUKERROLLE
+    # Admin og Director ser alt, ansatte ser kun sine egne saker
+    visnings_df = gjeldende_df if role in ["Admin", "Director"] else gjeldende_df[gjeldende_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # 4. SEARCH INTERFACE
-    sok = st.text_input("🔍 Search customer...", value=jump_id, placeholder="Name or ID...", key="arkiv_sok_main")
+    # 4. SØKEGRENSESNITT
+    sok = st.text_input("🔍 Søk etter kunde...", value=hopp_til_id, placeholder="Navn eller ID...", key="arkiv_sok_hoved")
     
     if sok:
-        view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
+        visnings_df = visnings_df[visnings_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
-    st.info(f"Records found: {len(view_df)}")
+    st.info(f"Antall saker funnet: {len(visnings_df)}")
 
-    # --- MAIN LOOP FOR CUSTOMERS ---
-    for i, r in view_df.iterrows():
-        # CRITICAL: sak_id yahan define hona lazmi hai
+    # --- HOVEDLØKKE FOR KUNDER ---
+    for i, r in visnings_df.iterrows():
         sak_id = str(r.get('ID', i))
-        mangler_msg = r.get('Mangler', '') 
-        chat_h = str(r.get('Chat_History', '[]')) 
+        mangler_beskjed = r.get('Mangler', '') 
+        chat_historikk = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # 5. NOTIFICATION LOGIC (RED DOT)
-        # Yeh logic check karta hai ke kya koi naya message hai jo "me" ne nahi bheja
-        is_unread = False
-        if '"read": false' in chat_h.lower():
+        # 5. VARSLINGSLOGIKK (RØD PRIKK)
+        har_ulest = False
+        if '"read": false' in chat_historikk.lower():
             try:
                 import json
-                msgs = json.loads(chat_h)
-                if msgs:
-                    last_msg = msgs[-1]
-                    msg_sender = str(last_msg.get('sender', '')).lower().strip()
-                    me_user = str(current_user).lower().strip()
-                    
-                    if last_msg.get('read') == False and msg_sender != me_user:
-                        is_unread = True
+                meldinger = json.loads(chat_historikk)
+                if meldinger:
+                    siste_melding = meldinger[-1]
+                    avsender = str(siste_melding.get('sender', '')).lower().strip()
+                    meg_bruker = str(current_user).lower().strip()
+                    if siste_melding.get('read') == False and avsender != meg_bruker:
+                        har_ulest = True
             except:
                 pass
             
-        alert_tag = "🔴 NY MELDING | " if is_unread else ""
+        varsel_merkelapp = "🔴 NY MELDING | " if har_ulest else ""
         
-        # 6. AUTO-EXPAND LOGIC
-        expand_me = True if (sok and str(sak_id) == str(sok)) else False
+        # 6. AUTOMATISK EKSPANDERING
+        skal_utvides = True if (sok and str(sak_id) == str(sok)) else False
 
-        # --- THE CUSTOMER BOX (EXPANDER) ---
-        with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
+        # --- KUNDE-BOKS (EKSPANDERBAR) ---
+        with st.expander(f"{varsel_merkelapp}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=skal_utvides):
             
-            if expand_me and url_id:
+            if skal_utvides and url_id:
                 st.query_params.clear()
                 st.session_state.search_query = ""
 
-            show_edit = st.checkbox(f"🛠️ Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
+            vis_redigering = st.checkbox(f"🛠️ Rediger sak (ID: {sak_id})", key=f"mod_sjekk_{sak_id}")
 
-            if not show_edit:
-                # --- VIEW MODE ---
-                st.markdown(f"### 📄 Case Details")
+            if not vis_redigering:
+                # --- VISNINGSMODUS ---
+                st.markdown(f"### 📄 Saksdetaljer")
                 v1, v2, v3 = st.columns(3)
                 with v1:
-                    st.write(f"**Name:** {r.get('Navn', '-')}")
-                    st.write(f"**Fnr:** {r.get('Fnr', '-')}")
-                    st.write(f"**Email:** {r.get('Epost', '-')}")
-                    st.write(f"**Phone:** {r.get('Tlf', '-')}")
+                    st.write(f"**Navn:** {r.get('Navn', '-')}")
+                    st.write(f"**Fødselsnummer:** {r.get('Fnr', '-')}")
+                    st.write(f"**E-post:** {r.get('Epost', '-')}")
+                    st.write(f"**Telefon:** {r.get('Tlf', '-')}")
                 with v2:
-                    st.write(f"**Product:** {r.get('Produkt', '-')}")
-                    st.write(f"**Amount:** {r.get('Lånebeløp', '0')} kr")
-                    st.write(f"**Salary:** {r.get('Lønn', '0')} kr")
-                    st.write(f"**Equity:** {r.get('EK', '0')} kr")
+                    st.write(f"**Produkt:** {r.get('Produkt', '-')}")
+                    st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
+                    st.write(f"**Årslønn:** {r.get('Lønn', '0')} kr")
+                    st.write(f"**Egenkapital:** {r.get('EK', '0')} kr")
                 with v3:
-                    st.write(f"**Debt:** {r.get('Gjeld', '0')} kr")
-                    st.write(f"**Status:** {r.get('Sivilstatus', '-')}")
-                    st.write(f"**Date:** {r.get('Dato', '-')}")
+                    st.write(f"**Gjeld:** {r.get('Gjeld', '0')} kr")
+                    st.write(f"**Sivilstatus:** {r.get('Sivilstatus', '-')}")
+                    st.write(f"**Dato:** {r.get('Dato', '-')}")
 
                 st.divider()
-                
-                # Co-applicant display
                 if r.get('Medsøker_Navn'):
-                    st.markdown("**👥 Co-applicant Info:**")
+                    st.markdown("**👥 Informasjon om medsøker:**")
                     mv1, mv2 = st.columns(2)
-                    mv1.write(f"**Name:** {r.get('Medsøker_Navn')}")
-                    mv2.write(f"**Fnr:** {r.get('Medsøker_Fnr')}")
+                    mv1.write(f"**Navn:** {r.get('Medsøker_Navn')}")
+                    mv2.write(f"**Fødselsnummer:** {r.get('Medsøker_Fnr')}")
                 
-                st.write(f"**Notes:** {r.get('Notater', 'No notes')}")
-                
-                # 💬 CALLING MESSAGING HUB (Nummer 5)
-                # Yeh function tabhi chalega jab sak_id loop mein generate hogi
-                display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
+                st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
+                display_bank_messaging_hub(sak_id, chat_historikk, role, current_user, agent_navn)
 
             else:
-                # --- EDIT MODE ---
-                st.subheader("🛠️ Full Edit Mode")
-                with st.form(key=f"edit_form_final_{sak_id}"):
-                    st.markdown("#### 👤 Primary Applicant")
+                # --- REDIGERINGSMODUS ---
+                st.subheader("🛠️ Full redigering")
+                with st.form(key=f"redigerings_skjema_{sak_id}"):
+                    st.markdown("#### 👤 Hovedsøker")
                     h1, h2 = st.columns(2)
-                    up_navn = h1.text_input("Full Name", value=str(r.get('Navn', '')))
-                    up_fnr = h1.text_input("FNR", value=str(r.get('Fnr', '')))
-                    up_epost = h2.text_input("Email", value=str(r.get('Epost', '')))
-                    up_tlf = h2.text_input("Phone", value=str(r.get('Tlf', '')))
+                    oppdater_navn = h1.text_input("Fullt navn", value=str(r.get('Navn', '')))
+                    oppdater_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
+                    oppdater_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
+                    oppdater_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
                     
-                    st.markdown("#### 💼 Economy")
+                    st.markdown("#### 💼 Økonomi")
                     a1, a2 = st.columns(2)
-                    up_lonn = a1.text_input("Salary (kr)", value=str(r.get('Lønn', '0')))
-                    up_gjeld = a1.text_input("Debt (kr)", value=str(r.get('Gjeld', '0')))
-                    up_belop = a2.text_input("Loan Amount (kr)", value=str(r.get('Lånebeløp', '0')))
-                    up_ek = a2.text_input("Equity (kr)", value=str(r.get('EK', '0')))
+                    oppdater_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
+                    oppdater_gjeld = a1.text_input("Gjeld (kr)", value=str(r.get('Gjeld', '0')))
+                    oppdater_belop = a2.text_input("Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
+                    oppdater_ek = a2.text_input("Egenkapital (kr)", value=str(r.get('EK', '0')))
 
-                    st.markdown("#### 👥 Co-applicant")
+                    st.markdown("#### 👥 Medsøker")
                     m1, m2 = st.columns(2)
-                    up_m_navn = m1.text_input("Co-app Name", value=str(r.get('Medsøker_Navn', '')))
-                    up_m_fnr = m1.text_input("Co-app FNR", value=str(r.get('Medsøker_Fnr', '')))
-                    up_m_lonn = m2.text_input("Co-app Salary", value=str(r.get('Medsøker_Lønn', '0')))
-                    up_m_tlf = m2.text_input("Co-app Phone", value=str(r.get('Medsøker_Tlf', '')))
+                    oppdater_m_navn = m1.text_input("Medsøkers navn", value=str(r.get('Medsøker_Navn', '')))
+                    oppdater_m_fnr = m1.text_input("Medsøkers fødselsnummer", value=str(r.get('Medsøker_Fnr', '')))
+                    oppdater_m_lonn = m2.text_input("Medsøkers lønn", value=str(r.get('Medsøker_Lønn', '0')))
+                    oppdater_m_tlf = m2.text_input("Medsøkers telefon", value=str(r.get('Medsøker_Tlf', '')))
 
-                    st.markdown("#### ⚙️ Status & Admin")
-                    up_mangler = st.text_area("Admin Message (Mangler)", value=str(mangler_msg))
+                    st.markdown("#### ⚙️ Status og administrasjon")
+                    oppdater_mangler = st.text_area("Beskjed om manglende dokumenter", value=str(mangler_beskjed))
                     
-                    current_status = r.get('Bank_Status', 'Mottatt')
-                    status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-                    try:
-                        status_idx = status_options.index(current_status)
-                    except:
-                        status_idx = 0
+                    # --- 🛡️ SIKKERHETSLÅS FOR SAKSSTATUS ---
+                    gjeldende_status = r.get('Bank_Status', 'Mottatt')
+                    
+                    if role in ["Admin", "Director"]:
+                        # Kun Admin eller Director kan endre status via nedtrekksmeny
+                        status_valg = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                        try:
+                            status_indeks = status_valg.index(gjeldende_status)
+                        except:
+                            status_indeks = 0
+                        oppdater_status = st.selectbox("Saksstatus (Kun Admin/Director)", status_valg, index=status_indeks)
+                    else:
+                        # For ansatte vises status kun som tekst, ingen mulighet for endring
+                        oppdater_status = gjeldende_status
+                        st.info(f"📊 **Nåværende status:** {gjeldende_status}")
+                        st.caption("Kun Admin eller Director har rettigheter til å endre status.")
 
-                    up_st = st.selectbox("Case Status", status_options, index=status_idx)
-                    up_notat = st.text_area("Internal Notes", value=str(r.get('Notater', '')))
+                    oppdater_notat = st.text_area("Interne notater", value=str(r.get('Notater', '')))
 
-                    if st.form_submit_button("💾 Save Changes"):
-                        final_data = {
-                            "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
-                            "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
-                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, 
-                            "Medsøker_Lønn": up_m_lonn, "Medsøker_Tlf": up_m_tlf,
-                            "Bank_Status": up_st, "Notater": up_notat, "Mangler": up_mangler
+                    if st.form_submit_button("💾 Lagre endringer"):
+                        endelige_data = {
+                            "Navn": oppdater_navn, "Fnr": oppdater_fnr, "Epost": oppdater_epost, "Tlf": oppdater_tlf,
+                            "Lønn": oppdater_lonn, "Gjeld": oppdater_gjeld, "Lånebeløp": oppdater_belop, "EK": oppdater_ek,
+                            "Medsøker_Navn": oppdater_m_navn, "Medsøker_Fnr": oppdater_m_fnr, 
+                            "Medsøker_Lønn": oppdater_m_lonn, "Medsøker_Tlf": oppdater_m_tlf,
+                            "Bank_Status": oppdater_status, "Notater": oppdater_notat, "Mangler": oppdater_mangler
                         }
-                        if update_sak_in_sheet(sak_id, final_data):
+                        if update_sak_in_sheet(sak_id, endelige_data):
                             st.cache_data.clear() 
-                            st.success("✅ Case updated!")
+                            st.success(f"✅ Sak {sak_id} er oppdatert!")
                             st.rerun()
                             
 # --- 9. MASTER KONTROLLPANEL ---

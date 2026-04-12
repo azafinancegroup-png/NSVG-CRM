@@ -128,6 +128,28 @@ def get_country_list():
     others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
     return base + others
 
+
+def delete_sak_from_sheet(sak_id):
+    """
+    Google Sheet se specific ID wali row ko delete karne ka function.
+    """
+    try:
+        # 1. Poora data dobara fetch karein taake current rows ka pata chale
+        rows = sheet.get_all_records()
+        
+        # 2. Loop chala kar check karein ke ID kahan match ho rahi hai
+        # Hum +2 isliye karte hain kyunke Sheets 1-indexed hai aur header row bhi hoti hai
+        for index, row in enumerate(rows):
+            if str(row.get('ID')) == str(sak_id):
+                row_to_delete = index + 2 
+                sheet.delete_rows(row_to_delete)
+                return True
+        return False
+    except Exception as e:
+        print(f"Error sletting: {e}")
+        return False
+        
+
 # --- 4. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})

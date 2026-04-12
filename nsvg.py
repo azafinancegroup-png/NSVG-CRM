@@ -199,13 +199,26 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
-
+# --- DYNAMIC NAVIGATION LOGIC ---
 if role in ["Admin", "Director"]:
-    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
-    for item in extra:
-        if item not in options:
-            options.append(item)
+    options = [
+        "📊 Dashbord", 
+        "➕ Ny Registrering", 
+        "📂 Kunde Arkiv", 
+        "👥 Ansatte Kontroll", 
+        "📇 Kontakter", 
+        "🕵️ Master Kontrollpanel"
+    ]
+else:
+    # Ansatte ke liye naye Professional Banking features
+    options = [
+        "📊 Dashbord", 
+        "➕ Ny Registrering", 
+        "📂 Kunde Arkiv", 
+        "🏦 Bankens Renters",    # New
+        "📜 Dokumentmaler",     # New
+        "📞 Support Center"      # New
+    ]
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
@@ -231,13 +244,13 @@ if st.sidebar.button("🔴 Logg ut"):
     st.rerun()
 
 # =================================================================
-# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (ERROR-FREE VERSION)
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (STABLE VERSION)
 # =================================================================
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     """
-    Yeh function sirf loop (Nummer 8) ke andar se call hoga.
-    Isliye 'sak_id' ka error nahi aaye ga.
+    Yeh function loop ke andar se call hota hai.
+    Purana saara logic (read/unread, bubbles, styling) intact hai.
     """
     st.markdown("---")
     me_clean = str(username).lower().strip()
@@ -258,11 +271,10 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # --- 🔴 NOTIFICATION DOT LOGIC (MARK AS READ) ---
+    # --- 🔴 NOTIFICATION LOGIC ---
     has_unread = False
     for m in messages:
         m_sender = str(m.get('sender', '')).lower().strip()
-        # Agar unread hai aur sender MEIN nahi hoon, toh mark as read
         if m.get('read') == False and m_sender != me_clean:
             m['read'] = True
             has_unread = True
@@ -289,9 +301,8 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
     st.divider()
     
-    # --- INPUT SECTION (Fixed sak_id scope) ---
+    # --- INPUT SECTION ---
     col_msg, col_file = st.columns([3, 1])
-    # Buttons aur inputs ke liye 'sak_id' function parameter se mil raha hai
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
@@ -310,7 +321,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-
+                
 
 # --- 6. DASHBORD (FINAL UPDATED VERSION WITH FIXED NOTIFICATIONS) ---
 if valg == "📊 Dashbord":

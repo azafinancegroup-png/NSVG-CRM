@@ -1109,77 +1109,86 @@ elif valg == "📇 Kontakter":
 
 
 elif valg == "📜 Dokumentmaler":
-    st.header("🏦 NSVG – Retningslinjer & Dokumentasjonsportal")
-    st.caption("Nordic Secure Vault Group | Offisiell Saksbehandlingsportal")
+    st.header("🏦 NSVG – Offisiell Dokumentasjonsportal")
+    st.caption("Nordic Secure Vault Group | Saksbehandlingssystem v3.0")
     st.markdown("---")
     
-    st.info("💡 **Viktig Informasjon:** For å sikre rask utbetaling fra banken, må alle vedlegg være i PDF-format. Screenshots eller uklare bilder blir automatisk avvist.")
+    # Hero Section: Quick Actions
+    st.info("""
+    **⚠️ Instrukser for Ansatte:**
+    Innsending av mangelfull dokumentasjon fører til forsinkelser. 
+    Alle vedlegg skal verifiseres mot sjekklisten nedenfor før de sendes til banken.
+    """)
 
-    # --- MODERN TABS SYSTEM FOR NSVG ---
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🏠 Boliglån & Refinans", 
+    # --- MAIN PORTAL INTERFACE ---
+    tab1, tab2, tab3 = st.tabs([
+        "📁 Privatmarked (Bolig/Refinans)", 
         "🏢 Næringslån (Bedrift)", 
-        "🛡️ KYC & Compliance",
-        "✅ NSVG Sjekkliste"
+        "🛡️ Compliance & KYC"
     ])
 
     with tab1:
-        st.subheader("Krav til Boliglån & Refinansiering")
+        st.subheader("🏠 Krav for Privatkunder")
+        
         col1, col2 = st.columns(2)
         with col1:
+            st.markdown("##### 💰 Inntekt & Skatt")
             st.markdown("""
-            **Inntekt & Skatt:**
-            * 📄 **Siste 3 lønnslipper:** Må vise år-til-dato (YTD) info.
-            * 📄 **Skattemelding:** Siste tilgjengelige (alle sider).
-            * 📄 **Lønnskonto:** Utskrift som bekrefter lønnsinnskudd.
+            * **Siste 3 lønnslipper:** Skal vise faste tillegg og trekk.
+            * **Skattemelding:** Fullstendig PDF fra Skatteetaten (alle sider).
+            * **NAV-Utbetalinger:** Vedtak og utskrift (hvis aktuelt).
             """)
+        
         with col2:
+            st.markdown("##### 🏘️ Eiendom & Gjeld")
             st.markdown("""
-            **Eiendom & Sikkerhet:**
-            * 🏠 **E-takst:** Verdivurdering (maks 6 måneder gammel).
-            * 💳 **Gjeldsregisteret:** Fullstendig utskrift av usikret gjeld.
-            * 📑 **Dokumentasjon på etakst:** Ved refinansiering er dette obligatorisk.
+            * **E-takst / Verdivurdering:** Skal inneholde bilder og teknisk info (Maks 6 mnd).
+            * **Gjeldsregisteret:** Full oversikt over kredittrammer og forbrukslån.
+            * **Refinansiering:** Dokumentasjon på lån som skal innfris.
             """)
+
+        st.divider()
+        st.markdown("##### ✅ Intern Sjekkliste for Boliglån")
+        st.checkbox("Er lønnslipper lastet opp?", key="c1")
+        st.checkbox("Er skattemeldingen komplett?", key="c2")
+        st.checkbox("Er E-takst gyldig og oppdatert?", key="c3")
+        st.checkbox("Er kunden kredittsjekket i Gjeldsregisteret?", key="c4")
 
     with tab2:
-        st.subheader("🏢 Næringslån & Bedriftsfinansiering")
-        st.error("NSVG Standard: Krav for bedriftskunder")
-        st.markdown("""
-        For at banken skal vurdere næringslån, må følgende foreligge:
+        st.subheader("🏢 Krav for Næringslån & Bedrifter")
+        st.warning("NSVG Standard: Bedriftskreditt krever utvidet kontroll.")
         
-        1.  📊 **Regnskap:** Fullstendig årsregnskap for de **siste 2 årene**.
-        2.  📈 **Saldobalanse:** Oppdatert regnskap for inneværende år.
-        3.  📜 **Firmaattest:** Bekreftelse fra Brønnøysundregistrene.
-        4.  📝 **Forretningsplan:** Kort beskrivelse av investering/formål.
-        5.  🏢 **Leiekontrakter:** Ved finansiering av næringseiendom.
+        st.markdown("""
+        **Følgende dokumenter er obligatoriske for næringssaker:**
+        1. **Årsregnskap:** Fullstendig regnskap for de **siste 2 årene** (Resultat & Balanse).
+        2. **Saldobalanse:** Oppdatert regnskap per dags dato for inneværende år.
+        3. **Firmaattest:** Nyere utskrift fra Brønnøysundregistrene.
+        4. **Eierstruktur:** Oversikt over reelle rettighetshavere (UBO).
+        5. **Pantesikkerhet:** Dokumentasjon på verdier som stilles som sikkerhet.
         """)
+        
+        st.divider()
+        st.markdown("##### ✅ Intern Sjekkliste for Næringslån")
+        st.checkbox("Er 2 års regnskap kontrollert?", key="n1")
+        st.checkbox("Er saldobalanse for i år mottatt?", key="n2")
+        st.checkbox("Er UBO (Eierstruktur) kartlagt?", key="n3")
 
     with tab3:
-        st.subheader("🛡️ KYC (Know Your Customer) & AML")
-        st.warning("Nordic Secure Vault Group følger strenge hvitvaskingsregler.")
+        st.subheader("🛡️ Compliance, KYC & ID-Kontroll")
+        st.error("AML (Anti-Money Laundering) Protokoll")
+        
         st.markdown("""
-        * **Legitimasjon:** Kopi av gyldig **Pass** eller **Nasjonalt ID-kort** (front og bak).
-        * **BankID:** Kunden må ha aktiv BankID for signering.
-        * **Formueskilde:** Dokumentasjon på hvor egenkapitalen stammer fra.
-        * **UBO:** Oversikt over reelle rettighetshavere i bedriften.
+        **Legitimasjonskrav:**
+        * **Primær ID:** Fargekopi av Pass eller Nasjonalt ID-kort (må være gyldig).
+        * **BankID:** Bekreftelse på at kunden kan signere elektronisk.
+        * **Midlenes Opprinnelse:** Skriftlig forklaring på egenkapital (Arv, sparing, salg).
+        * **PEP-Sjekk:** Er kunden eller nær familie i en politisk posisjon?
         """)
-
-    with tab4:
-        st.subheader("✅ Intern Kontrollpanel (Må fullføres)")
-        st.write("Vennligst bekreft at dokumentasjonen er komplett før du sender saken til NSVG Admin:")
         
-        check1 = st.checkbox("Siste 3 lønnslipper er verifisert.")
-        check2 = st.checkbox("Skattemelding for siste år er vedlagt.")
-        check3 = st.checkbox("Gyldig legitimasjon (Pass/ID) er kontrollert.")
-        check4 = st.checkbox("E-takst og gjeldsinfo er oppdatert.")
-        check5 = st.checkbox("For næringslån: 2 års regnskap er mottatt.")
-        
-        if check1 and check2 and check3 and check4 and check5:
-            st.success("🎯 **NSVG STATUS:** Dokumentasjonen er komplett. Klar for bankinnsending!")
-        else:
-            st.warning("⚠️ **NSVG STATUS:** Noen dokumenter mangler fortsatt.")
+        st.info("💡 **Tips:** Ved mistanke om hvitvasking, kontakt NSVG Compliance Manager umiddelbart.")
 
     st.markdown("---")
+
 
 
 

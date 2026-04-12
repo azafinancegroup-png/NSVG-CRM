@@ -1109,19 +1109,58 @@ elif valg == "📇 Kontakter":
 
 
 elif valg == "📜 Dokumentmaler":
-    st.header("📜 Retningslinjer og Dokumenter")
-    st.write("Her finner du nødvendige maler for innsending av saker.")
-    
-    st.download_button("📥 Last ned: Sjekkliste for Boliglån", "Sjekkliste data...", file_name="sjekkliste_bolig.txt")
-    
-    with st.expander("📌 Krav til dokumentasjon"):
+    st.header("📜 Bankens Retningslinjer & Dokumentasjonskrav")
+    st.info("Her finner du komplette krav for alle lånetyper. Vennligst sjekk at alle dokumenter er klare før innsending.")
+
+    # --- TAB SYSTEM FOR MODERN LOOK ---
+    tab1, tab2, tab3 = st.tabs(["🏠 Privatmarked", "🏢 Næringslån", "⚖️ Generelle Krav"])
+
+    with tab1:
+        st.subheader("Boliglån & Refinansiering")
         st.markdown("""
-        - Siste 3 lønnslipper
-        - Skattemelding for siste år
-        - Kopi av gyldig legitimasjon (Pass/BankID)
-        - Ved refinansiering: Oversikt over eksisterende gjeld
+        For en rask behandling av boliglånsøknader, må følgende lastes opp:
+        
+        * **Inntekt:** Siste 3 måneders lønnsslipper.
+        * **Skatt:** Siste tilgjengelige skattemelding (Fullstendig versjon).
+        * **Verdivurdering:** Ny e-takst (ikke eldre enn 6 måneder).
+        * **Gjeld:** Ved refinansiering, last opp nøyaktig oversikt over alle kredittkort og smålån fra Gjeldsregisteret.
+        """)
+        
+        if st.checkbox("Vis Sjekkliste for Boliglån"):
+            st.write("✅ **Sjekkliste:**")
+            st.write("- [ ] Er BankID validert?")
+            st.write("- [ ] Er medlåntaker lagt til (hvis aktuelt)?")
+            st.write("- [ ] Er alle felter i søknaden fylt ut?")
+
+    with tab2:
+        st.subheader("Næringslån / Bedriftslån")
+        st.warning("Næringslån krever dypere finansiell analyse.")
+        st.markdown("""
+        **Nødvendig dokumentasjon for bedrifter:**
+        
+        1.  **Regnskap:** Fullstendig regnskap for de siste **2 årene**.
+        2.  **Driftsresultat:** Foreløpig saldobalanse for inneværende år.
+        3.  **Firmaattest:** Ikke eldre enn 3 måneder.
+        4.  **Eierstruktur:** Oversikt over reelle rettighetshavere (UBO).
+        5.  **Sikkerhet:** Dokumentasjon på pantesikkerhet (Eiendom, maskiner eller varelager).
         """)
 
+    with tab3:
+        st.subheader("Generelle Krav & AML")
+        st.markdown("""
+        **Legitimasjon:**
+        * Kopi av gyldig Pass eller Nasjonalt ID-kort.
+        * Førerkort godtas kun som sekundær legitimasjon.
+        
+        **Hvitvasking (KYC):**
+        * Forklaring på egenkapitalens opprinnelse (f.eks. arv, sparing, salg av eiendom).
+        * Bekreftelse på om kunden er en Politisk Eksponert Person (PEP).
+        """)
+
+    st.divider()
+    # Bonus Feature: Quick Tips
+    st.info("💡 **Tips fra Admin:** Sørg for at alle PDF-filer er lesbare. Bilder av skjermer (screenshots) blir ofte avvist av banken.")
+    
 
 
 # --- FOOTER (FIXED Error Line) ---

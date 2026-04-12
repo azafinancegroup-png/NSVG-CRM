@@ -566,6 +566,7 @@ elif valg == "📂 Kunde Arkiv":
     view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
     # 2. Search Box (Pre-filled if coming from notification)
+    # Fix: Value ko direct jump_id se connect kiya hai taake link open ho
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
     if sok:
@@ -579,30 +580,34 @@ elif valg == "📂 Kunde Arkiv":
         st.session_state.search_query = ""
 
     for i, r in view_df.iterrows():
-        sak_id = r.get('ID', i)
+        sak_id = str(r.get('ID', i))
         mangler_msg = r.get('Mangler', '') 
         chat_h = str(r.get('Chat_History', '')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- FIX 2: SMART NOTIFICATION LOGIC (SENDER FILTER) ---
+        # --- FIX 2: SMART NOTIFICATION LOGIC (ONLY LAST MESSAGE SENDER) ---
         is_unread = False
-        chat_lower = chat_h.lower()
         
-        # Unread check ke sath aakhri message ka sender check (rfind)
-        if '"read": false' in chat_lower:
-            last_agent = chat_lower.rfind('"role": "agent"')
-            last_bank = chat_lower.rfind('"role": "bank"')
-            
-            # Admin ko tab dikhega jab aakhri message Agent ne bheja ho
-            if role in ["Admin", "Director"] and last_agent > last_bank:
-                is_unread = True
-            # Agent ko tab dikhega jab aakhri message Bank ne bheja ho
-            elif role not in ["Admin", "Director"] and last_bank > last_agent:
-                is_unread = True
+        if '"read": false' in chat_h.lower():
+            try:
+                import json
+                messages = json.loads(chat_h)
+                if messages:
+                    last_msg = messages[-1] # Sirf aakhri message uthao
+                    if last_msg.get('read') == False:
+                        # Admin ko sirf tab dikhe jab aakhri message Agent ne bheja ho
+                        if role in ["Admin", "Director"] and last_msg.get('role') == "agent":
+                            is_unread = True
+                        # Agent ko sirf tab dikhe jab aakhri message Bank ne bheja ho
+                        elif role not in ["Admin", "Director"] and last_msg.get('role') == "bank":
+                            is_unread = True
+            except:
+                pass
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
+        # "str(sak_id) == str(sok)" ensure karta hai ke wahi sak khulay jo link se aayi hai
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
@@ -611,7 +616,7 @@ elif valg == "📂 Kunde Arkiv":
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (100% Purana Look - Not a single dot changed) ---
+                # --- A: VIEW MODE (100% Aapka Original Look) ---
                 st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
                 v1, v2, v3 = st.columns(3)
                 with v1:
@@ -642,7 +647,7 @@ elif valg == "📂 Kunde Arkiv":
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
-                # --- B: MODIFICATION MODE (100% Purana Look - Safe & Intact) ---
+                # --- B: MODIFICATION MODE (100% Aapka Original Form) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
                 
                 with st.form(key=f"edit_form_final_{sak_id}"):

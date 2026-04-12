@@ -794,37 +794,37 @@ elif valg == "🏦 Bankens Renters":
 
 
 elif valg == "📞 Support Center":
-    st.header("📞 NSVG Support Center")
+    st.header("📞 Bank Support Center") # Title change kar dia
     st.subheader("Trenger du hjelp med en sak?")
     st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
     
     with st.form("support_form"):
-        st.write("Send en direkte forespørsel til NSVG Administrator")
+        st.write("Send en direkte forespørsel til Bankens Hovedkontor")
         sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Prioritert utbetaling", "Annet"])
         sup_msg = st.text_area("Beskrivelse (Vennligst oppgi saks-ID hvis relevant)")
         
         if st.form_submit_button("🚀 Send Forespørsel"):
             if sup_msg:
                 try:
-                    # Current Time aur User info nikalna
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                    sender = st.session_state.get('username', 'Ukjent')
                     
-                    # Data prepare karna
-                    support_data = [now, sender, sup_topic, sup_msg, "Åpen"]
+                    # Yahan ID ki jagah hum session_state se 'navn' (Full Name) uthayenge
+                    # Agar 'navn' nahi milta to hi 'username' use hoga
+                    sender_name = st.session_state.get('navn', st.session_state.get('username', 'Ukjent Ansatt'))
                     
-                    # Google Sheet mein save karna (Humein 'Support' sheet name use karna hai)
+                    support_data = [now, sender_name, sup_topic, sup_msg, "Åpen"]
+                    
                     success = add_data("Support", support_data)
                     
                     if success:
                         st.balloons()
-                        st.success(f"✅ Takk {sender}! Din forespørsel er sendt til Admin. Status: Åpen")
+                        st.success(f"✅ Takk {sender_name}! Din forespørsel er mottatt. Status: Åpen")
                     else:
-                        st.error("Kunne ikke lagre forespørsel. Sjekk om 'Support' tab finnes i Google Sheets.")
+                        st.error("Kunne ikke lagre forespørsel. Sjekk Google Sheets.")
                 except Exception as e:
                     st.error(f"Systemfeil: {e}")
             else:
-                st.warning("Vennligst skriv en beskrivelse før du sender.")
+                st.warning("Vennligst skriv en beskrivelse.")
                 
 
 

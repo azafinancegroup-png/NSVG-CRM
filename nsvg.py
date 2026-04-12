@@ -79,20 +79,24 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         # Display Name logic
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
-# --- MESSAGE INPUT (FIXED FOR SENDER PROTECTION) ---
+# --- MESSAGE INPUT (ULTIMATE SENDER FIX) ---
     msg_text = st.text_input(f"Skriv til {target_label}...", key=f"chat_in_{sak_id}")
     if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
         if msg_text:
-            # Humne "sender" mein "BANK" ki jagah asli "username" save kiya hai
-            # Taake notification system ko pata chale ke message bhejne wala 'Me' hoon ya 'Koi aur'
+            # Humne username ko lowercase kiya taake comparison mein masla na aaye
+            # 'username' wahi variable hai jo aapke function ke def mein aa raha hai
+            s_name = str(username).lower() if username else "ukjent"
+            
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": username.lower(), # <--- Yeh asli username save karega
+                "sender": s_name,  # <--- Yeh sab se qeemti line hai
                 "text": msg_text,
                 "time": get_norway_time(), 
                 "read": False 
             }
             messages.append(new_msg)
+            
+            # Database update logic
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
                 
@@ -580,7 +584,7 @@ elif valg == "📂 Kunde Arkiv":
     view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
     # Search Box (Auto-fills if coming from Dashboard)
-    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
+    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...", key="arkiv_sok_main")
     
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
@@ -593,7 +597,7 @@ elif valg == "📂 Kunde Arkiv":
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- 3. VARSEL LOGIC (SENDER PROTECTION - UPDATED) ---
+        # --- 3. VARSEL LOGIC (SENDER PROTECTION - FIXED) ---
         is_unread = False
         if '"read": false' in chat_h.lower():
             try:
@@ -601,10 +605,12 @@ elif valg == "📂 Kunde Arkiv":
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1]
-                    # FIX: Role ki jagah hum 'sender' check kar rahe hain taake apna notification na aaye
-                    last_sender = last_msg.get('sender', '').lower()
+                    # FIX: Hum check kar rahe hain ke aakhri message kisne bheja
+                    last_sender = str(last_msg.get('sender', '')).lower()
+                    me = str(current_user).lower()
                     
-                    if last_msg.get('read') == False and last_sender != current_user.lower():
+                    # Agar unread hai AUR bhejne wala 'Main' nahi hoon, sirf tab dot dikhao
+                    if last_msg.get('read') == False and last_sender != me:
                         is_unread = True
             except:
                 pass
@@ -616,7 +622,7 @@ elif valg == "📂 Kunde Arkiv":
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            # Khulne ke baad URL aur Session clear kar dein
+            # Khulne ke baad URL aur Session clear kar dein taake loop na bane
             if expand_me and url_id:
                 st.query_params.clear()
                 st.session_state.search_query = ""

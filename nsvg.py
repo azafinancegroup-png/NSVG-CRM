@@ -791,19 +791,7 @@ elif valg == "🏦 Bankens Renters":
     
     st.write("⚠️ *Merk: Rentene kan variere basert på kundens kredittscore.*")
 
-elif valg == "📜 Dokumentmaler":
-    st.header("📜 Retningslinjer og Dokumenter")
-    st.write("Her finner du nødvendige maler for innsending av saker.")
-    
-    st.download_button("📥 Last ned: Sjekkliste for Boliglån", "Sjekkliste data...", file_name="sjekkliste_bolig.txt")
-    
-    with st.expander("📌 Krav til dokumentasjon"):
-        st.markdown("""
-        - Siste 3 lønnslipper
-        - Skattemelding for siste år
-        - Kopi av gyldig legitimasjon (Pass/BankID)
-        - Ved refinansiering: Oversikt over eksisterende gjeld
-        """)
+
 
 elif valg == "📞 Support Center":
     st.header("📞 Bank Support")
@@ -1108,61 +1096,53 @@ elif valg == "📇 Kontakter":
                     st.warning("Navn og e-post er påkrevd.")
 
 
+
+# --- SEARCH FOR THIS LINE AND REPLACE EVERYTHING UNTIL THE FOOTER ---
 elif valg == "📜 Dokumentmaler":
     st.header("🏦 NSVG – Dokumentasjonsportal")
     st.caption("Nordic Secure Vault Group | Professional Banking Standards")
     st.markdown("---")
     
-    # Yahan koi download button nahi hai, sab kuch direct display hoga
-    st.info("ℹ️ **NSVG System:** Dokumentasjonskrav åpnes direkte i portalen. Ingen nedlasting nødvendig.")
+    # Direct View Message
+    st.success("✅ **Portal-modus:** Alle krav vises direkte nedenfor. Ingen nedlasting nødvendig.")
 
-    # --- MAIN CONTENT DISPLAY ---
-    col_left, col_right = st.columns([1, 1])
+    # --- MAIN CONTENT LAYOUT ---
+    col1, col2 = st.columns(2)
 
-    with col_left:
-        with st.expander("🏠 PRIVATMARKED: Boliglån & Refinans", expanded=True):
+    with col1:
+        st.markdown("### 🏠 Boliglån & Refinans")
+        with st.container():
             st.markdown("""
-            **Påkrevde dokumenter:**
-            1. **Lønn:** Siste 3 mnd lønnslipper.
-            2. **Skatt:** Siste års skattemelding (alle sider).
-            3. **Verdi:** Oppdatert **E-takst** (ikke eldre enn 6 mnd).
-            4. **Gjeld:** Utskrift fra Gjeldsregisteret.
+            **Påkrevd Dokumentasjon:**
+            * **Lønn:** Siste 3 mnd lønnslipper.
+            * **Skatt:** Siste års skattemelding (fullstendig).
+            * **Verdi:** Oppdatert **E-takst** (maks 6 mnd gammel).
+            * **Gjeld:** Oversikt over eksisterende gjeld og etakst.
             
-            ---
             **Sjekkliste:**
-            - [ ] Er ID verifisert?
-            - [ ] Er alle sider av skattemeldingen med?
-            - [ ] Stemmer E-takst med lånebeløp?
+            - [x] ID-kontroll utført
+            - [x] Skattemelding kontrollert
+            - [x] E-takst bekreftet
             """)
 
-    with col_right:
-        with st.expander("🏢 NÆRINGSLÅN: Bedrift & Investering", expanded=True):
+    with col2:
+        st.markdown("### 🏢 Næringslån (Bedrift)")
+        with st.container():
             st.markdown("""
-            **Påkrevde dokumenter:**
-            1. **Regnskap:** Fullstendig årsregnskap for **siste 2 år**.
-            2. **Drift:** Oppdatert saldobalanse for i år.
-            3. **Firma:** Ny firmaattest (Brønnøysund).
-            4. **Eiere:** Oversikt over reelle rettighetshavere (UBO).
+            **Påkrevd Dokumentasjon:**
+            * **Regnskap:** Fullstendig årsregnskap for **siste 2 år**.
+            * **Drift:** Foreløpig saldobalanse for inneværende år.
+            * **Firma:** Ny firmaattest fra Brønnøysund.
+            * **UBO:** Oversikt over reelle rettighetshavere.
             
-            ---
             **Sjekkliste:**
-            - [ ] Er regnskapet revidert?
-            - [ ] Er firmaattesten nyere enn 3 mnd?
-            - [ ] Er formålet med lånet tydelig?
+            - [x] 2 års regnskap mottatt
+            - [x] Saldobalanse sjekket
+            - [x] Firmaattest verifisert
             """)
-
-    # --- COMPLIANCE SECTION ---
-    st.markdown("### 🛡️ KYC & Compliance (Hvitvasking)")
-    with st.container():
-        st.error("Alle saker må gjennomgå NSVG AML-kontroll.")
-        st.markdown("""
-        * **Gyldig ID:** Pass eller Nasjonalt ID-kort (Fargekopi).
-        * **Egenkapital:** Dokumentasjon på kilde (Sparing/Arv/Salg).
-        * **Signering:** Alltid via BankID.
-        """)
 
     st.markdown("---")
-    
+    st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
 
 # --- FOOTER (FIXED Error Line) ---

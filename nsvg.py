@@ -281,39 +281,51 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
                 st.rerun()
 
 
-# --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
+# --- 6. DASHBORD (FINAL UPDATED VERSION WITH FIXED NOTIFICATIONS) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
-        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak (100% SAME)
+        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak
         if role in ["Admin", "Director"]:
             view_data = df
         else:
             view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
         
-        # --- NEW: ADVANCED NOTIFICATION SYSTEM (Professional Jump Logic) ---
+        # --- FIXED NOTIFICATION LOGIC (Ab double varsel nahi ayega) ---
         unread_saker = []
+        me_clean = str(current_user).lower().strip() 
+
         for i, r in view_data.iterrows():
             chat_h = str(r.get('Chat_History', ''))
-            # Check unread messages based on role
-            if role in ["Admin", "Director"]:
-                if '"role": "Agent"' in chat_h and '"read": false' in chat_h.lower():
-                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
-            else:
-                if '"role": "Bank"' in chat_h and '"read": false' in chat_h.lower():
-                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
+            
+            # Agar chat khali hai to skip karen
+            if not chat_h or chat_h == '[]' or chat_h == 'nan':
+                continue
+                
+            try:
+                msgs = json.loads(chat_h)
+                if msgs:
+                    last_msg = msgs[-1] # Sirf aakhri message check karen
+                    last_sender = str(last_msg.get('sender', '')).lower().strip()
+                    is_read = last_msg.get('read', True)
 
+                    # LOGIC: Agar aakhri message MERA NAHI HAI aur UNREAD hai, to hi varsel dikhao
+                    if not is_read and last_sender != me_clean:
+                        unread_saker.append({"navn": r.get('Hovedsøker', 'Ukjent'), "id": r.get('ID', i)})
+            except:
+                continue
+
+        # Display Notifications
         if unread_saker:
-            st.markdown("### 🔔 Varsler")
+            st.markdown("### 🔔 Varsler (Nye meldinger)")
             for sak in unread_saker:
-                # Jab is button par click hoga, system "Kunde Arkiv" par jump karega aur sak filter kar dega
                 if st.button(f"📩 Ny melding i sak: {sak['navn']} (ID: {sak['id']})", key=f"notif_{sak['id']}"):
                     st.session_state.search_query = str(sak['id']) 
                     st.session_state.active_tab = "📂 Kunde Arkiv" 
                     st.rerun()
 
-        # --- METRICS SECTION (Oversikt bars - 100% SAME AS YOURS) ---
+        # --- METRICS SECTION ---
         c1, c2, c3 = st.columns(3)
         
         loan_col = 'Lånebeløp' if 'Lånebeløp' in view_data.columns else view_data.columns[0] 
@@ -326,9 +338,8 @@ if valg == "📊 Dashbord":
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
-        # --- SAKER LIST SECTION (Displaying last 15 cases - 100% SAME LOGIC) ---
+        # --- SAKER LIST SECTION ---
         for i, r in view_data.tail(15).iterrows():
-            # Data extraction with safety
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
             b_status = r.get('Bank_Status', 'Mottatt')
@@ -337,7 +348,7 @@ if valg == "📊 Dashbord":
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
 
-            # Status Icons (100% SAME)
+            # Status Icons
             if b_status == "Mottatt":
                 st_icon = "🔵"
             elif b_status == "Under Behandling":
@@ -347,7 +358,6 @@ if valg == "📊 Dashbord":
             else:
                 st_icon = "🔴"
             
-            # Har case ke liye ek Expander
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
                 # --- BANKING CHAT HUB (Integrated) ---
@@ -355,10 +365,7 @@ if valg == "📊 Dashbord":
                 
                 st.divider()
 
-                # --- OLD MESSAGING SYSTEM REMOVED (As requested) ---
-                # Purana error aur info block yahan se delete kar diya gaya hai.
-
-                # --- FULL INFO DISPLAY (Aapka loop jo saara data dikhata hai - 100% SAME) ---
+                # --- FULL INFO DISPLAY ---
                 st.markdown("### 📄 Saksinformasjon")
                 
                 inf_c1, inf_c2 = st.columns(2)
@@ -369,7 +376,7 @@ if valg == "📊 Dashbord":
                     target_col = inf_c1 if count % 2 == 0 else inf_c2
                     target_col.write(f"**{col_name}:** {value}")
                 
-                # --- MODIFICATION SYSTEM (Aapka purana system - 100% SAME) ---
+                # --- MODIFICATION SYSTEM ---
                 st.markdown("---")
                 st.write("🔧 **Rediger Sak / Svar til Admin**")
                 

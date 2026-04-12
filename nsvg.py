@@ -221,11 +221,14 @@ if st.sidebar.button("🔴 Logg ut"):
 # =================================================================
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+    """
+    Yeh function sirf tab chale ga jab loop isse call kare ga.
+    Is liye error nahi aaye ga.
+    """
     st.markdown("---")
-    # Clean Identity check for comparison
     me_clean = str(username).lower().strip()
-    
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
+    
     st.subheader(f"💬 Meldinger med {target_label}")
 
     st.markdown("""
@@ -241,12 +244,10 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # --- SMART LOGIC: Auto-Mark as Read (FIXED IDENTITY CHECK) ---
+    # --- SMART LOGIC: Mark as Read ---
     has_unread = False
     for m in messages:
         m_sender = str(m.get('sender', '')).lower().strip()
-        
-        # Agar message unread hai AUR bhejne wala MEIN nahi hoon
         if m.get('read') == False and m_sender != me_clean:
             m['read'] = True
             has_unread = True
@@ -254,31 +255,26 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # --- DISPLAY MESSAGES ---
+    # --- DISPLAY ---
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
-        
-        # Display logic
         sender_raw = msg.get("sender", "SYSTEM")
         display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
         
         m_col, d_col = st.columns([0.9, 0.1])
         with m_col:
             st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
-        
         with d_col:
             if role in ["Admin", "Director"]:
                 if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
                     messages.pop(idx)
-                    if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
-                        st.rerun()
+                    update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+                    st.rerun()
 
     st.divider()
-
-    # Input Section
     col_msg, col_file = st.columns([3, 1])
-    msg_input = col_msg.text_input(f"Skriv melding til {target_label}...", key=f"input_{sak_id}")
+    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
     if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
@@ -286,12 +282,9 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             full_txt = msg_input
             if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
             
-            # Identity logic for saving
-            save_user = me_clean
-            
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": save_user, 
+                "sender": me_clean, 
                 "text": full_txt,
                 "time": get_norway_time(), 
                 "read": False 

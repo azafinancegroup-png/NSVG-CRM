@@ -773,7 +773,53 @@ elif valg == "📂 Kunde Arkiv":
                                 st.rerun()
                             else:
                                 st.error("Kunne ikke slette saken. Sjekk databasetilkoblingen.")
-                                
+
+
+# ... (Kunde Arkiv ka code khatam hone ke baad) ...
+
+elif valg == "🏦 Bankens Renters":
+    st.header("🏦 Aktuelle Bankrenter")
+    st.info("Oversikt over gjeldende renter for ulike låneprodukter.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Boliglån (Flytende)", "4.85%", "+0.25%")
+        st.metric("Refinansiering", "5.10%", "-0.10%")
+    with col2:
+        st.metric("Billån", "6.20%", "Stabil")
+        st.metric("Forbrukslån", "11.5%", "Stabil")
+    
+    st.write("⚠️ *Merk: Rentene kan variere basert på kundens kredittscore.*")
+
+elif valg == "📜 Dokumentmaler":
+    st.header("📜 Retningslinjer og Dokumenter")
+    st.write("Her finner du nødvendige maler for innsending av saker.")
+    
+    st.download_button("📥 Last ned: Sjekkliste for Boliglån", "Sjekkliste data...", file_name="sjekkliste_bolig.txt")
+    
+    with st.expander("📌 Krav til dokumentasjon"):
+        st.markdown("""
+        - Siste 3 lønnslipper
+        - Skattemelding for siste år
+        - Kopi av gyldig legitimasjon (Pass/BankID)
+        - Ved refinansiering: Oversikt over eksisterende gjeld
+        """)
+
+elif valg == "📞 Support Center":
+    st.header("📞 Bank Support")
+    st.subheader("Trenger du hjelp med en sak?")
+    
+    st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
+    
+    with st.form("support_form"):
+        st.write("Send en direkte forespørsel til Bankens Hovedkontor")
+        sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Annet"])
+        sup_msg = st.text_area("Beskrivelse")
+        if st.form_submit_button("Send Forespørsel"):
+            st.success("Din forespørsel er sendt til Bankens Administrator.")
+
+
+
 
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
@@ -1060,6 +1106,23 @@ elif valg == "📇 Kontakter":
                         st.rerun()
                 else:
                     st.warning("Navn og e-post er påkrevd.")
+
+
+elif valg == "📜 Dokumentmaler":
+    st.header("📜 Retningslinjer og Dokumenter")
+    st.write("Her finner du nødvendige maler for innsending av saker.")
+    
+    st.download_button("📥 Last ned: Sjekkliste for Boliglån", "Sjekkliste data...", file_name="sjekkliste_bolig.txt")
+    
+    with st.expander("📌 Krav til dokumentasjon"):
+        st.markdown("""
+        - Siste 3 lønnslipper
+        - Skattemelding for siste år
+        - Kopi av gyldig legitimasjon (Pass/BankID)
+        - Ved refinansiering: Oversikt over eksisterende gjeld
+        """)
+
+
 
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")

@@ -88,12 +88,13 @@ def connect_to_sheet(sheet_name):
         from oauth2client.service_account import ServiceAccountCredentials
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Yeh aapki main spreadsheet file ko open karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
     except Exception as e:
         st.error(f"Tilkoblingsfeil (Connection Error): {e}")
         return None
 
+# FIXED: Added caching (ttl=60 means it waits 1 minute before asking Google again)
+@st.cache_data(ttl=60)
 def get_data(sheet_name):
     sh = connect_to_sheet(sheet_name)
     if sh:
@@ -103,7 +104,10 @@ def get_data(sheet_name):
             df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception as e:
-            st.warning(f"Kunne ikke hente data fra {sheet_name}: {e}")
+            if "429" in str(e):
+                st.error("Google API Limit nådd. Vent 60 sekunder...")
+            else:
+                st.warning(f"Kunne ikke hente data fra {sheet_name}: {e}")
             return pd.DataFrame()
     return pd.DataFrame()
 
@@ -112,13 +116,14 @@ def add_data(sheet_name, row_list):
     if sh: 
         try:
             sh.append_row(row_list)
+            # Jab naya data add ho, cache clear karna zaroori hai
+            st.cache_data.clear()
             return True
         except Exception as e:
             st.error(f"Feil ved lagring av data: {e}")
             return False
     return False
 
-# NEW: Admin Update Function (Admin ke reply save karne ke liye)
 def update_sheet_data_internal(worksheet_name, df):
     sh = connect_to_sheet(worksheet_name)
     if sh:
@@ -126,13 +131,14 @@ def update_sheet_data_internal(worksheet_name, df):
             sh.clear()
             data_to_update = [df.columns.values.tolist()] + df.values.tolist()
             sh.update(data_to_update)
+            # Jab Admin update kare, cache clear karein taake naya jawab foran dikhe
+            st.cache_data.clear()
             return True
         except Exception as e:
             st.error(f"⚠️ Kunne ikke oppdatere {worksheet_name}: {e}")
             return False
     return False
 
-# AAPKA DELETE FUNCTION (Maine skip nahi kiya!)
 def delete_sak_from_sheet(sak_id): 
     """ 
     Google Sheet se specific ID wali row ko delete karne ka function.
@@ -143,9 +149,9 @@ def delete_sak_from_sheet(sak_id):
             rows = sh.get_all_records()
             for index, row in enumerate(rows):
                 if str(row.get('ID')) == str(sak_id):
-                    # +2 adjustment (1 for header, 1 for 0-index)
                     row_to_delete = index + 2
                     sh.delete_rows(row_to_delete)
+                    st.cache_data.clear() # Cache clear karein
                     return True
         else:
             st.error("Kunne ikke koble til databasen (MainDB).")
@@ -154,6 +160,7 @@ def delete_sak_from_sheet(sak_id):
     except Exception as e:
         st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
+        
 
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data

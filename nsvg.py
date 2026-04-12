@@ -81,6 +81,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
+
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -88,12 +89,12 @@ def connect_to_sheet(sheet_name):
         from oauth2client.service_account import ServiceAccountCredentials
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
+        # Yeh aapki main spreadsheet file ko open karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
     except Exception as e:
         st.error(f"Tilkoblingsfeil (Connection Error): {e}")
         return None
 
-# FIXED: Added caching (ttl=60 means it waits 1 minute before asking Google again)
 @st.cache_data(ttl=60)
 def get_data(sheet_name):
     sh = connect_to_sheet(sheet_name)
@@ -106,8 +107,6 @@ def get_data(sheet_name):
         except Exception as e:
             if "429" in str(e):
                 st.error("Google API Limit nådd. Vent 60 sekunder...")
-            else:
-                st.warning(f"Kunne ikke hente data fra {sheet_name}: {e}")
             return pd.DataFrame()
     return pd.DataFrame()
 
@@ -116,29 +115,36 @@ def add_data(sheet_name, row_list):
     if sh: 
         try:
             sh.append_row(row_list)
-            # Jab naya data add ho, cache clear karna zaroori hai
-            st.cache_data.clear()
+            st.cache_data.clear() # Cache clear taake naya data foran dikhe
             return True
         except Exception as e:
             st.error(f"Feil ved lagring av data: {e}")
             return False
     return False
 
+# YE RHA NAYA UPDATED FUNCTION (Jo aapne manga tha)
 def update_sheet_data_internal(worksheet_name, df):
+    """
+    Puri sheet ko naye data se update karne ke liye (Svar/Reply save karne ke liye).
+    """
     sh = connect_to_sheet(worksheet_name)
     if sh:
         try:
             sh.clear()
-            data_to_update = [df.columns.values.tolist()] + df.values.tolist()
-            sh.update(data_to_update)
-            # Jab Admin update kare, cache clear karein taake naya jawab foran dikhe
-            st.cache_data.clear()
+            # NaN values ko handle karna taake Google Sheet error na de
+            df_filled = df.fillna("")
+            data_to_update = [df_filled.columns.values.tolist()] + df_filled.values.tolist()
+            
+            # Pure data ko A1 cell se start karke update karna (Zyada stable method)
+            sh.update('A1', data_to_update)
+            st.cache_data.clear() # Cache mitaein taake naya jawab foran dikhe
             return True
         except Exception as e:
-            st.error(f"⚠️ Kunne ikke oppdatere {worksheet_name}: {e}")
+            st.error(f"⚠️ Google Sheets Update Error: {e}")
             return False
     return False
 
+# AAPKA DELETE FUNCTION (Yeh skip nahi hua!)
 def delete_sak_from_sheet(sak_id): 
     """ 
     Google Sheet se specific ID wali row ko delete karne ka function.
@@ -149,9 +155,10 @@ def delete_sak_from_sheet(sak_id):
             rows = sh.get_all_records()
             for index, row in enumerate(rows):
                 if str(row.get('ID')) == str(sak_id):
+                    # +2 adjustment (1 for header, 1 for 0-index)
                     row_to_delete = index + 2
                     sh.delete_rows(row_to_delete)
-                    st.cache_data.clear() # Cache clear karein
+                    st.cache_data.clear()
                     return True
         else:
             st.error("Kunne ikke koble til databasen (MainDB).")
@@ -161,7 +168,6 @@ def delete_sak_from_sheet(sak_id):
         st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
         
-
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data
 def get_country_list():
@@ -1027,39 +1033,61 @@ if role in ["Admin", "Director"]:
     st.header("📥 Support Management (Admin)")
     
     try:
+        # Henter data fra Google Sheets
         support_df = get_data("Support")
+        
         if not support_df.empty:
-            for i, row in support_df.iterrows():
-                # Sirf "Åpen" ya active tickets dikhane ke liye expander
+            # Viser de nyeste meldingene først
+            for i, row in support_df.sort_index(ascending=False).iterrows():
+                
+                # Sjekker om det er en hastesak
+                priority_tag = "⚠️ HASTE" if row['Tema'] == "Prioritert utbetaling" else ""
+                
+                # Fargeindikator basert på status
                 color = "🔴" if row['Status'] == "Åpen" else "🟢"
-                with st.expander(f"{color} Fra: {row['Fra_Bruker']} | Tema: {row['Tema']} | Tid: {row['Tidspunkt']}"):
+                
+                with st.expander(f"{color} {priority_tag} Fra: {row['Fra_Bruker']} | Tema: {row['Tema']} | Tid: {row['Tidspunkt']}"):
                     st.write(f"**Melding:** {row['Beskrivelse']}")
-                    st.write(f"**Nåværende Svar:** {row['Svar_Fra_Admin']}")
+                    st.info(f"**Nåværende Svar:** {row['Svar_Fra_Admin']}")
                     
-                    # Admin Actions
+                    # Admin handlinger
                     new_reply = st.text_area("Skriv svar til ansatt", value=row['Svar_Fra_Admin'], key=f"ans_{i}")
-                    new_status = st.selectbox("Oppdater Status", ["Åpen", "Behandles", "Løst / Ferdig"], 
-                                              index=["Åpen", "Behandles", "Løst / Ferdig"].index(row['Status']) if row['Status'] in ["Åpen", "Behandles", "Løst / Ferdig"] else 0,
-                                              key=f"stat_{i}")
+                    
+                    status_options = ["Åpen", "Behandles", "Løst / Ferdig"]
+                    current_status = row['Status'] if row['Status'] in status_options else "Åpen"
+                    
+                    new_status = st.selectbox("Oppdater Status", status_options, 
+                                             index=status_options.index(current_status), 
+                                             key=f"stat_{i}")
                     
                     col1, col2 = st.columns(2)
+                    
                     with col1:
                         if st.button("💾 Lagre Svar & Oppdater", key=f"save_{i}"):
-                            # Direct update logic
+                            # Oppdaterer lokalt i programmet
                             support_df.at[i, 'Svar_Fra_Admin'] = new_reply
                             support_df.at[i, 'Status'] = new_status
-                            update_sheet_data_internal("Support", support_df) # Make sure this helper exists
-                            st.success("Oppdatert!")
-                            st.rerun()
-                    
+                            
+                            # Lagrer til Google Sheets
+                            with st.spinner("Lagrer svar..."):
+                                if update_sheet_data_internal("Support", support_df):
+                                    st.cache_data.clear() # Sletter minne så endringen vises med en gang
+                                    st.success("✅ Svar er lagret og sendt!")
+                                    st.rerun() 
+                                else:
+                                    st.error("Kunne ikke lagre. Prøv igjen.")
+
                     with col2:
                         if st.button("🗑️ Slett Melding", key=f"del_msg_{i}"):
                             new_df = support_df.drop(i)
-                            update_sheet_data_internal("Support", new_df)
-                            st.warning("Melding slettet!")
-                            st.rerun()
+                            with st.spinner("Sletter..."):
+                                if update_sheet_data_internal("Support", new_df):
+                                    st.cache_data.clear()
+                                    st.warning("Melding slettet!")
+                                    st.rerun()
         else:
             st.info("Ingen support-forespørsler funnet.")
+            
     except Exception as e:
         st.error(f"Feil ved henting av support: {e}")
 

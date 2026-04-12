@@ -588,19 +588,21 @@ elif valg == "📂 Kunde Arkiv":
         is_unread = False
         chat_lower = chat_h.lower()
         
-        # Admin ko tab dikhega jab aakhri message Agent ne bheja ho
-        if role in ["Admin", "Director"]:
-            if '"role": "agent"' in chat_lower and '"read": false' in chat_lower:
+        # Unread check ke sath aakhri message ka sender check (rfind)
+        if '"read": false' in chat_lower:
+            last_agent = chat_lower.rfind('"role": "agent"')
+            last_bank = chat_lower.rfind('"role": "bank"')
+            
+            # Admin ko tab dikhega jab aakhri message Agent ne bheja ho
+            if role in ["Admin", "Director"] and last_agent > last_bank:
                 is_unread = True
-        # Agent ko tab dikhega jab aakhri message Bank/Admin ne bheja ho
-        else:
-            if '"role": "bank"' in chat_lower and '"read": false' in chat_lower:
+            # Agent ko tab dikhega jab aakhri message Bank ne bheja ho
+            elif role not in ["Admin", "Director"] and last_bank > last_agent:
                 is_unread = True
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
-        # Yeh line ensure karti hai ke jump wali sak khulay
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):

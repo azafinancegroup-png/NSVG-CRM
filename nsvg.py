@@ -555,7 +555,6 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
-                
 # --- 8. KUNDE ARKIV (PRO UPGRADE: SMART JUMP & AUTO-OPEN) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
@@ -569,14 +568,15 @@ elif valg == "📂 Kunde Arkiv":
     # 2. Search Box (Pre-filled if coming from notification)
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
-    # Agar search box empty ho jaye to session_state clear karein taake jump lock na ho
-    if not sok and 'search_query' in st.session_state:
-        st.session_state.search_query = ""
-
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
     st.info(f"Antall saker funnet: {len(view_df)}")
+
+    # --- FIX 1: AUTO-EXPAND LOGIC (WAIT & CLEAR) ---
+    # Hum session_state ko foran clear nahi kar rahe taake expander load ho jaye
+    if jump_id and sok != jump_id:
+        st.session_state.search_query = ""
 
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
@@ -584,20 +584,23 @@ elif valg == "📂 Kunde Arkiv":
         chat_h = str(r.get('Chat_History', '')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- SMART NOTIFICATION LOGIC (NEW: SENDER CHECK) ---
+        # --- FIX 2: SMART NOTIFICATION LOGIC (SENDER FILTER) ---
         is_unread = False
+        chat_lower = chat_h.lower()
+        
         # Admin ko tab dikhega jab aakhri message Agent ne bheja ho
         if role in ["Admin", "Director"]:
-            if '"role": "Agent"' in chat_h and '"read": false' in chat_h.lower():
+            if '"role": "agent"' in chat_lower and '"read": false' in chat_lower:
                 is_unread = True
         # Agent ko tab dikhega jab aakhri message Bank/Admin ne bheja ho
         else:
-            if '"role": "Bank"' in chat_h and '"read": false' in chat_h.lower():
+            if '"role": "bank"' in chat_lower and '"read": false' in chat_lower:
                 is_unread = True
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
+        # Yeh line ensure karti hai ke jump wali sak khulay
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):

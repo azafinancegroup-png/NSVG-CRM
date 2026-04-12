@@ -79,17 +79,18 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         # Display Name logic
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
-
-    # Message Input
+# --- MESSAGE INPUT (FIXED FOR SENDER PROTECTION) ---
     msg_text = st.text_input(f"Skriv til {target_label}...", key=f"chat_in_{sak_id}")
     if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
         if msg_text:
+            # Humne "sender" mein "BANK" ki jagah asli "username" save kiya hai
+            # Taake notification system ko pata chale ke message bhejne wala 'Me' hoon ya 'Koi aur'
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": "BANK" if role in ["Admin", "Director"] else username.upper(),
+                "sender": username.lower(), # <--- Yeh asli username save karega
                 "text": msg_text,
-                "time": get_norway_time(), # <--- Correct Norway Time
-                "read": False # <--- For Notifications
+                "time": get_norway_time(), 
+                "read": False 
             }
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
@@ -560,7 +561,6 @@ elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
     # --- 1. GOOGLE QUOTA PROTECTION (CRITICAL FIX FOR 429 ERROR) ---
-    # Is se Google Sheets par load kam hoga aur system crash nahi karega
     @st.cache_data(ttl=20)
     def safe_data_fetch():
         return df
@@ -568,7 +568,6 @@ elif valg == "📂 Kunde Arkiv":
     current_df = safe_data_fetch()
 
     # --- 2. LINK & URL LOGIC (Dashboard Sync) ---
-    # Dashboard se aane wali ID ko browser ke address bar se pakadne ke liye
     query_params = st.query_params
     url_id = query_params.get("search_query", "")
     
@@ -594,8 +593,7 @@ elif valg == "📂 Kunde Arkiv":
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- 3. VARSEL LOGIC (SENDER PROTECTION) ---
-        # Is se admin ko apna bheja hua varsel nahi dikhega
+        # --- 3. VARSEL LOGIC (SENDER PROTECTION - UPDATED) ---
         is_unread = False
         if '"read": false' in chat_h.lower():
             try:
@@ -603,27 +601,22 @@ elif valg == "📂 Kunde Arkiv":
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1]
-                    if last_msg.get('read') == False:
-                        msg_sender_role = last_msg.get('role', '').lower()
-                        
-                        # Admin (Bank) ko sirf tab varsel dikhe jab Agent ne bheja ho
-                        if role in ["Admin", "Director"] and msg_sender_role == "agent":
-                            is_unread = True
-                        # Agent (Ansatt) ko sirf tab varsel dikhe jab Bank ne bheja ho
-                        elif role not in ["Admin", "Director"] and msg_sender_role == "bank":
-                            is_unread = True
+                    # FIX: Role ki jagah hum 'sender' check kar rahe hain taake apna notification na aaye
+                    last_sender = last_msg.get('sender', '').lower()
+                    
+                    if last_msg.get('read') == False and last_sender != current_user.lower():
+                        is_unread = True
             except:
                 pass
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- 4. AUTO-EXPAND (THE MASTER LINK FIX) ---
-        # Agar URL ya Search se ID match ho jaye to folder khul jaye
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            # Khulne ke baad URL aur Session clear kar dein taake loop na bane
+            # Khulne ke baad URL aur Session clear kar dein
             if expand_me and url_id:
                 st.query_params.clear()
                 st.session_state.search_query = ""

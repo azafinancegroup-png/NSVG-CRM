@@ -4,187 +4,301 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import json
-import pytz
+import smtplib
+from email.mime.text import MIMEText
+import pytz 
 
-# ==========================================
-# 1. GLOBAL UTILITIES (Functions)
-# ==========================================
+# --- GLOBAL SETTINGS ---
 def get_norway_time():
     tz = pytz.timezone('Europe/Oslo')
     return datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
-@st.cache_data
-def get_country_list():
-    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
-    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
-    return base + others
-
-# ==========================================
-# 2. DATABASE ENGINE
-# ==========================================
-def connect_to_sheet(sheet_name):
+# --- 1 & 2. DATABASE UPDATE ENGINE (Stable & Fast) ---
+def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        return client.open("NSVG_CRM_Data").worksheet(sheet_name)
-    except Exception as e:
-        st.error(f"Tilkoblingsfeil: {e}")
-        return None
-
-@st.cache_data(ttl=300)
-def get_data(sheet_name):
-    sh = connect_to_sheet(sheet_name)
-    if sh:
-        try:
-            data = sh.get_all_records()
-            df = pd.DataFrame(data)
-            df.columns = [str(c).strip() for c in df.columns]
-            return df
-        except:
-            return pd.DataFrame()
-    return pd.DataFrame()
-
-def update_sak_in_sheet(sak_id, updated_values_dict):
-    try:
-        sh = connect_to_sheet("MainDB")
-        if sh:
-            data = sh.get_all_records()
-            temp_df = pd.DataFrame(data)
-            if 'ID' in temp_df.columns:
-                matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
-                if matched_rows:
-                    actual_row = matched_rows[0] + 2
-                    for col_name, new_val in updated_values_dict.items():
-                        if col_name in temp_df.columns:
-                            col_idx = temp_df.columns.get_loc(col_name) + 1
-                            sh.update_cell(actual_row, col_idx, str(new_val))
-                    st.cache_data.clear()
-                    return True
+        
+        sheet = client.open("NSVG_CRM_Data").worksheet("MainDB") 
+        data = sheet.get_all_records()
+        temp_df = pd.DataFrame(data)
+        
+        if 'ID' in temp_df.columns:
+            matched_rows = temp_df.index[temp_df['ID'].astype(str) == str(sak_id)].tolist()
+            if matched_rows:
+                actual_row = matched_rows[0] + 2 
+                for col_name, new_val in updated_values_dict.items():
+                    if col_name in temp_df.columns:
+                        col_idx = temp_df.columns.get_loc(col_name) + 1
+                        sheet.update_cell(actual_row, col_idx, str(new_val))
+                return True
         return False
     except Exception as e:
-        st.error(f"Feil: {e}")
+        st.error(f"Database Error: {e}")
         return False
 
-# ==========================================
-# 3. MESSAGING HUB (Maya's Hub Logic)
-# ==========================================
-def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+# --- MAYA'S HUB: THE PROFESSIONAL MESSAGING INTERFACE ---
+def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Agent"):
     st.markdown("---")
-    me_clean = str(username).lower().strip()
+    # Identity: Ansatt ko sirf BANK nazar aaye
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
-    
     st.subheader(f"💬 Meldinger med {target_label}")
+    
+    # Professional Styling
+    st.markdown("""
+        <style>
+        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 10px; border-radius: 10px; margin: 5px; color: black; }
+        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 10px; border-radius: 10px; margin: 5px; text-align: right; color: black; }
+        </style>
+    """, unsafe_allow_html=True)
 
     try:
         messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
     except:
         messages = []
 
-    # UI Bubbles
-    st.markdown("""<style>
-        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 10px; border-radius: 8px; margin: 5px 0; color: black; }
-        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 10px; border-radius: 8px; margin: 5px 0; text-align: right; color: black; }
-    </style>""", unsafe_allow_html=True)
+    # --- SMART LOGIC: Auto-Mark as Read when opened ---
+    has_unread = False
+    for m in messages:
+        if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
+        elif role in ["Admin", "Director"] and m.get('role') == "Agent" and m.get('read') == False:
+            m['read'] = True
+            has_unread = True
 
-    for idx, msg in enumerate(messages):
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
+    # Show History
+    for msg in messages:
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
-        disp_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg.get("sender", "SYSTEM").upper()
-        st.markdown(f'<div class="{div_class}"><b>{disp_name}</b><br>{msg["text"]}<br><small>{msg["time"]}</small></div>', unsafe_allow_html=True)
+        # Display Name logic
+        sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
+        st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
-    m_in = st.text_input("Skriv beskjed...", key=f"ti_{sak_id}")
-    if st.button("Send Melding", key=f"btn_{sak_id}"):
-        if m_in:
-            new_msg = {"role": "Bank" if role in ["Admin", "Director"] else "Agent", "sender": me_clean, "text": m_in, "time": get_norway_time(), "read": False}
+if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
+            
+            # --- THE MAGIC FIX: FORCE LOWERCASE ON SAVE ---
+            save_user = str(username).lower().strip()
+            
+            new_msg = {
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": save_user,  # Hamesha lowercase save hoga
+                "text": full_txt,
+                "time": get_norway_time(), 
+                "read": False 
+            }
             messages.append(new_msg)
-            update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
-            st.rerun()
+            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                st.rerun()
+                
+# --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
+def connect_to_sheet(sheet_name):
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+        # Yeh aapki main spreadsheet file ko open karega
+        return client.open("NSVG_CRM_Data").worksheet(sheet_name)
+    except Exception as e:
+        # Agar connection fail ho toh error show karega
+        st.error(f"Tilkoblingsfeil (Connection Error): {e}")
+        return None
 
-# ==========================================
-# 4. LOGIN & SESSION
-# ==========================================
+def get_data(sheet_name):
+    sh = connect_to_sheet(sheet_name)
+    if sh:
+        try:
+            data = sh.get_all_records()
+            df = pd.DataFrame(data)
+            # Column names se extra spaces khatam karne ke liye
+            df.columns = [str(c).strip() for c in df.columns]
+            return df
+        except Exception as e:
+            st.warning(f"Kunne ikke hente data fra {sheet_name}: {e}")
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+def add_data(sheet_name, row_list):
+    sh = connect_to_sheet(sheet_name)
+    if sh: 
+        try:
+            # Nayi row append karne ke liye
+            sh.append_row(row_list)
+            return True
+        except Exception as e:
+            st.error(f"Feil ved lagring av data: {e}")
+            return False
+    return False
+    
+# --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
+@st.cache_data
+def get_country_list():
+    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
+    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
+    return base + others
+
+# --- 4. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
 
 if not st.session_state['logged_in']:
-    st.title("🛡️ NSVG CRM Login")
-    u = st.text_input("Brukernavn").lower().strip()
-    p = st.text_input("Passord", type="password")
+    st.title("🛡️ NSVG - Sikker Digital Portal")
+    u_input = st.text_input("Brukernavn").lower().strip()
+    p_input = st.text_input("Passord", type="password")
     if st.button("Logg inn"):
-        udf = get_data("Users")
-        if not udf.empty and u in udf['username'].astype(str).values:
-            row = udf[udf['username'].astype(str) == u].iloc[0]
-            if str(row['password']) == p:
-                st.session_state.update({'logged_in': True, 'user_role': row['role'], 'user_id': u})
+        users_df = get_data("Users")
+        if not users_df.empty:
+            match = users_df[(users_df['username'].astype(str).str.lower() == u_input) & (users_df['password'].astype(str) == p_input)]
+            if not match.empty:
+                st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
                 st.rerun()
+            else: 
+                st.error("Feil brukernavn ya passord!")
     st.stop()
 
-# DEFINING GLOBAL VARS AFTER LOGIN
-role = st.session_state.user_role
-current_user = st.session_state.user_id
-main_df = get_data("MainDB")
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
 
-# Sidebar
-menu = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
-if role in ["Admin", "Director"]: menu.append("⚙️ Master Panel")
-valg = st.sidebar.selectbox("Navigasjon", menu)
+if st.session_state.get('logged_in'):
+    role = st.session_state.get('user_role', 'Guest')
+    username = st.session_state.get('user_id', 'Guest')
+    current_user = username
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
 
-# ==========================================
-# 5. DASHBOARD & OTHER SECTIONS
-# ==========================================
-if valg == "📊 Dashbord":
-    st.header(f"Velkommen, {current_user.capitalize()}")
-    if not main_df.empty:
-        # Role-based Filter
-        display_df = main_df if role in ["Admin", "Director"] else main_df[main_df['Saksbehandler'].astype(str).lower() == current_user.lower()]
+import pandas as pd
+try:
+    # Data fetching logic
+    df = get_data("MainDB") 
+    if df is None or df.empty:
+        df = get_data("Kunder")
+except Exception as e:
+    st.error(f"Data loading error: {e}")
+    df = pd.DataFrame()
+
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+if role in ["Admin", "Director"]:
+    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for item in extra:
+        if item not in options:
+            options.append(item)
+
+valg = st.sidebar.selectbox("Hovedmeny", options)
+
+def update_sheet_data_internal(worksheet_name, df_to_save):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+if st.sidebar.button("🔴 Logg ut"):
+    st.session_state.clear()
+    st.rerun()
+
+# =================================================================
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (ERROR-FREE VERSION)
+# =================================================================
+
+def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+    """
+    Yeh function sirf loop (Nummer 8) ke andar se call hoga.
+    Isliye 'sak_id' ka error nahi aaye ga.
+    """
+    st.markdown("---")
+    me_clean = str(username).lower().strip()
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
+    
+    st.subheader(f"💬 Meldinger med {target_label}")
+
+    st.markdown("""
+        <style>
+        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
+        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 12px; border-radius: 10px; margin: 8px 0; text-align: right; color: black; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    try:
+        import json
+        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
+    except:
+        messages = []
+
+    # --- 🔴 NOTIFICATION DOT LOGIC (MARK AS READ) ---
+    has_unread = False
+    for m in messages:
+        m_sender = str(m.get('sender', '')).lower().strip()
+        # Agar unread hai aur sender MEIN nahi hoon, toh mark as read
+        if m.get('read') == False and m_sender != me_clean:
+            m['read'] = True
+            has_unread = True
+
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
+    # --- DISPLAY MESSAGES ---
+    for idx, msg in enumerate(messages):
+        is_bank = msg['role'] == "Bank"
+        div_class = "bank-bubble" if is_bank else "agent-bubble"
+        sender_raw = msg.get("sender", "SYSTEM")
+        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
         
-        # Stats
-        st.metric("Aktive Saker", len(display_df))
-        st.divider()
+        m_col, d_col = st.columns([0.9, 0.1])
+        with m_col:
+            st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        with d_col:
+            if role in ["Admin", "Director"]:
+                if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
+                    messages.pop(idx)
+                    update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+                    st.rerun()
 
-        # Display Saker
-        for i, r in display_df.iterrows():
-            sid = r.get('ID', i)
-            with st.expander(f"📁 {r.get('Hovedsøker', 'Ukjent')} | ID: {sid} | Status: {r.get('Bank_Status', 'Ny')}"):
-                
-                # Info
-                st.write(f"**Lånebeløp:** {r.get('Lånebeløp')} kr")
-                
-                # Messaging
-                display_bank_messaging_hub(sid, r.get('Chat_History', ''), role, current_user, r.get('Saksbehandler', 'Agent'))
+    st.divider()
+    
+    # --- INPUT SECTION (Fixed sak_id scope) ---
+    col_msg, col_file = st.columns([3, 1])
+    # Buttons aur inputs ke liye 'sak_id' function parameter se mil raha hai
+    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
+    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
-                # KONTROLLPANEL (Only for Admin)
-                if role in ["Admin", "Director"]:
-                    st.markdown("---")
-                    st.subheader("🕵️ Admin Kontroll")
-                    n_status = st.selectbox("Oppdater Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått"], key=f"stat_{sid}")
-                    if st.button("Lagre Status", key=f"sav_{sid}"):
-                        update_sak_in_sheet(sid, {"Bank_Status": n_status})
-                        st.rerun()
+    if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
+            
+            new_msg = {
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": me_clean, 
+                "text": full_txt,
+                "time": get_norway_time(), 
+                "read": False 
+            }
+            messages.append(new_msg)
+            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                st.rerun()
 
-elif valg == "➕ Ny Registrering":
-    st.header("Registrer Ny Sak")
-    countries = get_country_list() # NO NAME ERROR HERE
-    with st.form("reg_form"):
-        navn = st.text_input("Navn")
-        belop = st.number_input("Beløp", min_value=0)
-        land = st.selectbox("Land", countries)
-        if st.form_submit_button("Send"):
-            st.success("Registrert!")
 
-elif valg == "📂 Kunde Arkiv":
-    st.header("Kunde Arkiv")
-    search = st.text_input("Søk i arkivet...")
-    if not main_df.empty:
-        filtered = main_df[main_df.astype(str).apply(lambda x: search.lower() in x.str.lower().any(), axis=1)] if search else main_df
-        for i, r in filtered.iterrows():
-            sid = r.get('ID', i)
-            with st.expander(f"🔍 {r.get('Hovedsøker')} (ID: {sid})"):
-                st.write(r)
-                display_bank_messaging_hub(sid, r.get('Chat_History', ''), role, current_user, r.get('Saksbehandler', 'Agent'))
-                
 # --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")

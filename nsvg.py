@@ -725,25 +725,34 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     agents_df = get_data("Agents")
     st.table(agents_df[['username', 'navn', 'stilling', 'status']])
 
-# --- 10. ANSATTE KONTROLL (FULL RE-INTEGRATION + MODIFICATION ENGINE) ---
+# --- 10. ANSATTE KONTROLL (ADVANCED & SECURE VERSION) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
     st.header("👥 Ansatte Oversikt og Kontroll")
     
-    # --- SMART DATA LOADING (To fix Quota 429 Error) ---
-    # Hum function ko yahan define kar rahe hain taake cache apply ho sake
+    # Professional Status Styling Function
+    def get_status_badge(status):
+        colors = {
+            "Mottatt": ("#6c757d", "⚪"),        # Grey
+            "Under Behandling": ("#007bff", "🔵"), # Blue
+            "Godkjent": ("#28a745", "🟢"),         # Green
+            "Avslått": ("#dc3545", "🔴"),          # Red
+            "Utbetalt": ("#ffc107", "🟡")          # Gold/Yellow
+        }
+        color, icon = colors.get(status, ("#000000", "❓"))
+        return f'<span style="background-color:{color}; color:white; padding:4px 10px; border-radius:12px; font-weight:bold; font-size:14px;">{icon} {status}</span>'
+
     @st.cache_data(ttl=60)
     def get_agents_cached():
         return get_data("Agents")
 
     try:
         agents_df = get_agents_cached()
-        main_df = df # Global load
+        main_df = df 
     except Exception as e:
         st.error(f"Kunne ikke hente agents: {e}")
         agents_df = pd.DataFrame()
 
     if not agents_df.empty:
-        # 1. Search Box (Aapka original search logic)
         sok_agent = st.text_input("🔍 Søk etter ansatt (Navn/ID)...", placeholder="Skriv brukernavn eller navn...")
         
         if sok_agent:
@@ -759,13 +768,11 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
             with st.expander(f"👤 {a_navn} (ID: {a_user})"):
                 col1, col2 = st.columns(2)
                 
-                # --- Agent Details (PURANA CODE - 100% Same) ---
                 with col1:
                     st.markdown(f"**Stilling:** `{row.get('stilling', '-')}`")
                     st.markdown(f"**Vakt:** `{row.get('vakt', '-')}`")
                     st.markdown(f"**Nåværende Status:** `{row.get('status', '-')}`")
                 
-                # --- Performance Metrics (PURANA CODE - 100% Same) ---
                 agent_saker = main_df[main_df['Saksbehandler'].astype(str).str.lower() == a_user] if not main_df.empty else pd.DataFrame()
                 
                 with col2:
@@ -780,7 +787,6 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
 
                 st.divider()
                 
-                # --- Actions (Slette, Se Saker, Endre Status - PURANA CODE) ---
                 act1, act2, act3 = st.columns(3)
                 
                 with act1:
@@ -789,63 +795,76 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                             st.subheader(f"Saker for {a_navn}")
                             for idx, s_row in agent_saker.iterrows():
                                 sak_id = s_row.get('ID', idx)
+                                current_st = s_row.get('Bank_Status', 'Mottatt')
+                                
                                 with st.expander(f"📄 Sak: {s_row.get('Hovedsøker', 'Kunde')} (ID: {sak_id})"):
+                                    # Modern Header with Badge
+                                    st.markdown(f"**Status:** {get_status_badge(current_st)}", unsafe_allow_html=True)
+                                    
                                     cols = st.columns(2)
                                     for count, (col_name, col_val) in enumerate(s_row.items()):
-                                        if col_name != 'Mangler': 
+                                        if col_name not in ['Mangler', 'Bank_Status']: 
                                             target_col = cols[0] if count % 2 == 0 else cols[1]
                                             target_col.write(f"**{col_name}:** {col_val}")
 
                                     st.markdown("---")
-                                    st.write("🔧 **Admin Action: Status & Messaging**")
+                                    st.write("🔧 **Admin Action: Status & Provisjon**")
                                     
+                                    # 1. Status Update (Admin/Director Only)
                                     status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-                                    current_bank_st = s_row.get('Bank_Status', 'Mottatt')
-                                    st_idx = status_options.index(current_bank_st) if current_bank_st in status_options else 0
-                                    
+                                    st_idx = status_options.index(current_st) if current_st in status_options else 0
                                     new_bank_st = st.selectbox("Oppdater Sak Status", status_options, index=st_idx, key=f"st_edit_{idx}_{i}")
+                                    
+                                    # 2. Provisjon Engine (Add Admin Provisjon manually if missing)
+                                    admin_prov_val = s_row.get('Admin_Provisjon', 0)
+                                    if pd.isna(admin_prov_val): admin_prov_val = 0
+                                    
+                                    new_admin_p = st.number_input("Total Provisjon fra Bank (kr)", value=float(admin_prov_val), key=f"adm_p_{idx}_{i}")
+                                    
+                                    # Display 10% Share if Approved
+                                    if new_bank_st == "Godkjent":
+                                        ansatt_share = new_admin_p * 0.10
+                                        st.success(f"💎 **Ansatt Provisjon (10%):** {ansatt_share:,.2f} kr")
                                     
                                     mangler_msg_val = s_row.get('Mangler', '')
                                     mangler_msg = st.text_area("Mangler dokumenter / Melding til ansatt", 
                                                                value=str(mangler_msg_val) if str(mangler_msg_val).lower() != 'nan' else "", 
-                                                               placeholder="Skriv her...",
                                                                key=f"msg_edit_{idx}_{i}")
                                     
-                                    if st.button(f"🚀 Lagre & Send Live (ID:{sak_id})", key=f"sv_edit_{idx}_{i}"):
-                                        updates = {"Bank_Status": new_bank_st, "Mangler": mangler_msg}
-                                        with st.spinner("Oppdaterer Google Sheets..."):
+                                    if st.button(f"🚀 Lagre Sak & Send Live", key=f"sv_edit_{idx}_{i}"):
+                                        updates = {
+                                            "Bank_Status": new_bank_st, 
+                                            "Mangler": mangler_msg,
+                                            "Admin_Provisjon": new_admin_p
+                                        }
+                                        with st.spinner("Oppdaterer..."):
                                             success = update_sak_in_sheet(sak_id, updates)
                                             if success:
-                                                st.success(f"✅ Sak {sak_id} er oppdatert!")
+                                                st.success(f"✅ Sak {sak_id} oppdatert!")
                                                 st.rerun()
                         else:
                             st.warning("Ingen data funnet.")
 
                 with act2:
-                    status_options = ["Aktiv", "Inaktiv", "Permisjon"]
+                    status_options_ag = ["Aktiv", "Inaktiv", "Permisjon"]
                     current_s = row.get('status', 'Aktiv')
-                    try: idx_s = status_options.index(current_s)
-                    except: idx_s = 0
-                    
-                    n_st = st.selectbox("Endre Agent Status", status_options, index=idx_s, key=f"st_sel_{i}")
+                    idx_s = status_options_ag.index(current_s) if current_s in status_options_ag else 0
+                    n_st = st.selectbox("Endre Agent Status", status_options_ag, index=idx_s, key=f"st_sel_{i}")
                     if st.button("💾 Oppdater Agent", key=f"upd_btn_{i}"):
                         st.success(f"Agent status oppdatert til {n_st}")
 
                 with act3:
                     if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
                         if role == "Admin":
-                            with st.spinner(f"Sletter {a_user}..."):
-                                try:
-                                    success = delete_user_completely(a_user)
-                                    if success:
-                                        st.success(f"✅ Agent {a_user} er slettet!")
-                                        st.rerun()
-                                except:
-                                    st.error("Kunne ikke slette. Sjekk om funksjonen 'delete_user_completely' finnes.")
+                            with st.spinner(f"Sletter..."):
+                                success = delete_user_completely(a_user)
+                                if success:
+                                    st.success(f"✅ Agent {a_user} slettet!")
+                                    st.rerun()
                         else:
-                            st.warning("Kun Admin kan slette ansatte.")
+                            st.warning("Kun Admin kan slette.")
     else:
-        st.warning("Ingen ansatte funnet i databasen.")
+        st.warning("Ingen ansatte funnet.")
         
 # --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---
 elif valg == "📇 Kontakter":

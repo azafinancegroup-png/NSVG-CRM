@@ -559,14 +559,16 @@ elif valg == "➕ Ny Registrering":
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # --- GOOGLE QUOTA PROTECTION (Error 429 Fix) ---
-    @st.cache_data(ttl=15)
+    # --- 1. GOOGLE QUOTA PROTECTION (CRITICAL FIX FOR 429 ERROR) ---
+    # Is se Google Sheets par load kam hoga aur system crash nahi karega
+    @st.cache_data(ttl=20)
     def safe_data_fetch():
         return df
     
     current_df = safe_data_fetch()
 
-    # --- 1. LINK & URL LOGIC (Dashboard se Link ka masla hal) ---
+    # --- 2. LINK & URL LOGIC (Dashboard Sync) ---
+    # Dashboard se aane wali ID ko browser ke address bar se pakadne ke liye
     query_params = st.query_params
     url_id = query_params.get("search_query", "")
     
@@ -575,10 +577,10 @@ elif valg == "📂 Kunde Arkiv":
 
     jump_id = st.session_state.get('search_query', "")
 
-    # Filtering logic (Original)
+    # Filtering logic (100% Original)
     view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # Search Box
+    # Search Box (Auto-fills if coming from Dashboard)
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
     if sok:
@@ -592,7 +594,7 @@ elif valg == "📂 Kunde Arkiv":
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- 2. VARSEL LOGIC (SELF-NOTIFICATION FIX) ---
+        # --- 3. VARSEL LOGIC (SENDER PROTECTION) ---
         # Is se admin ko apna bheja hua varsel nahi dikhega
         is_unread = False
         if '"read": false' in chat_h.lower():
@@ -615,11 +617,13 @@ elif valg == "📂 Kunde Arkiv":
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
-        # --- 3. AUTO-EXPAND (THE LINK FIX) ---
+        # --- 4. AUTO-EXPAND (THE MASTER LINK FIX) ---
+        # Agar URL ya Search se ID match ho jaye to folder khul jaye
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
+            # Khulne ke baad URL aur Session clear kar dein taake loop na bane
             if expand_me and url_id:
                 st.query_params.clear()
                 st.session_state.search_query = ""
@@ -627,7 +631,7 @@ elif valg == "📂 Kunde Arkiv":
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (100% Aapka Original Look) ---
+                # --- A: VIEW MODE (Aapka 100% Original Look) ---
                 st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
                 v1, v2, v3 = st.columns(3)
                 with v1:

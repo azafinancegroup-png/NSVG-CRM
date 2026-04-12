@@ -79,24 +79,23 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         # Display Name logic
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+
 # --- MESSAGE INPUT (ULTIMATE SENDER FIX) ---
     msg_text = st.text_input(f"Skriv til {target_label}...", key=f"chat_in_{sak_id}")
     if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
         if msg_text:
-            # Humne username ko lowercase kiya taake comparison mein masla na aaye
-            # 'username' wahi variable hai jo aapke function ke def mein aa raha hai
-            s_name = str(username).lower() if username else "ukjent"
+            # Hum hamesha login karne wale ka USERNAME save karenge
+            # Taake system ko pata ho ke ye specific insaan ne bheja hai
+            my_username = str(current_user).lower().strip()
             
             new_msg = {
-                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": s_name,  # <--- Yeh sab se qeemti line hai
+                "role": role, # Admin/Director/Agent
+                "sender": my_username, # <--- 'bank' ya 'amina'
                 "text": msg_text,
                 "time": get_norway_time(), 
                 "read": False 
             }
             messages.append(new_msg)
-            
-            # Database update logic
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
                 
@@ -223,11 +222,9 @@ if st.sidebar.button("🔴 Logg ut"):
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
-    # Professional Labeling: Ansatt ko sirf "BANK" dikhega
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
 
-    # Professional Chat Styling (Updated for Delete button alignment)
     st.markdown("""
         <style>
         .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
@@ -236,6 +233,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     """, unsafe_allow_html=True)
 
     try:
+        import json
         messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
     except:
         messages = []
@@ -243,39 +241,39 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     # --- SMART LOGIC: Auto-Mark as Read ---
     has_unread = False
     for m in messages:
-        if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
-            m['read'] = True
-            has_unread = True
-        elif role in ["Admin", "Director"] and m.get('role') == "Agent" and m.get('read') == False:
+        # Check if message is unread and not sent by current user
+        m_sender = str(m.get('sender', '')).lower().strip()
+        curr_me = str(username).lower().strip()
+        
+        if m.get('read') == False and m_sender != curr_me:
             m['read'] = True
             has_unread = True
 
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # --- DISPLAY MESSAGES WITH DELETE CONTROL ---
+    # --- DISPLAY MESSAGES ---
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
-        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         
-        # Grid for Message + Delete Button
+        # Display logic
+        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg.get("sender", "SYSTEM")
+        
         m_col, d_col = st.columns([0.9, 0.1])
-        
         with m_col:
             st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
         
         with d_col:
-            # SIRF ADMIN SAB KUCH DELETE KAR SAKTA HAI
             if role in ["Admin", "Director"]:
-                if st.button("🗑️", key=f"del_{sak_id}_{idx}", help="Slett denne meldingen permanent"):
+                if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
                     messages.pop(idx)
                     if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                         st.rerun()
 
     st.divider()
 
-    # Input Section (100% Same)
+    # Input Section
     col_msg, col_file = st.columns([3, 1])
     msg_input = col_msg.text_input(f"Skriv melding til {target_label}...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
@@ -285,9 +283,12 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             full_txt = msg_input
             if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
             
+            # IDENTITY FIX: Save exact lowercase username as sender
+            save_user = str(username).lower().strip()
+            
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": "BANK" if role in ["Admin", "Director"] else username.upper(),
+                "sender": save_user,  # <--- CRITICAL FIX: No more uppercase "BANK" here
                 "text": full_txt,
                 "time": get_norway_time(), 
                 "read": False 
@@ -560,18 +561,19 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
+
 # --- 8. KUNDE ARKIV (PRO UPGRADE: FULL AUTOMATION & SENDER FIX) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # --- 1. GOOGLE QUOTA PROTECTION (CRITICAL FIX FOR 429 ERROR) ---
-    @st.cache_data(ttl=20)
+    # 1. GOOGLE QUOTA PROTECTION (Fixed to 60s to prevent 429 error)
+    @st.cache_data(ttl=60)
     def safe_data_fetch():
         return df
     
     current_df = safe_data_fetch()
 
-    # --- 2. LINK & URL LOGIC (Dashboard Sync) ---
+    # 2. URL PARAMETERS LOGIC
     query_params = st.query_params
     url_id = query_params.get("search_query", "")
     
@@ -580,24 +582,25 @@ elif valg == "📂 Kunde Arkiv":
 
     jump_id = st.session_state.get('search_query', "")
 
-    # Filtering logic (100% Original)
+    # 3. FILTERING BY USER ROLE
     view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # Search Box (Auto-fills if coming from Dashboard)
-    sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...", key="arkiv_sok_main")
+    # 4. SEARCH INTERFACE
+    sok = st.text_input("🔍 Search customer...", value=jump_id, placeholder="Name or ID...", key="arkiv_sok_main")
     
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
-    st.info(f"Antall saker funnet: {len(view_df)}")
+    st.info(f"Records found: {len(view_df)}")
 
+    # --- MAIN LOOP FOR CUSTOMERS ---
     for i, r in view_df.iterrows():
         sak_id = str(r.get('ID', i))
         mangler_msg = r.get('Mangler', '') 
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- 3. VARSEL LOGIC (SENDER PROTECTION - FIXED) ---
+        # 5. NOTIFICATION LOGIC (STRICT SENDER FILTER)
         is_unread = False
         if '"read": false' in chat_h.lower():
             try:
@@ -605,86 +608,86 @@ elif valg == "📂 Kunde Arkiv":
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1]
-                    # FIX: Hum check kar rahe hain ke aakhri message kisne bheja
-                    last_sender = str(last_msg.get('sender', '')).lower()
-                    me = str(current_user).lower()
+                    # Logic: Notification sirf tab jab message unread ho AUR bhejne wala MEIN NA HOON
+                    msg_sender = str(last_msg.get('sender', '')).lower().strip()
+                    me_user = str(current_user).lower().strip()
                     
-                    # Agar unread hai AUR bhejne wala 'Main' nahi hoon, sirf tab dot dikhao
-                    if last_msg.get('read') == False and last_sender != me:
+                    if last_msg.get('read') == False and msg_sender != me_user:
                         is_unread = True
             except:
                 pass
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
-        # --- 4. AUTO-EXPAND (THE MASTER LINK FIX) ---
+        # 6. AUTO-EXPAND LOGIC
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            # Khulne ke baad URL aur Session clear kar dein taake loop na bane
             if expand_me and url_id:
                 st.query_params.clear()
                 st.session_state.search_query = ""
 
-            show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
+            show_edit = st.checkbox(f"🛠️ Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
-                # --- A: VIEW MODE (Aapka 100% Original Look) ---
-                st.markdown(f"### 📄 Sak Detaljer (Fil-visning)")
+                # --- VIEW MODE ---
+                st.markdown(f"### 📄 Case Details")
                 v1, v2, v3 = st.columns(3)
                 with v1:
-                    st.write(f"**Navn:** {r.get('Navn', '-')}")
+                    st.write(f"**Name:** {r.get('Navn', '-')}")
                     st.write(f"**Fnr:** {r.get('Fnr', '-')}")
-                    st.write(f"**Epost:** {r.get('Epost', '-')}")
-                    st.write(f"**Tlf:** {r.get('Tlf', '-')}")
+                    st.write(f"**Email:** {r.get('Epost', '-')}")
+                    st.write(f"**Phone:** {r.get('Tlf', '-')}")
                 with v2:
-                    st.write(f"**Produkt:** {r.get('Produkt', '-')}")
-                    st.write(f"**Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
-                    st.write(f"**Lønn:** {r.get('Lønn', '0')} kr")
-                    st.write(f"**EK:** {r.get('EK', '0')} kr")
+                    st.write(f"**Product:** {r.get('Produkt', '-')}")
+                    st.write(f"**Amount:** {r.get('Lånebeløp', '0')} kr")
+                    st.write(f"**Salary:** {r.get('Lønn', '0')} kr")
+                    st.write(f"**Equity:** {r.get('EK', '0')} kr")
                 with v3:
-                    st.write(f"**Gjeld:** {r.get('Gjeld', '0')} kr")
-                    st.write(f"**Sivilstatus:** {r.get('Sivilstatus', '-')}")
-                    st.write(f"**Dato:** {r.get('Dato', '-')}")
+                    st.write(f"**Debt:** {r.get('Gjeld', '0')} kr")
+                    st.write(f"**Status:** {r.get('Sivilstatus', '-')}")
+                    st.write(f"**Date:** {r.get('Dato', '-')}")
 
                 st.divider()
                 if r.get('Medsøker_Navn'):
-                    st.markdown("**👥 Medsøker Info:**")
+                    st.markdown("**👥 Co-applicant Info:**")
                     mv1, mv2 = st.columns(2)
-                    mv1.write(f"**Navn:** {r.get('Medsøker_Navn')}")
+                    mv1.write(f"**Name:** {r.get('Medsøker_Navn')}")
                     mv2.write(f"**Fnr:** {r.get('Medsøker_Fnr')}")
                 
-                st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
+                st.write(f"**Notes:** {r.get('Notater', 'No notes')}")
+                
+                # 💬 Calling the Messaging Hub
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
-                # --- B: MODIFICATION MODE (100% Aapka Original Form) ---
-                st.subheader("🛠️ Full Redigeringsmodus")
+                # --- EDIT MODE ---
+                st.subheader("🛠️ Full Edit Mode")
                 with st.form(key=f"edit_form_final_{sak_id}"):
-                    st.markdown("#### 👤 Hovedsøker Detaljer")
+                    st.markdown("#### 👤 Primary Applicant")
                     h1, h2 = st.columns(2)
-                    up_navn = h1.text_input("Fullt Navn", value=str(r.get('Navn', '')))
-                    up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
-                    up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
-                    up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
+                    up_navn = h1.text_input("Full Name", value=str(r.get('Navn', '')))
+                    up_fnr = h1.text_input("FNR", value=str(r.get('Fnr', '')))
+                    up_epost = h2.text_input("Email", value=str(r.get('Epost', '')))
+                    up_tlf = h2.text_input("Phone", value=str(r.get('Tlf', '')))
                     
-                    st.markdown("#### 💼 Økonomi")
+                    st.markdown("#### 💼 Economy")
                     a1, a2 = st.columns(2)
-                    up_lonn = a1.text_input("Lønn (kr)", value=str(r.get('Lønn', '0')))
-                    up_gjeld = a1.text_input("Gjeld (kr)", value=str(r.get('Gjeld', '0')))
-                    up_belop = a2.text_input("Lånebeløp (kr)", value=str(r.get('Lånebeløp', '0')))
-                    up_ek = a2.text_input("EK (kr)", value=str(r.get('EK', '0')))
+                    up_lonn = a1.text_input("Salary (kr)", value=str(r.get('Lønn', '0')))
+                    up_gjeld = a1.text_input("Debt (kr)", value=str(r.get('Gjeld', '0')))
+                    up_belop = a2.text_input("Loan Amount (kr)", value=str(r.get('Lånebeløp', '0')))
+                    up_ek = a2.text_input("Equity (kr)", value=str(r.get('EK', '0')))
 
-                    st.markdown("#### 👥 Medsøker")
+                    st.markdown("#### 👥 Co-applicant")
                     m1, m2 = st.columns(2)
-                    up_m_navn = m1.text_input("Medsøker Navn", value=str(r.get('Medsøker_Navn', '')))
-                    up_m_fnr = m1.text_input("Medsøker Fnr", value=str(r.get('Medsøker_Fnr', '')))
-                    up_m_lonn = m2.text_input("Medsøker Lønn", value=str(r.get('Medsøker_Lønn', '0')))
-                    up_m_tlf = m2.text_input("Medsøker Tlf", value=str(r.get('Medsøker_Tlf', '')))
+                    up_m_navn = m1.text_input("Co-app Name", value=str(r.get('Medsøker_Navn', '')))
+                    up_m_fnr = m1.text_input("Co-app FNR", value=str(r.get('Medsøker_Fnr', '')))
+                    up_m_lonn = m2.text_input("Co-app Salary", value=str(r.get('Medsøker_Lønn', '0')))
+                    up_m_tlf = m2.text_input("Co-app Phone", value=str(r.get('Medsøker_Tlf', '')))
 
-                    st.markdown("#### ⚙️ Status & Notater")
-                    up_mangler = st.text_area("Admin Melding (Mangler)", value=str(mangler_msg))
+                    st.markdown("#### ⚙️ Status & Admin")
+                    up_mangler = st.text_area("Admin Message (Mangler)", value=str(mangler_msg))
                     
                     current_status = r.get('Bank_Status', 'Mottatt')
                     status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
@@ -693,10 +696,10 @@ elif valg == "📂 Kunde Arkiv":
                     except:
                         status_idx = 0
 
-                    up_st = st.selectbox("Bank Status", status_options, index=status_idx)
-                    up_notat = st.text_area("Notater", value=str(r.get('Notater', '')))
+                    up_st = st.selectbox("Case Status", status_options, index=status_idx)
+                    up_notat = st.text_area("Internal Notes", value=str(r.get('Notater', '')))
 
-                    if st.form_submit_button("💾 Lagre Alle Endringer"):
+                    if st.form_submit_button("💾 Save Changes"):
                         final_data = {
                             "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
                             "Lønn": up_lonn, "Gjeld": up_gjeld, "Lånebeløp": up_belop, "EK": up_ek,
@@ -706,7 +709,7 @@ elif valg == "📂 Kunde Arkiv":
                         }
                         if update_sak_in_sheet(sak_id, final_data):
                             st.cache_data.clear() 
-                            st.success("✅ Sak oppdatert!")
+                            st.success("✅ Case updated!")
                             st.rerun()
                             
 # --- 9. MASTER KONTROLLPANEL ---

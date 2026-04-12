@@ -80,18 +80,18 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
-# --- MESSAGE INPUT (ULTIMATE SENDER FIX) ---
-    msg_text = st.text_input(f"Skriv til {target_label}...", key=f"chat_in_{sak_id}")
-    if st.button("🚀 Send Melding", key=f"btn_{sak_id}"):
-        if msg_text:
-            # Hum hamesha login karne wale ka USERNAME save karenge
-            # Taake system ko pata ho ke ye specific insaan ne bheja hai
-            my_username = str(current_user).lower().strip()
+if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
+            
+            # --- THE MAGIC FIX: FORCE LOWERCASE ON SAVE ---
+            save_user = str(username).lower().strip()
             
             new_msg = {
-                "role": role, # Admin/Director/Agent
-                "sender": my_username, # <--- 'bank' ya 'amina'
-                "text": msg_text,
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": save_user,  # Hamesha lowercase save hoga
+                "text": full_txt,
                 "time": get_norway_time(), 
                 "read": False 
             }
@@ -222,6 +222,9 @@ if st.sidebar.button("🔴 Logg ut"):
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
+    # Clean Identity check for comparison
+    me_clean = str(username).lower().strip()
+    
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
 
@@ -238,14 +241,13 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # --- SMART LOGIC: Auto-Mark as Read ---
+    # --- SMART LOGIC: Auto-Mark as Read (FIXED IDENTITY CHECK) ---
     has_unread = False
     for m in messages:
-        # Check if message is unread and not sent by current user
         m_sender = str(m.get('sender', '')).lower().strip()
-        curr_me = str(username).lower().strip()
         
-        if m.get('read') == False and m_sender != curr_me:
+        # Agar message unread hai AUR bhejne wala MEIN nahi hoon
+        if m.get('read') == False and m_sender != me_clean:
             m['read'] = True
             has_unread = True
 
@@ -258,7 +260,8 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
         div_class = "bank-bubble" if is_bank else "agent-bubble"
         
         # Display logic
-        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else msg.get("sender", "SYSTEM")
+        sender_raw = msg.get("sender", "SYSTEM")
+        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
         
         m_col, d_col = st.columns([0.9, 0.1])
         with m_col:
@@ -283,12 +286,12 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             full_txt = msg_input
             if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
             
-            # IDENTITY FIX: Save exact lowercase username as sender
-            save_user = str(username).lower().strip()
+            # Identity logic for saving
+            save_user = me_clean
             
             new_msg = {
                 "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": save_user,  # <--- CRITICAL FIX: No more uppercase "BANK" here
+                "sender": save_user, 
                 "text": full_txt,
                 "time": get_norway_time(), 
                 "read": False 

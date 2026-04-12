@@ -219,8 +219,9 @@ if not st.session_state['logged_in']:
 
 if st.session_state.get('logged_in'):
     role = st.session_state.get('user_role', 'Guest')
-    username = st.session_state.get('user_id', 'Guest')
-    current_user = username
+    # FIX: Pehle check karein ke 'navn' (Name) hai, warna user_id dikhaye
+    username = st.session_state.get('navn') or st.session_state.get('user_id') or "Bruker"
+    current_user = st.session_state.get('user_id', 'Guest')
 else:
     role = "Guest"
     username = "Guest"
@@ -258,44 +259,7 @@ else:
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
-# --- 📊 DYNAMIC DASHBOARD LOGIC (PROVISJON FIX) ---
-if valg == "📊 Dashbord":
-    st.title(f"Velkommen, {st.session_state.get('navn', 'Bruker')}! 👋")
-    
-    if not df.empty:
-        # Filter logic: Admin/Director sab dekh sakte hain, Ansatte sirf apna data
-        if role not in ["Admin", "Director"]:
-            display_df = df[df['Ansatt_ID'] == st.session_state.get('user_id')]
-        else:
-            display_df = df
-
-        # --- NEW DYNAMIC PROVISJON SYSTEM ---
-        # 1. Check if Provisjon_Prosent column exists, if not create with 0
-        if 'Provisjon_Prosent' not in display_df.columns:
-            display_df['Provisjon_Prosent'] = 0
-            
-        # 2. Convert to numbers safely (errors='coerce' means bad data becomes 0)
-        omsetning_raw = pd.to_numeric(display_df['Lånebeløp'], errors='coerce').fillna(0)
-        prosent_raw = pd.to_numeric(display_df['Provisjon_Prosent'], errors='coerce').fillna(0)
-        
-        # 3. Calculate: (Amount * Percent) / 100
-        total_omsetning = omsetning_raw.sum()
-        total_provisjon = (omsetning_raw * prosent_raw / 100).sum()
-
-        # Dashboard Tiles
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Omsetning", f"{total_omsetning:,.0f} kr")
-        with col2:
-            st.metric("Din Totale Provisjon", f"{total_provisjon:,.0f} kr") # Ab ye % ke mutabiq hai
-        with col3:
-            st.metric("Antall Saker", len(display_df))
-            
-    else:
-        st.info("Ingen data tilgjengelig for dashbordet.")
-
-# --- ORIGINAL FUNCTIONS (RESTORED & INTACT) ---
-
+# --- INTERNAL FUNCTIONS ---
 def update_sheet_data_internal(worksheet_name, df_to_save):
     try:
         creds_dict = st.secrets["gcp_service_account"]
@@ -317,9 +281,17 @@ if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB ---
+# =================================================================
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (STABLE VERSION)
+# =================================================================
+
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+    """
+    Yeh function loop ke andar se call hota hai.
+    Purana saara logic (read/unread, bubbles, styling) intact hai.
+    """
     st.markdown("---")
+    # FIX: 'username' ko handle karna taake messaging mein error na aaye
     me_clean = str(username).lower().strip()
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     
@@ -338,6 +310,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
+    # --- 🔴 NOTIFICATION LOGIC ---
     has_unread = False
     for m in messages:
         m_sender = str(m.get('sender', '')).lower().strip()
@@ -348,15 +321,16 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
+    # --- DISPLAY MESSAGES ---
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
         sender_raw = msg.get("sender", "SYSTEM")
-        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
+        display_name_msg = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
         
         m_col, d_col = st.columns([0.9, 0.1])
         with m_col:
-            st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="{div_class}"><b>{display_name_msg}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
         with d_col:
             if role in ["Admin", "Director"]:
                 if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
@@ -366,6 +340,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
     st.divider()
     
+    # --- INPUT SECTION ---
     col_msg, col_file = st.columns([3, 1])
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
@@ -385,17 +360,20 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-                
-# --- 6. DASHBORD (FINAL UPDATED VERSION WITH FIXED NOTIFICATIONS) ---
+
+
+# --- 6. DASHBORD (FINAL UPDATED VERSION WITH FIXED NOTIFICATIONS & DYNAMIC PROVISJON) ---
 if valg == "📊 Dashbord":
+    # Display name using capitalize for clean look
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
         # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak
         if role in ["Admin", "Director"]:
-            view_data = df
+            view_data = df.copy()
         else:
-            view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
+            # Ansatt filter based on Saksbehandler column
+            view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()].copy()
         
         # --- FIXED NOTIFICATION LOGIC (Ab double varsel nahi ayega) ---
         unread_saker = []
@@ -409,6 +387,7 @@ if valg == "📊 Dashbord":
                 continue
                 
             try:
+                import json
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1] # Sirf aakhri message check karen
@@ -430,20 +409,31 @@ if valg == "📊 Dashbord":
                     st.session_state.active_tab = "📂 Kunde Arkiv" 
                     st.rerun()
 
-        # --- METRICS SECTION ---
+        # --- METRICS SECTION (UPDATED WITH DYNAMIC % LOGIC) ---
         c1, c2, c3 = st.columns(3)
         
-        loan_col = 'Lånebeløp' if 'Lånebeløp' in view_data.columns else view_data.columns[0] 
-        total_v = pd.to_numeric(view_data[loan_col], errors='coerce').sum()
+        # Clean data for calculations
+        loan_vals = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').fillna(0)
+        
+        # Check if Provisjon_Prosent exists, otherwise default to 0
+        if 'Provisjon_Prosent' in view_data.columns:
+            percent_vals = pd.to_numeric(view_data['Provisjon_Prosent'], errors='coerce').fillna(0)
+        else:
+            percent_vals = 0 # Default if column missing
+            
+        total_v = loan_vals.sum()
+        # Dynamic calculation: (Beløp * Prosent) / 100 for each row
+        total_p = (loan_vals * percent_vals / 100).sum()
         
         c1.metric("Antall Saker", len(view_data))
         c2.metric("Total Volum (kr)", f"{total_v:,.0f} kr")
-        c3.metric("Provisjon (1%)", f"{total_v * 0.01:,.0f} kr")
+        c3.metric("Din Provisjon", f"{total_p:,.0f} kr")
         
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
         # --- SAKER LIST SECTION ---
+        # Showing last 15 entries
         for i, r in view_data.tail(15).iterrows():
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
@@ -453,15 +443,11 @@ if valg == "📊 Dashbord":
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
 
-            # Status Icons
-            if b_status == "Mottatt":
-                st_icon = "🔵"
-            elif b_status == "Under Behandling":
-                st_icon = "🟡"
-            elif b_status == "Godkjent":
-                st_icon = "🟢"
-            else:
-                st_icon = "🔴"
+            # Status Icons logic
+            st_icon = "🔴"
+            if b_status == "Mottatt": st_icon = "🔵"
+            elif b_status == "Under Behandling": st_icon = "🟡"
+            elif b_status == "Godkjent": st_icon = "🟢"
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
                 
@@ -474,6 +460,7 @@ if valg == "📊 Dashbord":
                 st.markdown("### 📄 Saksinformasjon")
                 
                 inf_c1, inf_c2 = st.columns(2)
+                # Show all columns except internal ones
                 for count, (col_name, value) in enumerate(r.items()):
                     if col_name in ['Mangler', 'Chat_History']: 
                         continue

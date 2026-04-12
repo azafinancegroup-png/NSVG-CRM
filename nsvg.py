@@ -497,25 +497,33 @@ elif valg == "➕ Ny Registrering":
         notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
-        # --- 🛡️ SECURITY STATUS LOGIC ---
-        # Sirf Admin/Director status dekh sakte ya badal sakte hain
-        if role in ["Admin", "Director"]:
-            status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-            final_status = st.selectbox("Sak Status (Kun for Admin/Director)", status_options, index=0)
+        # --- 🛡️ DOUBLE-LOCK SECURITY STATUS LOGIC ---
+        if 'role' in locals() or 'role' in globals():
+            user_role = role.strip().capitalize()
         else:
-            final_status = "Mottatt" # Ansatt ke liye automatic
+            user_role = "Ansatt"
+
+        if user_role in ["Admin", "Director"]:
+            status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+            final_status = st.selectbox("Sak Status (KUN ADMIN/DIRECTOR)", status_options, index=0)
+        else:
+            final_status = "Mottatt"
+            st.markdown("---")
+            st.info("ℹ️ Status settes automatisk til: **Mottatt**")
 
         if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
+                # Calculations for Sheet columns
                 tot_ek = h_ek + m_ek
                 tot_gjeld = h_gjeld + m_gjeld
                 
+                # --- NEW: Initial Banking Chat Message ---
                 initial_chat = json.dumps([{
                     "role": "Bank",
                     "sender": "BANK CENTRAL",
-                    "text": "Velkommen! Vi har mottatt din søknad og vil behandle den fortløpende.",
+                    "text": "Velkommen! Vi har mottatt din søknad og vil behandle den fortløpende. Sjekk denne chatten for oppdateringer.",
                     "time": datetime.now().strftime("%d-%m-%Y %H:%M")
                 }])
                 
@@ -550,15 +558,16 @@ elif valg == "➕ Ny Registrering":
                     notater,
                     f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
                     current_user, 
-                    final_status, # Yahan ab dynamic status jayegi
-                    "", 
-                    initial_chat 
+                    final_status, # Yahan hardcoded "Mottatt" ki jagah security variable hai
+                    "", # Mangler column
+                    initial_chat # Maya: New Chat_History column data
                 ]
                 
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert med status: {final_status}!")
                 st.balloons()
-                
+
+
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     

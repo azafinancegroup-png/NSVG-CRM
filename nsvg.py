@@ -148,14 +148,68 @@ if not st.session_state['logged_in']:
                 st.error("Feil brukernavn ya passord!")
     st.stop()
 
+import streamlit as st
+import pandas as pd
+import json
+
+# --- 1. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
+if st.session_state.get('logged_in'):
+    role = st.session_state.get('user_role', 'Guest')
+    username = st.session_state.get('user_id', 'Guest')
+    current_user = username
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
+
+try:
+    # Data fetching logic
+    df = get_data("MainDB") 
+    if df is None or df.empty:
+        df = get_data("Kunder")
+except Exception as e:
+    st.error(f"Data loading error: {e}")
+    df = pd.DataFrame()
+
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+if role in ["Admin", "Director"]:
+    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for item in extra:
+        if item not in options:
+            options.append(item)
+
+# YEH LINE LAZMI HAI TAAKE NameError NA AAYE
+valg = st.sidebar.selectbox("Hovedmeny", options)
+
+def update_sheet_data_internal(worksheet_name, df_to_save):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+if st.sidebar.button("🔴 Logg ut"):
+    st.session_state.clear()
+    st.rerun()
+
 # =================================================================
-# 🏦 NUMMER 5: FINAL PROFESSIONAL BANKING MESSAGING HUB (FIXED)
+# 🏦 NUMMER 5: FINAL PROFESSIONAL BANKING MESSAGING HUB
 # =================================================================
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     """
-    Yeh function sirf loop ke andar se call hota hai.
-    Saari logic iske andar band hai taake sak_id ka error na aaye.
+    Yeh function loop ke andar call hoga. Iska apna scope hai.
     """
     st.markdown("---")
     me_clean = str(username).lower().strip()
@@ -171,12 +225,11 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     """, unsafe_allow_html=True)
 
     try:
-        import json
         messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
     except:
         messages = []
 
-    # --- 🔴 AUTO-READ LOGIC ---
+    # --- 🔴 NOTIFICATION LOGIC ---
     has_unread = False
     for m in messages:
         m_sender = str(m.get('sender', '')).lower().strip()
@@ -206,7 +259,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
     st.divider()
     
-    # --- INPUT SECTION (Function ke andar hona lazmi hai) ---
+    # --- INPUT SECTION ---
     col_msg, col_file = st.columns([3, 1])
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
@@ -226,7 +279,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-
+                
 # --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")

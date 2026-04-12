@@ -1109,58 +1109,79 @@ elif valg == "📇 Kontakter":
 
 
 elif valg == "📜 Dokumentmaler":
-    st.header("📜 Bankens Retningslinjer & Dokumentasjonskrav")
-    st.info("Her finner du komplette krav for alle lånetyper. Vennligst sjekk at alle dokumenter er klare før innsending.")
+    st.header("🏦 NSVG – Retningslinjer & Dokumentasjonsportal")
+    st.caption("Nordic Secure Vault Group | Offisiell Saksbehandlingsportal")
+    st.markdown("---")
+    
+    st.info("💡 **Viktig Informasjon:** For å sikre rask utbetaling fra banken, må alle vedlegg være i PDF-format. Screenshots eller uklare bilder blir automatisk avvist.")
 
-    # --- TAB SYSTEM FOR MODERN LOOK ---
-    tab1, tab2, tab3 = st.tabs(["🏠 Privatmarked", "🏢 Næringslån", "⚖️ Generelle Krav"])
+    # --- MODERN TABS SYSTEM FOR NSVG ---
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🏠 Boliglån & Refinans", 
+        "🏢 Næringslån (Bedrift)", 
+        "🛡️ KYC & Compliance",
+        "✅ NSVG Sjekkliste"
+    ])
 
     with tab1:
-        st.subheader("Boliglån & Refinansiering")
-        st.markdown("""
-        For en rask behandling av boliglånsøknader, må følgende lastes opp:
-        
-        * **Inntekt:** Siste 3 måneders lønnsslipper.
-        * **Skatt:** Siste tilgjengelige skattemelding (Fullstendig versjon).
-        * **Verdivurdering:** Ny e-takst (ikke eldre enn 6 måneder).
-        * **Gjeld:** Ved refinansiering, last opp nøyaktig oversikt over alle kredittkort og smålån fra Gjeldsregisteret.
-        """)
-        
-        if st.checkbox("Vis Sjekkliste for Boliglån"):
-            st.write("✅ **Sjekkliste:**")
-            st.write("- [ ] Er BankID validert?")
-            st.write("- [ ] Er medlåntaker lagt til (hvis aktuelt)?")
-            st.write("- [ ] Er alle felter i søknaden fylt ut?")
+        st.subheader("Krav til Boliglån & Refinansiering")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **Inntekt & Skatt:**
+            * 📄 **Siste 3 lønnslipper:** Må vise år-til-dato (YTD) info.
+            * 📄 **Skattemelding:** Siste tilgjengelige (alle sider).
+            * 📄 **Lønnskonto:** Utskrift som bekrefter lønnsinnskudd.
+            """)
+        with col2:
+            st.markdown("""
+            **Eiendom & Sikkerhet:**
+            * 🏠 **E-takst:** Verdivurdering (maks 6 måneder gammel).
+            * 💳 **Gjeldsregisteret:** Fullstendig utskrift av usikret gjeld.
+            * 📑 **Dokumentasjon på etakst:** Ved refinansiering er dette obligatorisk.
+            """)
 
     with tab2:
-        st.subheader("Næringslån / Bedriftslån")
-        st.warning("Næringslån krever dypere finansiell analyse.")
+        st.subheader("🏢 Næringslån & Bedriftsfinansiering")
+        st.error("NSVG Standard: Krav for bedriftskunder")
         st.markdown("""
-        **Nødvendig dokumentasjon for bedrifter:**
+        For at banken skal vurdere næringslån, må følgende foreligge:
         
-        1.  **Regnskap:** Fullstendig regnskap for de siste **2 årene**.
-        2.  **Driftsresultat:** Foreløpig saldobalanse for inneværende år.
-        3.  **Firmaattest:** Ikke eldre enn 3 måneder.
-        4.  **Eierstruktur:** Oversikt over reelle rettighetshavere (UBO).
-        5.  **Sikkerhet:** Dokumentasjon på pantesikkerhet (Eiendom, maskiner eller varelager).
+        1.  📊 **Regnskap:** Fullstendig årsregnskap for de **siste 2 årene**.
+        2.  📈 **Saldobalanse:** Oppdatert regnskap for inneværende år.
+        3.  📜 **Firmaattest:** Bekreftelse fra Brønnøysundregistrene.
+        4.  📝 **Forretningsplan:** Kort beskrivelse av investering/formål.
+        5.  🏢 **Leiekontrakter:** Ved finansiering av næringseiendom.
         """)
 
     with tab3:
-        st.subheader("Generelle Krav & AML")
+        st.subheader("🛡️ KYC (Know Your Customer) & AML")
+        st.warning("Nordic Secure Vault Group følger strenge hvitvaskingsregler.")
         st.markdown("""
-        **Legitimasjon:**
-        * Kopi av gyldig Pass eller Nasjonalt ID-kort.
-        * Førerkort godtas kun som sekundær legitimasjon.
-        
-        **Hvitvasking (KYC):**
-        * Forklaring på egenkapitalens opprinnelse (f.eks. arv, sparing, salg av eiendom).
-        * Bekreftelse på om kunden er en Politisk Eksponert Person (PEP).
+        * **Legitimasjon:** Kopi av gyldig **Pass** eller **Nasjonalt ID-kort** (front og bak).
+        * **BankID:** Kunden må ha aktiv BankID for signering.
+        * **Formueskilde:** Dokumentasjon på hvor egenkapitalen stammer fra.
+        * **UBO:** Oversikt over reelle rettighetshavere i bedriften.
         """)
 
-    st.divider()
-    # Bonus Feature: Quick Tips
-    st.info("💡 **Tips fra Admin:** Sørg for at alle PDF-filer er lesbare. Bilder av skjermer (screenshots) blir ofte avvist av banken.")
-    
+    with tab4:
+        st.subheader("✅ Intern Kontrollpanel (Må fullføres)")
+        st.write("Vennligst bekreft at dokumentasjonen er komplett før du sender saken til NSVG Admin:")
+        
+        check1 = st.checkbox("Siste 3 lønnslipper er verifisert.")
+        check2 = st.checkbox("Skattemelding for siste år er vedlagt.")
+        check3 = st.checkbox("Gyldig legitimasjon (Pass/ID) er kontrollert.")
+        check4 = st.checkbox("E-takst og gjeldsinfo er oppdatert.")
+        check5 = st.checkbox("For næringslån: 2 års regnskap er mottatt.")
+        
+        if check1 and check2 and check3 and check4 and check5:
+            st.success("🎯 **NSVG STATUS:** Dokumentasjonen er komplett. Klar for bankinnsending!")
+        else:
+            st.warning("⚠️ **NSVG STATUS:** Noen dokumenter mangler fortsatt.")
+
+    st.markdown("---")
+
+
 
 
 # --- FOOTER (FIXED Error Line) ---

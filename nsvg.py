@@ -218,7 +218,14 @@ if not st.session_state['logged_in']:
 # --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
 
 if st.session_state.get('logged_in'):
-    role = st.session_state.get('user_role', 'Guest')
+    # BEDY KI PEHCHAN: Hum user_id check kar rahe hain
+    raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
+    
+    if raw_user == "bedi":
+        role = "Saksbehandler"
+    else:
+        role = st.session_state.get('user_role', 'Guest')
+        
     # FIX: Pehle check karein ke 'navn' (Name) hai, warna user_id dikhaye
     username = st.session_state.get('navn') or st.session_state.get('user_id') or "Bruker"
     current_user = st.session_state.get('user_id', 'Guest')
@@ -246,6 +253,14 @@ if role in ["Admin", "Director"]:
         "👥 Ansatte Kontroll", 
         "📇 Kontakter", 
         "🕵️ Master Kontrollpanel"
+    ]
+elif role == "Saksbehandler":
+    # BEDI KE LIYE SPECIAL MENU (Features added for him)
+    options = [
+        "📊 Dashbord", 
+        "📥 Nye Oppgaver", 
+        "📂 Kunde Arkiv", 
+        "🏦 Bank Portaler"
     ]
 else:
     options = [
@@ -360,17 +375,23 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
+                
 
-
-# --- 6. DASHBORD (FINAL UPDATED VERSION WITH FIXED NOTIFICATIONS & DYNAMIC PROVISJON) ---
+# --- 6. DASHBORD (FINAL UPDATED VERSION WITH SAKSBEHANDLER & ASSIGNMENT LOGIC) ---
 if valg == "📊 Dashbord":
     # Display name using capitalize for clean look
     st.header(f"Oversikt - {current_user.capitalize()}")
     
     if not df.empty:
-        # Role wise filter: Admin sab dekh sakta hai, Ansatt sirf apni sak
+        # --- ROLE WISE FILTERING (Updated for Saksbehandler/Bedi) ---
         if role in ["Admin", "Director"]:
             view_data = df.copy()
+        elif role == "Saksbehandler":
+            # Bedi sirf wahi saker dekhega jo usay assign ki gayi hain
+            if 'Assigned_To' in df.columns:
+                view_data = df[df['Assigned_To'].astype(str).str.lower() == current_user.lower()].copy()
+            else:
+                view_data = pd.DataFrame() # Agar column nahi hai to khali dikhao
         else:
             # Ansatt filter based on Saksbehandler column
             view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()].copy()
@@ -419,10 +440,9 @@ if valg == "📊 Dashbord":
         if 'Provisjon_Prosent' in view_data.columns:
             percent_vals = pd.to_numeric(view_data['Provisjon_Prosent'], errors='coerce').fillna(0)
         else:
-            percent_vals = 0 # Default if column missing
+            percent_vals = 0 
             
         total_v = loan_vals.sum()
-        # Dynamic calculation: (Beløp * Prosent) / 100 for each row
         total_p = (loan_vals * percent_vals / 100).sum()
         
         c1.metric("Antall Saker", len(view_data))
@@ -433,7 +453,6 @@ if valg == "📊 Dashbord":
         st.subheader("Siste Registrerte Saker")
 
         # --- SAKER LIST SECTION ---
-        # Showing last 15 entries
         for i, r in view_data.tail(15).iterrows():
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
@@ -442,6 +461,7 @@ if valg == "📊 Dashbord":
             sak_id = r.get('ID', i)
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
+            assigned_to = r.get('Assigned_To', 'Ingen')
 
             # Status Icons logic
             st_icon = "🔴"
@@ -449,24 +469,51 @@ if valg == "📊 Dashbord":
             elif b_status == "Under Behandling": st_icon = "🟡"
             elif b_status == "Godkjent": st_icon = "🟢"
             
-            with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
+            with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
                 
+                # --- 🏦 BEDI'S SPECIAL BANK COPY TOOL (Only for Saksbehandler) ---
+                if role == "Saksbehandler":
+                    st.info("📋 **Bank Portal Data (Kopier herfra)**")
+                    # Data formatted for easy bank entry
+                    copy_data = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {r.get('Fødselsnummer', 'N/A')}\nTLF: {r.get('Telefon', 'N/A')}\nEPOST: {r.get('Epost', 'N/A')}"
+                    st.text_area("Klar til kopiering:", value=copy_data, height=130, key=f"copy_{sak_id}")
+                    if st.button("🚀 Marker som 'Sendt til Bank'", key=f"btn_bank_{sak_id}"):
+                        update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling", "Notater": f"{str(r.get('Notater',''))}\n[System]: Sendt til bank av {current_user}."})
+                        st.success("Status oppdatert til Under Behandling!")
+                        st.rerun()
+
                 # --- BANKING CHAT HUB (Integrated) ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
                 st.divider()
 
-                # --- FULL INFO DISPLAY ---
+                # --- FULL INFO DISPLAY & ADMIN ASSIGNMENT ---
                 st.markdown("### 📄 Saksinformasjon")
                 
                 inf_c1, inf_c2 = st.columns(2)
-                # Show all columns except internal ones
-                for count, (col_name, value) in enumerate(r.items()):
-                    if col_name in ['Mangler', 'Chat_History']: 
-                        continue
+                
+                with inf_c1:
+                    for count, (col_name, value) in enumerate(r.items()):
+                        if col_name in ['Mangler', 'Chat_History', 'Assigned_To', 'Notater']: continue
+                        if count % 2 == 0:
+                            st.write(f"**{col_name}:** {value}")
+                
+                with inf_c2:
+                    for count, (col_name, value) in enumerate(r.items()):
+                        if col_name in ['Mangler', 'Chat_History', 'Assigned_To', 'Notater']: continue
+                        if count % 2 != 0:
+                            st.write(f"**{col_name}:** {value}")
                     
-                    target_col = inf_c1 if count % 2 == 0 else inf_c2
-                    target_col.write(f"**{col_name}:** {value}")
+                    # --- ADMIN ASSIGNMENT DROPDOWN ---
+                    if role in ["Admin", "Director"]:
+                        st.markdown("---")
+                        st.write("👤 **Tildel Saksbehandler (Bedi)**")
+                        current_val = str(r.get('Assigned_To', 'Ingen'))
+                        new_assign = st.selectbox("Velg ansvarlig:", ["Ingen", "Bedi"], index=1 if current_val == "Bedi" else 0, key=f"asgn_{sak_id}")
+                        if st.button("Confirm Assignment", key=f"asgn_btn_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Assigned_To": new_assign}):
+                                st.success(f"Sak tildelt {new_assign}!")
+                                st.rerun()
                 
                 # --- MODIFICATION SYSTEM ---
                 st.markdown("---")
@@ -481,15 +528,10 @@ if valg == "📊 Dashbord":
                     
                 if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
                     final_msg = ansatt_reply if role == "Ansatt" and ansatt_reply.strip() != "" else mangler_msg
-                    
-                    updates = {
-                        "Notater": new_notater,
-                        "Mangler": final_msg
-                    }
+                    updates = {"Notater": new_notater, "Mangler": final_msg}
                     
                     with st.spinner("Oppdaterer databasen..."):
-                        success = update_sak_in_sheet(sak_id, updates)
-                        if success:
+                        if update_sak_in_sheet(sak_id, updates):
                             st.success(f"✅ Sak {sak_id} er oppdatert!")
                             st.rerun()
                         else:

@@ -590,7 +590,7 @@ elif valg == "📂 Kunde Arkiv":
 
     st.info(f"✨ **Viser {len(visnings_df)} aktive saker i systemet**")
 
-    # --- HOVEDLØKKE FOR SAKER (DYNAMISK LISTE) ---
+    # --- HOVEDLØKKE FOR SAKER ---
     for i, r in visnings_df.iterrows():
         sak_id = str(r.get('ID', i))
         gjeldende_status = r.get('Bank_Status', 'Mottatt')
@@ -616,7 +616,7 @@ elif valg == "📂 Kunde Arkiv":
         varsel = "🔴 NY MELDING | " if har_ulest else ""
         skal_utvides = True if (sok and str(sak_id) == str(sok)) else False
 
-        # --- EKSPANDERBAR BOKS (KUNDE KORT) ---
+        # --- EKSPANDERBAR BOKS ---
         with st.expander(f"{varsel}{status_ikon} **{r.get('Navn', 'Ukjent')}** | ID: {sak_id} | STATUS: {gjeldende_status}", expanded=skal_utvides):
             
             if gjeldende_status == "Godkjent": st.success(f"✅ **Saken er Godkjent av Banken**")
@@ -625,10 +625,12 @@ elif valg == "📂 Kunde Arkiv":
             else: st.info(f"📩 **Søknaden er Mottatt**")
 
             st.divider()
+            
+            # Control Tabs: Redigering vs Sletting
             vis_redigering = st.checkbox(f"🛠️ Modifiser søknadsdata (Full tilgang)", key=f"mod_sjekk_{sak_id}")
 
             if not vis_redigering:
-                # --- VISNINGSMODUS (CLEAN VIEW) ---
+                # --- VISNINGSMODUS ---
                 st.markdown(f"#### 📄 Søknadsdetaljer")
                 v1, v2, v3 = st.columns(3)
                 with v1:
@@ -645,7 +647,7 @@ elif valg == "📂 Kunde Arkiv":
                 display_bank_messaging_hub(sak_id, chat_historikk, role, current_user, agent_navn)
 
             else:
-                # --- FULL REDIGERING (BANK PORTAL STIL) ---
+                # --- FULL REDIGERING & SLETTING ---
                 with st.form(key=f"full_edit_form_{sak_id}"):
                     st.subheader("📝 Oppdater Søknadsinformasjon")
                     
@@ -713,7 +715,23 @@ elif valg == "📂 Kunde Arkiv":
                             st.cache_data.clear()
                             st.success(f"✅ Søknad {sak_id} er oppdatert i bankportalen!")
                             st.rerun()
-                            
+
+                # --- 🗑️ MODERNE SLETTING (KUN FOR ADMIN & DIRECTOR) ---
+                if role in ["Admin", "Director"]:
+                    st.divider()
+                    with st.expander("⚠️ Faresone: Slett denne søknaden"):
+                        st.warning(f"Vil du slette saken til **{r.get('Navn')}** permanent? Dette kan ikke angres.")
+                        # Checkbox for extra security
+                        bekreft_sletting = st.checkbox(f"Jeg bekrefter sletting av sak {sak_id}", key=f"del_confirm_{sak_id}")
+                        
+                        if st.button(f"🗑️ SLETT SØKNAD PERMANENT", key=f"del_btn_{sak_id}", disabled=not bekreft_sletting):
+                            if delete_sak_from_sheet(sak_id): # Yeh function call hoga
+                                st.cache_data.clear()
+                                st.error(f"✅ Sak {sak_id} er nå fjernet fra systemet.")
+                                st.rerun()
+                            else:
+                                st.error("Kunne ikke slette saken. Sjekk databasetilkoblingen.")
+                                
 
 # --- 9. MASTER KONTROLLPANEL ---
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:

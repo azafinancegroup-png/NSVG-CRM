@@ -178,6 +178,7 @@ else:
 
 import pandas as pd
 try:
+    # Data fetching logic
     df = get_data("MainDB") 
     if df is None or df.empty:
         df = get_data("Kunder")
@@ -217,13 +218,13 @@ if st.sidebar.button("🔴 Logg ut"):
     st.rerun()
 
 # =================================================================
-# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (UPGRADED)
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (ERROR-FREE VERSION)
 # =================================================================
 
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     """
-    Yeh function sirf tab chale ga jab loop isse call kare ga.
-    Is liye error nahi aaye ga.
+    Yeh function sirf loop (Nummer 8) ke andar se call hoga.
+    Isliye 'sak_id' ka error nahi aaye ga.
     """
     st.markdown("---")
     me_clean = str(username).lower().strip()
@@ -244,10 +245,11 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # --- SMART LOGIC: Mark as Read ---
+    # --- 🔴 NOTIFICATION DOT LOGIC (MARK AS READ) ---
     has_unread = False
     for m in messages:
         m_sender = str(m.get('sender', '')).lower().strip()
+        # Agar unread hai aur sender MEIN nahi hoon, toh mark as read
         if m.get('read') == False and m_sender != me_clean:
             m['read'] = True
             has_unread = True
@@ -255,7 +257,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # --- DISPLAY ---
+    # --- DISPLAY MESSAGES ---
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
@@ -273,7 +275,10 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
                     st.rerun()
 
     st.divider()
+    
+    # --- INPUT SECTION (Fixed sak_id scope) ---
     col_msg, col_file = st.columns([3, 1])
+    # Buttons aur inputs ke liye 'sak_id' function parameter se mil raha hai
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
@@ -292,7 +297,8 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-                
+
+
 # --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")
@@ -558,11 +564,10 @@ elif valg == "➕ Ny Registrering":
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
 
-# --- 8. KUNDE ARKIV (PRO UPGRADE: FULL AUTOMATION & SENDER FIX) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # 1. GOOGLE QUOTA PROTECTION (Fixed to 60s to prevent 429 error)
+    # 1. GOOGLE QUOTA PROTECTION
     @st.cache_data(ttl=60)
     def safe_data_fetch():
         return df
@@ -579,6 +584,7 @@ elif valg == "📂 Kunde Arkiv":
     jump_id = st.session_state.get('search_query', "")
 
     # 3. FILTERING BY USER ROLE
+    # Admin/Director sab dekh sakte hain, baki sirf apna
     view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
     # 4. SEARCH INTERFACE
@@ -591,12 +597,14 @@ elif valg == "📂 Kunde Arkiv":
 
     # --- MAIN LOOP FOR CUSTOMERS ---
     for i, r in view_df.iterrows():
+        # CRITICAL: sak_id yahan define hona lazmi hai
         sak_id = str(r.get('ID', i))
         mangler_msg = r.get('Mangler', '') 
         chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # 5. NOTIFICATION LOGIC (STRICT SENDER FILTER)
+        # 5. NOTIFICATION LOGIC (RED DOT)
+        # Yeh logic check karta hai ke kya koi naya message hai jo "me" ne nahi bheja
         is_unread = False
         if '"read": false' in chat_h.lower():
             try:
@@ -604,7 +612,6 @@ elif valg == "📂 Kunde Arkiv":
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1]
-                    # Logic: Notification sirf tab jab message unread ho AUR bhejne wala MEIN NA HOON
                     msg_sender = str(last_msg.get('sender', '')).lower().strip()
                     me_user = str(current_user).lower().strip()
                     
@@ -618,6 +625,7 @@ elif valg == "📂 Kunde Arkiv":
         # 6. AUTO-EXPAND LOGIC
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
+        # --- THE CUSTOMER BOX (EXPANDER) ---
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
             if expand_me and url_id:
@@ -646,6 +654,8 @@ elif valg == "📂 Kunde Arkiv":
                     st.write(f"**Date:** {r.get('Dato', '-')}")
 
                 st.divider()
+                
+                # Co-applicant display
                 if r.get('Medsøker_Navn'):
                     st.markdown("**👥 Co-applicant Info:**")
                     mv1, mv2 = st.columns(2)
@@ -654,7 +664,8 @@ elif valg == "📂 Kunde Arkiv":
                 
                 st.write(f"**Notes:** {r.get('Notater', 'No notes')}")
                 
-                # 💬 Calling the Messaging Hub
+                # 💬 CALLING MESSAGING HUB (Nummer 5)
+                # Yeh function tabhi chalega jab sak_id loop mein generate hogi
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:

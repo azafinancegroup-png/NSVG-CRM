@@ -80,18 +80,17 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
-                
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
+        from oauth2client.service_account import ServiceAccountCredentials
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         # Yeh aapki main spreadsheet file ko open karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
     except Exception as e:
-        # Agar connection fail ho toh error show karega
         st.error(f"Tilkoblingsfeil (Connection Error): {e}")
         return None
 
@@ -101,7 +100,6 @@ def get_data(sheet_name):
         try:
             data = sh.get_all_records()
             df = pd.DataFrame(data)
-            # Column names se extra spaces khatam karne ke liye
             df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception as e:
@@ -113,36 +111,36 @@ def add_data(sheet_name, row_list):
     sh = connect_to_sheet(sheet_name)
     if sh: 
         try:
-            # Nayi row append karne ke liye
             sh.append_row(row_list)
             return True
         except Exception as e:
             st.error(f"Feil ved lagring av data: {e}")
             return False
     return False
-    
-# --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
-@st.cache_data
-def get_country_list():
-    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
-    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
-    return base + others
 
+# NEW: Admin Update Function (Admin ke reply save karne ke liye)
+def update_sheet_data_internal(worksheet_name, df):
+    sh = connect_to_sheet(worksheet_name)
+    if sh:
+        try:
+            sh.clear()
+            data_to_update = [df.columns.values.tolist()] + df.values.tolist()
+            sh.update(data_to_update)
+            return True
+        except Exception as e:
+            st.error(f"⚠️ Kunne ikke oppdatere {worksheet_name}: {e}")
+            return False
+    return False
 
-def delete_sak_from_sheet(sak_id):
+# AAPKA DELETE FUNCTION (Maine skip nahi kiya!)
+def delete_sak_from_sheet(sak_id): 
     """ 
     Google Sheet se specific ID wali row ko delete karne ka function.
-    Yeh aapke connect_to_sheet function ko use karega.
     """
     try:
-        # Aapki file mein 'MainDB' naam ki sheet use ho rahi hai
         sh = connect_to_sheet("MainDB")
-        
         if sh:
-            # 1. Poora data fetch karein
             rows = sh.get_all_records()
-            
-            # 2. Loop chala kar ID match karein
             for index, row in enumerate(rows):
                 if str(row.get('ID')) == str(sak_id):
                     # +2 adjustment (1 for header, 1 for 0-index)
@@ -152,31 +150,57 @@ def delete_sak_from_sheet(sak_id):
         else:
             st.error("Kunne ikke koble til databasen (MainDB).")
             return False
-            
         return False
     except Exception as e:
         st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
-        
 
+# --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
+@st.cache_data
+def get_country_list():
+    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
+    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
+    return base + others
+    
 # --- 4. LOGIN SYSTEM ---
 if 'logged_in' not in st.session_state:
-    st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
+    st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None, 'navn': None})
 
 if not st.session_state['logged_in']:
     st.title("🛡️ NSVG - Sikker Digital Portal")
     u_input = st.text_input("Brukernavn").lower().strip()
     p_input = st.text_input("Passord", type="password")
+    
     if st.button("Logg inn"):
         users_df = get_data("Users")
         if not users_df.empty:
-            match = users_df[(users_df['username'].astype(str).str.lower() == u_input) & (users_df['password'].astype(str) == p_input)]
+            match = users_df[(users_df['username'].astype(str).str.lower() == u_input) & 
+                             (users_df['password'].astype(str) == p_input)]
+            
             if not match.empty:
-                st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
+                # Role aur ID save karna
+                role = match.iloc[0]['role']
+                st.session_state.update({'logged_in': True, 'user_role': role, 'user_id': u_input})
+                
+                # --- NEW: Agents ki sheet se Full Name nikalna ---
+                try:
+                    agents_df = get_data("Agents")
+                    # Username match karke naam uthana
+                    agent_match = agents_df[agents_df['username'].astype(str).str.lower() == u_input]
+                    if not agent_match.empty:
+                        st.session_state['navn'] = agent_match.iloc[0]['navn']
+                    else:
+                        st.session_state['navn'] = u_input # Agar naam na mile to ID hi sahi
+                except:
+                    st.session_state['navn'] = u_input
+                # -----------------------------------------------
+                
+                st.success(f"Velkommen, {st.session_state['navn']}!")
                 st.rerun()
             else: 
                 st.error("Feil brukernavn ya passord!")
     st.stop()
+
 
 # --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
 
@@ -794,38 +818,41 @@ elif valg == "🏦 Bankens Renters":
 
 
 elif valg == "📞 Support Center":
-    st.header("📞 Bank Support Center") # Title change kar dia
-    st.subheader("Trenger du hjelp med en sak?")
-    st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
+    st.header("📞 Bank Support Center")
     
-    with st.form("support_form"):
-        st.write("Send en direkte forespørsel til Bankens Hovedkontor")
-        sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Prioritert utbetaling", "Annet"])
-        sup_msg = st.text_area("Beskrivelse (Vennligst oppgi saks-ID hvis relevant)")
-        
-        if st.form_submit_button("🚀 Send Forespørsel"):
-            if sup_msg:
-                try:
+    tab1, tab2 = st.tabs(["📩 Send Forespørsel", "📜 Min Historikk"])
+    
+    with tab1:
+        st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
+        with st.form("support_form"):
+            sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Prioritert utbetaling", "Annet"])
+            sup_msg = st.text_area("Beskrivelse")
+            if st.form_submit_button("🚀 Send Forespørsel"):
+                if sup_msg:
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                    
-                    # Yahan ID ki jagah hum session_state se 'navn' (Full Name) uthayenge
-                    # Agar 'navn' nahi milta to hi 'username' use hoga
-                    sender_name = st.session_state.get('navn', st.session_state.get('username', 'Ukjent Ansatt'))
-                    
-                    support_data = [now, sender_name, sup_topic, sup_msg, "Åpen"]
-                    
-                    success = add_data("Support", support_data)
-                    
-                    if success:
+                    sender = st.session_state.get('navn', st.session_state.get('user_id', 'Ukjent'))
+                    # Data: Time, Name, Topic, Msg, Status, Admin Reply
+                    support_data = [now, sender, sup_topic, sup_msg, "Åpen", "Venter på svar..."]
+                    if add_data("Support", support_data):
                         st.balloons()
-                        st.success(f"✅ Takk {sender_name}! Din forespørsel er mottatt. Status: Åpen")
-                    else:
-                        st.error("Kunne ikke lagre forespørsel. Sjekk Google Sheets.")
-                except Exception as e:
-                    st.error(f"Systemfeil: {e}")
+                        st.success("✅ Forespørsel sendt!")
+                        st.rerun()
+
+    with tab2:
+        st.subheader("Mine tidligere henvendelser")
+        try:
+            s_df = get_data("Support")
+            my_name = st.session_state.get('navn', '')
+            my_saker = s_df[s_df['Fra_Bruker'] == my_name]
+            if not my_saker.empty:
+                for idx, row in my_saker.sort_index(ascending=False).iterrows():
+                    with st.expander(f"📌 {row['Tidspunkt']} - {row['Tema']} ({row['Status']})"):
+                        st.write(f"**Din melding:** {row['Beskrivelse']}")
+                        st.info(f"**Bankens svar:** {row['Svar_Fra_Admin']}")
             else:
-                st.warning("Vennligst skriv en beskrivelse.")
-                
+                st.info("Du har ingen registrerte forespørsler.")
+        except:
+            st.error("Kunne ikke hente historikk.")                
 
 
 
@@ -988,18 +1015,47 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
         st.warning("Ingen ansatte funnet.")
 
 
-# Yeh Admin wale section ke andar niche kahin daal dein
 if role in ["Admin", "Director"]:
     st.divider()
-    st.subheader("📥 Inngående Support Forespørsler (NSVG)")
+    st.header("📥 Support Management (Admin)")
+    
     try:
         support_df = get_data("Support")
         if not support_df.empty:
-            st.dataframe(support_df.sort_values(by="Tidspunkt", ascending=False), use_container_width=True)
+            for i, row in support_df.iterrows():
+                # Sirf "Åpen" ya active tickets dikhane ke liye expander
+                color = "🔴" if row['Status'] == "Åpen" else "🟢"
+                with st.expander(f"{color} Fra: {row['Fra_Bruker']} | Tema: {row['Tema']} | Tid: {row['Tidspunkt']}"):
+                    st.write(f"**Melding:** {row['Beskrivelse']}")
+                    st.write(f"**Nåværende Svar:** {row['Svar_Fra_Admin']}")
+                    
+                    # Admin Actions
+                    new_reply = st.text_area("Skriv svar til ansatt", value=row['Svar_Fra_Admin'], key=f"ans_{i}")
+                    new_status = st.selectbox("Oppdater Status", ["Åpen", "Behandles", "Løst / Ferdig"], 
+                                              index=["Åpen", "Behandles", "Løst / Ferdig"].index(row['Status']) if row['Status'] in ["Åpen", "Behandles", "Løst / Ferdig"] else 0,
+                                              key=f"stat_{i}")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("💾 Lagre Svar & Oppdater", key=f"save_{i}"):
+                            # Direct update logic
+                            support_df.at[i, 'Svar_Fra_Admin'] = new_reply
+                            support_df.at[i, 'Status'] = new_status
+                            update_sheet_data_internal("Support", support_df) # Make sure this helper exists
+                            st.success("Oppdatert!")
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button("🗑️ Slett Melding", key=f"del_msg_{i}"):
+                            new_df = support_df.drop(i)
+                            update_sheet_data_internal("Support", new_df)
+                            st.warning("Melding slettet!")
+                            st.rerun()
         else:
-            st.info("Ingen aktive support-forespørsler.")
-    except:
-        st.error("Kunne ikke hente support-data. Har du laget 'Support' fanen i Google Sheets?")
+            st.info("Ingen support-forespørsler funnet.")
+    except Exception as e:
+        st.error(f"Feil ved henting av support: {e}")
+
 
 
 # --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---

@@ -794,18 +794,38 @@ elif valg == "🏦 Bankens Renters":
 
 
 elif valg == "📞 Support Center":
-    st.header("📞 Bank Support")
+    st.header("📞 NSVG Support Center")
     st.subheader("Trenger du hjelp med en sak?")
-    
     st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
     
     with st.form("support_form"):
-        st.write("Send en direkte forespørsel til Bankens Hovedkontor")
-        sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Annet"])
-        sup_msg = st.text_area("Beskrivelse")
-        if st.form_submit_button("Send Forespørsel"):
-            st.success("Din forespørsel er sendt til Bankens Administrator.")
-
+        st.write("Send en direkte forespørsel til NSVG Administrator")
+        sup_topic = st.selectbox("Tema", ["Teknisk feil", "Spørsmål om sak", "Prioritert utbetaling", "Annet"])
+        sup_msg = st.text_area("Beskrivelse (Vennligst oppgi saks-ID hvis relevant)")
+        
+        if st.form_submit_button("🚀 Send Forespørsel"):
+            if sup_msg:
+                try:
+                    # Current Time aur User info nikalna
+                    now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+                    sender = st.session_state.get('username', 'Ukjent')
+                    
+                    # Data prepare karna
+                    support_data = [now, sender, sup_topic, sup_msg, "Åpen"]
+                    
+                    # Google Sheet mein save karna (Humein 'Support' sheet name use karna hai)
+                    success = add_data("Support", support_data)
+                    
+                    if success:
+                        st.balloons()
+                        st.success(f"✅ Takk {sender}! Din forespørsel er sendt til Admin. Status: Åpen")
+                    else:
+                        st.error("Kunne ikke lagre forespørsel. Sjekk om 'Support' tab finnes i Google Sheets.")
+                except Exception as e:
+                    st.error(f"Systemfeil: {e}")
+            else:
+                st.warning("Vennligst skriv en beskrivelse før du sender.")
+                
 
 
 
@@ -966,7 +986,22 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                             st.warning("Kun Admin kan slette.")
     else:
         st.warning("Ingen ansatte funnet.")
-        
+
+
+# Yeh Admin wale section ke andar niche kahin daal dein
+if role in ["Admin", "Director"]:
+    st.divider()
+    st.subheader("📥 Inngående Support Forespørsler (NSVG)")
+    try:
+        support_df = get_data("Support")
+        if not support_df.empty:
+            st.dataframe(support_df.sort_values(by="Tidspunkt", ascending=False), use_container_width=True)
+        else:
+            st.info("Ingen aktive support-forespørsler.")
+    except:
+        st.error("Kunne ikke hente support-data. Har du laget 'Support' fanen i Google Sheets?")
+
+
 # --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---
 elif valg == "📇 Kontakter":
     st.header("📇 Kontaktadministrasjon")

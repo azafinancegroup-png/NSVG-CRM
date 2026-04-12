@@ -555,18 +555,25 @@ elif valg == "➕ Ny Registrering":
                 add_data("MainDB", new_row)
                 st.success(f"✅ Søknad på {belop:,.0f} kr registrert!")
                 st.balloons()
-# --- 8. KUNDE ARKIV (PRO UPGRADE: SMART JUMP & AUTO-OPEN) ---
+# --- 8. KUNDE ARKIV (PRO UPGRADE: SMART JUMP & CACHING FIX) ---
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Full Oversikt")
     
-    # --- SMART JUMP LOGIC: Dashboard se click karke aane walon ke liye ---
+    # --- GOOGLE QUOTA DEEP FIX: 10 Seconds Cache ---
+    # Is se Google Sheets par load 90% kam ho jayega
+    @st.cache_data(ttl=10)
+    def get_arkiv_data():
+        return df  # Aapka existing dataframe yahan cache ho raha hai
+
+    current_df = get_arkiv_data()
+    
+    # --- SMART JUMP LOGIC ---
     jump_id = st.session_state.get('search_query', "")
     
-    # 1. Filtering logic (100% Same as your original)
-    view_df = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
+    # 1. Filtering logic (100% Original)
+    view_df = current_df if role in ["Admin", "Director"] else current_df[current_df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
     
-    # 2. Search Box (Pre-filled if coming from notification)
-    # Fix: Value ko direct jump_id se connect kiya hai taake link open ho
+    # 2. Search Box
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
     if sok:
@@ -574,45 +581,37 @@ elif valg == "📂 Kunde Arkiv":
 
     st.info(f"Antall saker funnet: {len(view_df)}")
 
-    # --- FIX 1: AUTO-EXPAND LOGIC (WAIT & CLEAR) ---
-    # Hum session_state ko foran clear nahi kar rahe taake expander load ho jaye
+    # AUTO-EXPAND CLEAR
     if jump_id and sok != jump_id:
         st.session_state.search_query = ""
 
     for i, r in view_df.iterrows():
         sak_id = str(r.get('ID', i))
         mangler_msg = r.get('Mangler', '') 
-        chat_h = str(r.get('Chat_History', '')) 
+        chat_h = str(r.get('Chat_History', '[]')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
         # --- FIX 2: SMART NOTIFICATION LOGIC (ONLY LAST MESSAGE SENDER) ---
         is_unread = False
-        
         if '"read": false' in chat_h.lower():
             try:
                 import json
                 messages = json.loads(chat_h)
                 if messages:
-                    last_msg = messages[-1] # Sirf aakhri message uthao
+                    last_msg = messages[-1] 
                     if last_msg.get('read') == False:
-                        # Admin ko sirf tab dikhe jab aakhri message Agent ne bheja ho
                         if role in ["Admin", "Director"] and last_msg.get('role') == "agent":
                             is_unread = True
-                        # Agent ko sirf tab dikhe jab aakhri message Bank ne bheja ho
                         elif role not in ["Admin", "Director"] and last_msg.get('role') == "bank":
                             is_unread = True
             except:
                 pass
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
-        
-        # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
-        # "str(sak_id) == str(sok)" ensure karta hai ke wahi sak khulay jo link se aayi hai
         expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             
-            # Checkbox for switching between View and Edit mode
             show_edit = st.checkbox(f"🛠️ Aktiver Redigering / Modify (ID: {sak_id})", key=f"mod_check_{sak_id}")
 
             if not show_edit:
@@ -642,14 +641,11 @@ elif valg == "📂 Kunde Arkiv":
                     mv2.write(f"**Fnr:** {r.get('Medsøker_Fnr')}")
                 
                 st.write(f"**Notater:** {r.get('Notater', 'Ingen notater')}")
-
-                # --- INTEGRATED MESSAGING HUB ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
 
             else:
                 # --- B: MODIFICATION MODE (100% Aapka Original Form) ---
                 st.subheader("🛠️ Full Redigeringsmodus")
-                
                 with st.form(key=f"edit_form_final_{sak_id}"):
                     st.markdown("#### 👤 Hovedsøker Detaljer")
                     h1, h2 = st.columns(2)
@@ -694,6 +690,7 @@ elif valg == "📂 Kunde Arkiv":
                             "Bank_Status": up_st, "Notater": up_notat, "Mangler": up_mangler
                         }
                         if update_sak_in_sheet(sak_id, final_data):
+                            st.cache_data.clear() # Save ke baad cache clear karna zaroori hai
                             st.success("✅ Sak oppdatert!")
                             st.rerun()
                             

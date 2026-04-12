@@ -130,24 +130,32 @@ def get_country_list():
 
 
 def delete_sak_from_sheet(sak_id):
-    """ Google Sheet se specific ID wali row ko delete karne ka function. """
+    """ 
+    Google Sheet se specific ID wali row ko delete karne ka function.
+    Yeh aapke connect_to_sheet function ko use karega.
+    """
     try:
-        # GLOBAL sheet ka istemal taake database connection mil jaye
-        global sheet 
+        # Aapki file mein 'MainDB' naam ki sheet use ho rahi hai
+        sh = connect_to_sheet("MainDB")
         
-        # 1. Poora data fetch karein
-        rows = sheet.get_all_records()
-        
-        # 2. Loop chala kar ID match karein
-        for index, row in enumerate(rows):
-            if str(row.get('ID')) == str(sak_id):
-                # +2 adjustment for header and 0-indexing
-                row_to_delete = index + 2
-                sheet.delete_rows(row_to_delete)
-                return True
+        if sh:
+            # 1. Poora data fetch karein
+            rows = sh.get_all_records()
+            
+            # 2. Loop chala kar ID match karein
+            for index, row in enumerate(rows):
+                if str(row.get('ID')) == str(sak_id):
+                    # +2 adjustment (1 for header, 1 for 0-index)
+                    row_to_delete = index + 2
+                    sh.delete_rows(row_to_delete)
+                    return True
+        else:
+            st.error("Kunne ikke koble til databasen (MainDB).")
+            return False
+            
         return False
     except Exception as e:
-        st.error(f"⚠️ Database Error: {e}")
+        st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
         
 

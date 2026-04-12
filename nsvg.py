@@ -81,28 +81,34 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
         st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
 
 
-                
-# --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
+import streamlit as st
+import pandas as pd
+import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
+# =================================================================
+# 🛠️ SECTION 1 & 2: CONNECTION & CACHING (QUOTA FIX)
+# =================================================================
+
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Yeh aapki main spreadsheet file ko open karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
     except Exception as e:
-        # Agar connection fail ho toh error show karega
-        st.error(f"Tilkoblingsfeil (Connection Error): {e}")
+        st.error(f"Tilkoblingsfeil: {e}")
         return None
 
+@st.cache_data(ttl=300) # 5 minute tak data yaad rakhega
 def get_data(sheet_name):
     sh = connect_to_sheet(sheet_name)
     if sh:
         try:
             data = sh.get_all_records()
             df = pd.DataFrame(data)
-            # Column names se extra spaces khatam karne ke liye
             df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception as e:
@@ -114,14 +120,143 @@ def add_data(sheet_name, row_list):
     sh = connect_to_sheet(sheet_name)
     if sh: 
         try:
-            # Nayi row append karne ke liye
             sh.append_row(row_list)
+            st.cache_data.clear() # Naya data aate hi refresh
             return True
         except Exception as e:
-            st.error(f"Feil ved lagring av data: {e}")
+            st.error(f"Feil ved lagring: {e}")
             return False
     return False
+
+# =================================================================
+# 📊 SECTION 5: GLOBAL DATA & SIDEBAR LOGIC
+# =================================================================
+
+if st.session_state.get('logged_in'):
+    role = st.session_state.get('user_role', 'Guest')
+    username = st.session_state.get('user_id', 'Guest')
+    current_user = username
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
+
+# Data Fetching
+try:
+    df = get_data("MainDB") 
+    if df is None or df.empty:
+        df = get_data("Kunder")
+except Exception as e:
+    st.error(f"Data loading error: {e}")
+    df = pd.DataFrame()
+
+# Sidebar Menu Building
+options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
+
+if role in ["Admin", "Director"]:
+    extra = ["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"]
+    for item in extra:
+        if item not in options:
+            options.append(item)
+
+# Menu Selection (NameError Fix)
+valg = st.sidebar.selectbox("Hovedmeny", options)
+
+def update_sheet_data_internal(worksheet_name, df_to_save):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+if st.sidebar.button("🔴 Logg ut"):
+    st.session_state.clear()
+    st.rerun()
+
+# =================================================================
+# 🏦 SECTION 5-B: BANKING MESSAGING HUB (REPLACED VERSION)
+# =================================================================
+
+def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+    st.markdown("---")
+    me_clean = str(username).lower().strip()
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     
+    st.subheader(f"💬 Meldinger med {target_label}")
+
+    st.markdown("""
+        <style>
+        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
+        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 12px; border-radius: 10px; margin: 8px 0; text-align: right; color: black; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    try:
+        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
+    except:
+        messages = []
+
+    # Auto-read Logic
+    has_unread = False
+    for m in messages:
+        m_sender = str(m.get('sender', '')).lower().strip()
+        if m.get('read') == False and m_sender != me_clean:
+            m['read'] = True
+            has_unread = True
+
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
+    # Display Messages
+    for idx, msg in enumerate(messages):
+        is_bank = msg['role'] == "Bank"
+        div_class = "bank-bubble" if is_bank else "agent-bubble"
+        sender_raw = msg.get("sender", "SYSTEM")
+        display_name = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
+        
+        m_col, d_col = st.columns([0.9, 0.1])
+        with m_col:
+            st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        with d_col:
+            if role in ["Admin", "Director"]:
+                if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
+                    messages.pop(idx)
+                    update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+                    st.rerun()
+
+    st.divider()
+    
+    col_msg, col_file = st.columns([3, 1])
+    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
+    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
+
+    if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
+            
+            new_msg = {
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": me_clean, 
+                "text": full_txt,
+                "time": get_norway_time(), 
+                "read": False 
+            }
+            messages.append(new_msg)
+            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                st.rerun()
+                
+
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data
 def get_country_list():

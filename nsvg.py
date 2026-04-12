@@ -569,32 +569,36 @@ elif valg == "📂 Kunde Arkiv":
     # 2. Search Box (Pre-filled if coming from notification)
     sok = st.text_input("🔍 Søk kunde (Navn, ID, Tlf)...", value=jump_id, placeholder="Skriv her...")
     
+    # Agar search box empty ho jaye to session_state clear karein taake jump lock na ho
+    if not sok and 'search_query' in st.session_state:
+        st.session_state.search_query = ""
+
     if sok:
         view_df = view_df[view_df.astype(str).apply(lambda x: x.str.contains(sok, case=False)).any(axis=1)]
 
     st.info(f"Antall saker funnet: {len(view_df)}")
 
-    # Clear jump query after first use so it doesn't lock the search
-    if 'search_query' in st.session_state:
-        st.session_state.search_query = ""
-
     for i, r in view_df.iterrows():
         sak_id = r.get('ID', i)
         mangler_msg = r.get('Mangler', '') 
-        chat_h = r.get('Chat_History', '') 
+        chat_h = str(r.get('Chat_History', '')) 
         agent_navn = r.get('Saksbehandler', 'Agent') 
         
-        # --- SMART NOTIFICATION TAG ---
+        # --- SMART NOTIFICATION LOGIC (NEW: SENDER CHECK) ---
         is_unread = False
-        if role in ["Admin", "Director"] and '"role": "Agent"' in str(chat_h) and '"read": false' in str(chat_h).lower():
-            is_unread = True
-        elif role not in ["Admin", "Director"] and '"role": "Bank"' in str(chat_h) and '"read": false' in str(chat_h).lower():
-            is_unread = True
+        # Admin ko tab dikhega jab aakhri message Agent ne bheja ho
+        if role in ["Admin", "Director"]:
+            if '"role": "Agent"' in chat_h and '"read": false' in chat_h.lower():
+                is_unread = True
+        # Agent ko tab dikhega jab aakhri message Bank/Admin ne bheja ho
+        else:
+            if '"role": "Bank"' in chat_h and '"read": false' in chat_h.lower():
+                is_unread = True
             
         alert_tag = "🔴 NY MELDING | " if is_unread else ""
         
         # --- AUTO-EXPAND LOGIC: Matches search or jump ID ---
-        expand_me = True if (sok and str(sak_id) == str(sok)) or (jump_id and str(sak_id) == str(jump_id)) else False
+        expand_me = True if (sok and str(sak_id) == str(sok)) else False
 
         with st.expander(f"{alert_tag}📁 {r.get('Navn', 'Ukjent')} | ID: {sak_id} | Status: {r.get('Bank_Status', 'Mottatt')}", expanded=expand_me):
             

@@ -6,22 +6,12 @@ from datetime import datetime
 import json
 import pytz
 
-# ==========================================
-# 1. GLOBAL SETTINGS & UTILITIES
-# ==========================================
+# --- 1. GLOBAL SETTINGS ---
 def get_norway_time():
     tz = pytz.timezone('Europe/Oslo')
     return datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
-@st.cache_data
-def get_country_list():
-    base = ["Norge", "Sverige", "Danmark", "UK", "USA", "Pakistan", "India"]
-    others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
-    return base + others
-
-# ==========================================
-# 2. DATABASE ENGINE (CONNECTION & UPDATES)
-# ==========================================
+# --- 2. DATABASE ENGINE ---
 def connect_to_sheet(sheet_name):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -60,21 +50,18 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
                         if col_name in temp_df.columns:
                             col_idx = temp_df.columns.get_loc(col_name) + 1
                             sh.update_cell(actual_row, col_idx, str(new_val))
-                    st.cache_data.clear() # Refresh data after update
+                    st.cache_data.clear()
                     return True
         return False
     except Exception as e:
-        st.error(f"Feil ved oppdatering: {e}")
+        st.error(f"Feil: {e}")
         return False
 
-# ==========================================
-# 3. MAYA'S HUB: BANKING MESSAGING SYSTEM
-# ==========================================
+# --- 3. MESSAGING HUB ---
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
     me_clean = str(username).lower().strip()
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
-    
     st.subheader(f"💬 Meldinger med {target_label}")
 
     st.markdown("""
@@ -89,18 +76,15 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     except:
         messages = []
 
-    # Notification/Read Logic
+    # Auto-read logic
     has_unread = False
     for m in messages:
-        m_sender = str(m.get('sender', '')).lower().strip()
-        if m.get('read') == False and m_sender != me_clean:
+        if m.get('read') == False and str(m.get('sender', '')).lower().strip() != me_clean:
             m['read'] = True
             has_unread = True
-
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # Display Chat History
     for idx, msg in enumerate(messages):
         is_bank = msg['role'] == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
@@ -111,6 +95,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             st.markdown(f'<div class="{div_class}"><b>{display_name}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
         with d_col:
             if role in ["Admin", "Director"]:
+                # Unique key: sak_id + index
                 if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
                     messages.pop(idx)
                     update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
@@ -118,142 +103,74 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
     st.divider()
     col_msg, col_file = st.columns([3, 1])
-    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
-    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
+    msg_input = col_msg.text_input(f"Skriv melding...", key=f"in_{sak_id}")
+    u_file = col_file.file_uploader("📎", key=f"f_{sak_id}")
 
-    if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+    if st.button("🚀 Send", key=f"btn_{sak_id}"):
         if msg_input or u_file:
-            full_txt = msg_input
-            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
-            
-            new_msg = {
-                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": me_clean, 
-                "text": full_txt,
-                "time": get_norway_time(), 
-                "read": False 
-            }
+            txt = msg_input + (f"\n\n📎 {u_file.name}" if u_file else "")
+            new_msg = {"role": "Bank" if role in ["Admin", "Director"] else "Agent", "sender": me_clean, "text": txt, "time": get_norway_time(), "read": False}
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
 
-# ==========================================
-# 4. LOGIN SYSTEM
-# ==========================================
+# --- 4. LOGIN ---
 if 'logged_in' not in st.session_state:
     st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None})
 
 if not st.session_state['logged_in']:
-    st.title("🛡️ NSVG - Sikker Digital Portal")
-    u_input = st.text_input("Brukernavn").lower().strip()
-    p_input = st.text_input("Passord", type="password")
+    st.title("🛡️ NSVG Portal")
+    u = st.text_input("Brukernavn").lower().strip()
+    p = st.text_input("Passord", type="password")
     if st.button("Logg inn"):
-        users_df = get_data("Users")
-        if not users_df.empty:
-            match = users_df[(users_df['username'].astype(str).str.lower() == u_input) & (users_df['password'].astype(str) == p_input)]
+        udf = get_data("Users")
+        if not udf.empty:
+            match = udf[(udf['username'].astype(str).str.lower() == u) & (udf['password'].astype(str) == p)]
             if not match.empty:
-                st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u_input})
+                st.session_state.update({'logged_in': True, 'user_role': match.iloc[0]['role'], 'user_id': u})
                 st.rerun()
-            else: 
-                st.error("Feil brukernavn eller passord!")
     st.stop()
 
-# ==========================================
-# 5. DASHBOARD & SIDEBAR (THE CORE)
-# ==========================================
+# --- 5. DASHBOARD ---
 role = st.session_state.user_role
-current_user = st.session_state.user_id
+user = st.session_state.user_id
+df = get_data("MainDB")
 
-# Fetch Main Data
-df = get_data("MainDB") 
-if df.empty:
-    df = get_data("Kunder")
-
-# Sidebar
 options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv"]
 if role in ["Admin", "Director"]:
-    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter", "🕵️ Master Kontrollpanel"])
+    options.extend(["👥 Ansatte Kontroll", "📇 Kontakter"])
 
-valg = st.sidebar.selectbox("Hovedmeny", options)
+valg = st.sidebar.selectbox("Meny", options)
 
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
 
-# --- DASHBORD SECTION ---
 if valg == "📊 Dashbord":
-    st.header(f"Oversikt - {current_user.capitalize()}")
-    
+    st.header(f"Oversikt - {user.capitalize()}")
     if not df.empty:
-        # Filter data based on role
-        view_data = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()]
-
-        # 🔔 SMART NOTIFICATIONS
-        unread_saker = []
-        for i, r in view_data.iterrows():
-            chat_h = str(r.get('Chat_History', '')).lower()
-            if role in ["Admin", "Director"]:
-                if '"role": "agent"' in chat_h and '"read": false' in chat_h:
-                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
-            else:
-                if '"role": "bank"' in chat_h and '"read": false' in chat_h:
-                    unread_saker.append({"navn": r.get('Navn', 'Ukjent'), "id": r.get('ID', i)})
-
-        if unread_saker:
-            st.markdown("### 🔔 Varsler")
-            for sak in unread_saker:
-                if st.button(f"📩 Ny melding i sak: {sak['navn']} (ID: {sak['id']})", key=f"notif_{sak['id']}"):
-                    st.session_state.search_query = str(sak['id'])
-                    # Note: You can add logic here to switch 'valg' to Archive if needed
-                    st.rerun()
-
-        # METRICS
-        loan_col = 'Lånebeløp' if 'Lånebeløp' in view_data.columns else view_data.columns[0]
-        total_v = pd.to_numeric(view_data[loan_col], errors='coerce').sum()
+        view_data = df if role in ["Admin", "Director"] else df[df['Saksbehandler'].astype(str).str.lower() == user.lower()]
         
+        # Metrics
+        total_v = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').sum()
         c1, c2, c3 = st.columns(3)
         c1.metric("Antall Saker", len(view_data))
         c2.metric("Total Volum", f"{total_v:,.0f} kr")
         c3.metric("Provisjon (1%)", f"{total_v * 0.01:,.0f} kr")
         
         st.divider()
-        st.subheader("Siste Registrerte Saker")
-
-        # CASE LIST
         for i, r in view_data.tail(15).iterrows():
-            sak_id = r.get('ID', i)
-            hoved = r.get('Hovedsøker', 'N/A')
-            belop = r.get('Lånebeløp', '0')
-            b_status = r.get('Bank_Status', 'Mottatt')
-            
-            st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
-            
-            with st.expander(f"{st_icon} {hoved} | {belop} kr | Status: {b_status}"):
+            sid = r.get('ID', i)
+            st_icon = "🟢" if r.get('Bank_Status') == "Godkjent" else "🔵"
+            with st.expander(f"{st_icon} {r.get('Hovedsøker', 'N/A')} | {r.get('Lånebeløp')} kr"):
+                display_bank_messaging_hub(sid, r.get('Chat_History', ''), role, user, r.get('Saksbehandler', 'Agent'))
                 
-                # Integration of Messaging Hub
-                display_bank_messaging_hub(sak_id, r.get('Chat_History', ''), role, current_user, r.get('Saksbehandler', 'Agent'))
-                
-                st.divider()
-                st.markdown("### 📄 Saksinformasjon")
-                
-                inf_c1, inf_c2 = st.columns(2)
-                for count, (col_name, value) in enumerate(r.items()):
-                    if col_name in ['Mangler', 'Chat_History']: continue
-                    target_col = inf_c1 if count % 2 == 0 else inf_c2
-                    target_col.write(f"**{col_name}:** {value}")
-                
-                # Modification Section
-                st.markdown("---")
-                st.write("🔧 **Rediger Sak**")
-                new_notater = st.text_area("Oppdater Notater", value=str(r.get('Notater', '')), key=f"not_{i}")
-                
-                if st.button("💾 Lagre Endringer", key=f"save_{i}"):
-                    if update_sak_in_sheet(sak_id, {"Notater": new_notater}):
-                        st.success("Oppdatert!")
-                        st.rerun()
-    else:
-        st.warning("Ingen data tilgjengelig.")
-        
+                # Info
+                st.markdown("### Info")
+                for col in view_data.columns:
+                    if col not in ['Chat_History', 'Mangler']:
+                        st.write(f"**{col}:** {r[col]}")
+                        
 # --- 6. DASHBORD (100% PURANA CODE + SMART NOTIFICATIONS & BANKING HUB) ---
 if valg == "📊 Dashbord":
     st.header(f"Oversikt - {current_user.capitalize()}")

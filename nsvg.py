@@ -262,7 +262,6 @@ elif role == "Saksbehandler":
         "➕ Ny Registrering", 
         "📥 Nye Oppgaver",      # Saksbehandler Feature
         "📂 Kunde Arkiv", 
-        "🏦 Bank Portaler",      # Saksbehandler Feature
         "🏦 Bankens Renters",    # Ansatt Feature (Restored)
         "📜 Dokumentmaler",      # Ansatt Feature (Restored)
         "📞 Support Center"      # Ansatt Feature (Restored)

@@ -1263,41 +1263,54 @@ elif valg == "📜 Dokumentmaler":
     st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
 # =================================================================
-# --- 💼 SAKSBEHANDLER PANEL (Cleanup Version) ---
+# --- 💼 SAKSBEHANDLER PANEL (Mukammal Clean Version) ---
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
     st.header(f"💼 Saksbehandler: {current_user}")
 
-    # Data filter
+    # 1. Data Filter
     sb_df = df.copy()
     
-    # Filter for New Tasks (Ny Oppgaver)
+    # Filter for New Tasks (Ny Oppgaver) - Jo sirf Admin ne bheji hain
     ny_mask = (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & (sb_df['Status'] == "Ny")
     ny_saker = sb_df[ny_mask]
 
     # 📥 NY OPPGAVER SECTION
-    st.subheader("📥 Ny Oppgaver")
+    st.subheader("📥 Ny Oppgaver (Fra Admin)")
     if not ny_saker.empty:
         for idx, row in ny_saker.iterrows():
-            with st.expander(f"🆕 NY SAK: {row['Navn']} (ID: {row['ID']})"):
-                st.write(f"**Beløp:** {row['Lånebeløp']} kr")
+            with st.expander(f"🆕 NY SAK: {row['Navn']} | ID: {row['ID']}", expanded=True):
+                st.write(f"**💰 Lånebeløp:** {row['Lånebeløp']} kr")
+                st.write(f"**👤 Kunde:** {row['Navn']}")
                 
-                # --- BANK PORTAL WALA SECTION YAHAN SE HATA DIYA HAI ---
-                
+                # --- BANK PORTAL YAHAN SE MUHAMMAD BHAI NE HATWA DIYA HAI ---
+                st.info("Denne saken er tildelt deg. Trykk under for å starte.")
+
                 if st.button(f"✅ Start Behandling", key=f"start_{row['ID']}"):
                     if update_sak_in_sheet(row['ID'], {"Status": "Under Behandling"}):
-                        st.success("Saken er flyttet til Arkiv.")
+                        st.success("Saken er flyttet til ditt arkiv.")
                         st.rerun()
     else:
-        st.info("Ingen nye oppgaver.")
+        st.info("📭 Ingen nye oppgaver fra Admin.")
 
     st.divider()
 
-    # 📂 ARKIV SECTION
+    # 📂 MITT ARKIV / MINE SAKER
     st.subheader("📂 Mitt Arkiv")
-    # Yahan baqi ka kaam...
+    # Wo cases jo 'Ny' nahi hain lekin Bedi ko assign hain
+    arkiv_mask = (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & (sb_df['Status'] != "Ny")
+    arkiv_saker = sb_df[arkiv_mask]
 
-
+    if not arkiv_saker.empty:
+        for idx, row in arkiv_saker.iterrows():
+            with st.expander(f"👤 {row['Navn']} | Status: {row['Status']}"):
+                # Normal details show karein
+                st.write(f"**ID:** {row['ID']}")
+                st.write(f"**Produkt:** {row['Produkt']}")
+                # YAHAN BHI AGAR BANK PORTAL HAI TOH USAY DELETE KAR DEIN
+    else:
+        st.write("Du har ingen aktive saker i arkivet.")
+        
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

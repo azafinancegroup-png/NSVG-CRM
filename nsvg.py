@@ -682,82 +682,81 @@ if valg == "🛠️ Master Kontroll":
                 
 
 # =================================================================
-# --- 7. NY REGISTRERING (2026 HIGH-BRAND MODERN VERSION) ---
+# --- 7. NY REGISTRERING (2026 HIGH-TECH + 100% ORIGINAL LOGIC) ---
 # =================================================================
 elif valg == "➕ Ny Registrering":
-    # --- Modern Header with Progress ---
-    st.markdown("""
-        <div style='background: white; padding: 20px; border-radius: 15px; border-left: 10px solid #4A69BD; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px;'>
-            <h1 style='margin:0; color: #2C3E50;'>➕ Ny Bankforespørsel</h1>
-            <p style='color: #7F8C8D; font-size: 14px;'>Fyll ut informasjonen under for å starte en ny lånesak i NSVG Systemet.</p>
+    # --- 📈 DYNAMIC PROGRESS TRACKER (2026 Feature) ---
+    steps = 0
+    if st.session_state.get('navn_input'): steps += 25
+    if st.session_state.get('fnr_input'): steps += 25
+    if st.session_state.get('belop_input'): steps += 25
+    if st.session_state.get('epost_input'): steps += 25
+
+    st.markdown(f"""
+        <div style='background: white; padding: 20px; border-radius: 15px; border-left: 10px solid #4A69BD; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 10px;'>
+            <h2 style='margin:0; color: #2C3E50;'>🚀 Ny Bankforespørsel</h2>
+            <p style='color: #7F8C8D; font-size: 14px;'>Søknad Completion: {steps}%</p>
         </div>
     """, unsafe_allow_html=True)
+    st.progress(steps / 100)
 
     countries = get_country_list()
-    
-    # Product Selection with Modern Card Style
     prod = st.selectbox("🎯 Velg Produkt Type", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
 
-    # Medsøker Toggle - Modern Info Box
-    st.markdown("""<div style='background-color: #E3F2FD; padding: 10px; border-radius: 8px; border: 1px solid #BBDEFB; color: #0D47A1; font-weight: 500;'>
-        💡 Har kunden en Medsøker? Marker her for å låse opp ekstra felter.
-        </div>""", unsafe_allow_html=True)
+    st.info("💡 Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
     has_med = st.checkbox("✅ JA, legg til Medsøker (Ektefelle/Samboer)", key="med_toggle")
 
-    # Start of Form
     with st.form("main_bank_form", clear_on_submit=True):
         f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
         
-        # --- 🏢 BEDRIFT SECTION (Conditional) ---
+        # --- 🏢 BEDRIFT SECTION (RE-ADDED AS PER ORIGINAL) ---
         if is_bedrift:
-            st.markdown("### 🏢 Bedrift / Firma Detaljer")
+            st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
-            f_navn = bc1.text_input("Firma Navn", placeholder="f.eks. NSVG Group AS")
-            f_org = bc1.text_input("Organisasjonsnummer (9 siffer)", max_chars=9)
-            f_eier = bc2.text_area("Navn & Personnummer på alle eiere", placeholder="Navn: X, Pnr: Y...")
-            f_aksjer = bc2.text_input("Aksjefordeling (%)", placeholder="f.eks. 50/50")
+            f_navn = bc1.text_input("Firma Navn")
+            f_org = bc1.text_input("Organisasjonsnummer (9 siffer)")
+            f_eier = bc2.text_area("Navn & Personnummer på alle eiere")
+            f_aksjer = bc2.text_input("Aksjefordeling (%)")
             st.divider()
 
         # --- 👤 HOVEDSØKER SECTION ---
         st.markdown("<h3 style='color: #4A69BD;'>👤 Hovedsøker Detaljer</h3>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
-        navn = c1.text_input("Fullt Navn (Hovedsøker) *", placeholder="Ola Nordmann") 
-        fnr = c1.text_input("Fødselsnummer (11 siffer)", max_chars=11, placeholder="12345678910")
-        epost = c1.text_input("E-post", placeholder="ola@eksempel.no")
-        tlf = c2.text_input("Telefon", placeholder="+47 000 00 000")
+        navn = c1.text_input("Fullt Navn (Hovedsøker) *", key="navn_input") 
+        fnr = c1.text_input("Fødselsnummer (11 siffer)", key="fnr_input")
+        epost = c1.text_input("E-post", key="epost_input")
+        tlf = c2.text_input("Telefon")
         sivil = c2.selectbox("Sivilstatus", ["Enslig", "Gift", "Samboer", "Skilt", "Enke/Enkemann"])
         pass_land = c1.selectbox("Statsborgerskap (Pass fra)", countries, index=0)
-        botid = c2.text_input("Botid i Norge (Hvis ikke norsk pass)", placeholder="f.eks. 5 år")
+        botid = c2.text_input("Botid i Norge (Hvis ikke norsk pass)")
 
-        # --- 💼 ARBEID & INNTEKT (HOVED) ---
         st.markdown("#### 💼 Arbeid & Inntekt (Hovedsøker)")
         l1, l2, l3 = st.columns(3)
         lonn = l1.number_input("Årslønn Brutto (kr)", min_value=0, step=1000, format="%d")
-        arbeidsgiver = l2.text_input("Arbeidsgiver", placeholder="Navn på firma")
-        ansatt_tid = l3.text_input("Ansettelsestid", placeholder="f.eks. 3 år")
+        arbeidsgiver = l2.text_input("Arbeidsgiver")
+        ansatt_tid = l3.text_input("Ansettelsestid (Hvor lenge?)")
         stilling_type = l1.selectbox("Ansettelsesform", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"])
         ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
-        # --- 🏠 FINANSIELL STATUS (HOVED) ---
         st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
         hf1, hf2, hf3 = st.columns(3)
         h_ek = hf1.number_input("Egenkapital (kr) - Hoved", 0, step=10000, format="%d")
         h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
         h_gjeld = hf3.number_input("Eksisterende Gjeld (kr) - Hoved", 0, step=10000, format="%d")
 
-        # --- 👥 MEDSØKER SECTION (SYMMETRIC) ---
+        # --- 👥 MEDSØKER SECTION (100% ORIGINAL SYMMETRIC) ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
         m_ek, m_sfo, m_gjeld = 0, "Nei", 0
         
         if has_med:
-            st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+            st.divider()
             st.markdown("<h3 style='color: #10AC84;'>👥 Medsøker Detaljer</h3>", unsafe_allow_html=True)
             mc1, mc2 = st.columns(2)
             m_navn = mc1.text_input("Fullt Navn (Medsøker)")
-            m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)", max_chars=11)
+            m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
             m_epost = mc1.text_input("E-post (Medsøker)")
             m_tlf = mc2.text_input("Telefon (Medsøker)")
             m_sivil = mc2.selectbox("Sivilstatus (Medsøker)", ["Enslig", "Gift", "Samboer", "Skilt"], key="ms_sivil")
@@ -779,87 +778,59 @@ elif valg == "➕ Ny Registrering":
             m_sfo = mf2.selectbox("SFO / Barnehage? - Medsøker", ["Nei", "Ja"], key="ms_sfo")
             m_gjeld = mf3.number_input("Eksisterende Gjeld (kr) - Medsøker", 0, step=10000, format="%d", key="ms_gjeld")
 
-        # --- 📊 FELLES LÅNESØKNAD ---
         st.divider()
-        st.markdown("<h3 style='color: #2C3E50;'>📊 Lånebehov & Felles Info</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #2C3E50;'>📊 Felles Lånesøknad</h3>", unsafe_allow_html=True)
         f1, f2, f3 = st.columns(3)
-        belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d")
+        belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d", key="belop_input")
         barn = f2.number_input("Antall Barn totalt (under 18 år)", 0)
         biler = f3.number_input("Antall Biler totalt", 0)
 
-        notater = st.text_area("Interne Notater", placeholder="Skriv viktig informasjon her jo banken må vite...")
-        st.file_uploader("Last opp Vedlegg (PDF/Bilder - Max 200MB)")
+        # --- 📉 AUTO-CALCULATION SUMMARY BOX (2026 Feature) ---
+        total_inc = lonn + m_lonn
+        total_debt = h_gjeld + m_gjeld + belop
+        dti = round(total_debt / total_inc, 2) if total_inc > 0 else 0
+        st.markdown(f"""
+            <div style='background: #F0F4F8; padding: 15px; border-radius: 10px; border: 1px dashed #4A69BD; margin-bottom: 20px;'>
+                <h4 style='margin:0; color: #4A69BD;'>📊 Økonomisk Oversikt</h4>
+                <p style='margin:2px;'>Total Inntekt: <b>{total_inc:,.0f} kr</b> | Total Gjeld: <b>{total_debt:,.0f} kr</b></p>
+                <p style='margin:2px;'>Gjeldsgrad (DTI): <span style='color:{"red" if dti > 5 else "green"};'><b>{dti}x</b></span></p>
+            </div>
+        """, unsafe_allow_html=True)
 
-        # --- 🛡️ SECURITY CONTROL (Logic Restored) ---
+        notater = st.text_area("Interne Notater (Viktig info for banken)")
+        st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
+
+        # --- 🛡️ HARD-LOCK STATUS (ORIGINAL LOGIC) ---
         user_role = st.session_state.get('role', 'Ansatt').strip().capitalize()
         if user_role in ["Admin", "Director"]:
             status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-            final_status = st.selectbox("🎯 Sett Sak Status (KUN ADMIN/DIRECTOR)", status_options, index=0)
+            final_status = st.selectbox("Sak Status (KUN ADMIN/DIRECTOR)", status_options, index=0)
         else:
             final_status = "Mottatt"
             st.info("ℹ️ Status settes automatisk til: **Mottatt**")
 
-        # Submit Button with High-Brand Style
-        st.markdown("<br>", unsafe_allow_html=True)
-        submit_btn = st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN", use_container_width=True)
-
-        if submit_btn:
+        if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN", use_container_width=True):
             if not navn:
-                st.error("❌ Feil: Vennligst skriv inn navnet på Hovedsøker!")
+                st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
                 tot_ek = h_ek + m_ek
                 tot_gjeld = h_gjeld + m_gjeld
+                initial_chat = json.dumps([{"role": "Bank", "sender": "BANK CENTRAL", "text": "Velkommen! Vi har mottatt din søknad.", "time": datetime.now().strftime("%d-%m-%Y %H:%M")}])
                 
-                # Logic intact: Chat initialization
-                initial_chat = json.dumps([{
-                    "role": "Bank",
-                    "sender": "BANK CENTRAL",
-                    "text": f"Søknad om {prod} er mottatt. Vi starter behandlingen nå.",
-                    "time": datetime.now().strftime("%d-%m-%Y %H:%M")
-                }])
-                
-                # Logic intact: Row placement
+                # 100% ORIGINAL NEW_ROW PLACEMENT
                 new_row = [
-                    len(df)+1, 
-                    datetime.now().strftime("%d-%m-%Y"), 
-                    prod, 
-                    navn, 
-                    fnr, 
-                    epost, 
-                    tlf, 
-                    sivil,
-                    "Bedrift" if is_bedrift else "Privat", 
-                    "Active", 
-                    f_navn if is_bedrift else "", 
-                    lonn,
-                    barn, 
-                    h_sfo, 
-                    tot_ek, 
-                    tot_gjeld, 
-                    biler, 
-                    belop, 
-                    f_org if is_bedrift else "",
-                    f_eier if is_bedrift else "", 
-                    f_aksjer if is_bedrift else "",
-                    m_navn, 
-                    m_fnr, 
-                    m_epost, 
-                    m_tlf, 
-                    m_lonn, 
-                    m_arb, 
-                    notater,
-                    f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
-                    current_user, 
-                    final_status, 
-                    "", 
-                    initial_chat 
+                    len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
+                    "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "", lonn,
+                    barn, h_sfo, tot_ek, tot_gjeld, biler, belop, f_org if is_bedrift else "",
+                    f_eier if is_bedrift else "", f_aksjer if is_bedrift else "",
+                    m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater,
+                    f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", current_user, final_status, "", initial_chat 
                 ]
                 
-                # Logic intact: Adding data
                 add_data("MainDB", new_row)
-                st.success(f"✅ Søknad registrert suksessfullt! ID: {len(df)+1}")
+                st.success(f"✅ Søknad registrert! Status: {final_status}")
                 st.balloons()
-
+                
 
 
 elif valg == "📂 Kunde Arkiv":

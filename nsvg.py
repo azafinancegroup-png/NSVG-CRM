@@ -1256,15 +1256,15 @@ elif valg == "📜 Dokumentmaler":
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
     st.header("💼 Saksbehandler Kontrollpanel")
-    st.info("Klargjør søknader for bankinnsending her. Kopier data ya status update karein.")
+    st.info("Klargjør søknader for bankinnsending her. Kopier data eller oppdater status.")
 
-    # 1. Filter data: Sirf wo cases dikhao jo is user (Bedi) ko assign hain
+    # 1. Filter data: Henter saker tildelt denne brukeren
     try:
         if 'Saksbehandler' in df.columns:
-            # Username ko match kar rahe hain (Bedi)
-            assigned_cases = df[df['Saksbehandler'].str.lower().str.strip() == username.lower().strip()]
+            # Vi fjerner mellomrom og gjør alt til små bokstaver for å sikre match
+            assigned_cases = df[df['Saksbehandler'].astype(str).str.lower().str.strip() == username.lower().strip()]
         else:
-            st.error("Kunne ikke finne 'Saksbehandler' kolonne i MainDB.")
+            st.error("Kunne ikke finne 'Saksbehandler'-kolonnen i databasen.")
             assigned_cases = pd.DataFrame()
     except Exception as e:
         st.error(f"Feil ved henting av oppgaver: {e}")
@@ -1276,7 +1276,6 @@ elif valg == "💼 Saksbehandler Panel":
         selected_sak_name = st.selectbox("🎯 Velg sak du vil jobbe med:", case_list)
         
         if selected_sak_name:
-            # Is specific case ka sara data uthao
             sak_data = assigned_cases[assigned_cases['Navn'] == selected_sak_name].iloc[0]
             sak_id = sak_data.get('ID', 'N/A')
             
@@ -1295,7 +1294,7 @@ elif valg == "💼 Saksbehandler Panel":
                     st.write(f"**🆔 Sak-ID:** {sak_id}")
 
             with tab_bank:
-                st.subheader("🚀 Bank-Ready Data")
+                st.subheader("🚀 Bank-klare data")
                 st.caption("Kopier informasjonen nedenfor og lim den inn i bankens portal.")
                 
                 # --- SMART COPY BOX ---
@@ -1309,20 +1308,21 @@ Arbeidsgiver: {sak_data.get('Arbeidsgiver', 'N/A')}
 Status: Verifisert av NSVG
 --------------------------------------""".strip()
                 
-                st.text_area("📋 Utklippstavle (Copy-Paste):", value=summary_text, height=220)
-                st.info("💡 Tips: Bruk CTRL+A og CTRL+C for å kopiere alt raskt.")
+                st.text_area("📋 Utklippstavle (Kopier herfra):", value=summary_text, height=220)
+                st.info("💡 Tips: Bruk CTRL+A og CTRL+C for å kopiere raskt.")
                 
                 st.divider()
                 
                 # --- STATUS UPDATER ---
-                st.markdown("### 🚦 Oppdater Framdrift")
+                st.markdown("### 🚦 Oppdater framdrift")
                 status_list = ["Ny", "Klargjøring", "Sendt til Bank", "Venter på Tilbud", "Signert", "Avslått", "Utbetalt"]
-                current_idx = status_list.index(sak_data['Status']) if sak_data['Status'] in status_list else 0
+                
+                current_status = str(sak_data.get('Status', 'Ny'))
+                current_idx = status_list.index(current_status) if current_status in status_list else 0
                 
                 new_status = st.selectbox("Endre status til:", status_list, index=current_idx)
                 
-                if st.button("💾 Lagre Statusoppdatering"):
-                    # Sheet update logic
+                if st.button("💾 Lagre statusoppdatering"):
                     if update_sak_in_sheet(sak_id, {"Status": new_status}):
                         st.success(f"✅ Status er nå oppdatert til: {new_status}")
                         st.cache_data.clear()
@@ -1330,15 +1330,14 @@ Status: Verifisert av NSVG
 
             with tab_docs:
                 st.subheader("📂 Dokumentpakke")
-                # Yahan hum search karenge ke is customer ke folder mein kya kya hai
                 st.write(f"Søker etter dokumenter for ID: {sak_id}...")
-                # Isko hum aapke 'Kunde Arkiv' logic se connect kar sakte hain
-                st.warning("Dokument-forhåndsvisning kommer i neste oppdatering.")
+                # Her kan vi koble til din eksisterende dokumentlogikk senere
+                st.warning("Dokumentvisning blir tilgjengelig i neste oppdatering.")
                 
     else:
-        st.warning("☕ Ingen tildelte saker på deg akkurat nå. Nyt kaffen!")
-
-
+        st.warning("☕ Ingen tildelte saker på deg akkurat nå.")
+        st.write("Dersom du mener dette er feil, vennligst sjekk 'Saksbehandler'-kolonnen i Google Sheets.")
+        
 
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")

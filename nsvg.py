@@ -699,31 +699,29 @@ elif valg == "➕ Ny Registrering":
             
                 
 
-# =================================================================
-# --- 7. NY REGISTRERING (ORIGINAL CLEAN VERSION) ---
-# =================================================================
+# --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
-    st.header("Ny Bankforespørsel")
+    st.header("➕ Ny Bankforespørsel")
     countries = get_country_list()
     prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
 
     st.info("Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
-    has_med = st.checkbox("JA, legg til Medsøker (Ektefelle/Samboer)")
+    has_med = st.checkbox("✅ JA, legg til Medsøker (Ektefelle/Samboer)")
 
     with st.form("main_bank_form", clear_on_submit=True):
         f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
         if is_bedrift:
-            st.subheader("Bedrift / Firma Detaljer")
+            st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
             f_navn = bc1.text_input("Firma Navn")
             f_org = bc1.text_input("Organisasjonsnummer (9 siffer)")
-            f_eier = bc2.text_area("Navn & Personnummer på alle eiere")
+            f_eier = bc2.text_area("Navn & Personnummer pe alle eiere")
             f_aksjer = bc2.text_input("Aksjefordeling (%)")
             st.divider()
 
-        # --- HOVEDSØKER SECTION ---
-        st.subheader("Hovedsøker Detaljer")
+        # --- 👤 HOVEDSØKER SECTION ---
+        st.subheader("👤 Hovedsøker Detaljer")
         c1, c2 = st.columns(2)
         navn = c1.text_input("Fullt Navn (Hovedsøker) *") 
         fnr = c1.text_input("Fødselsnummer (11 siffer)")
@@ -733,7 +731,7 @@ elif valg == "➕ Ny Registrering":
         pass_land = c1.selectbox("Statsborgerskap (Pass fra)", countries, index=0)
         botid = c2.text_input("Botid i Norge (Hvis ikke norsk pass)")
 
-        st.markdown("#### Arbeid & Inntekt (Hovedsøker)")
+        st.markdown("#### 💼 Arbeid & Inntekt (Hovedsøker)")
         l1, l2, l3 = st.columns(3)
         lonn = l1.number_input("Årslønn Brutto (kr)", min_value=0, step=1000, format="%d")
         arbeidsgiver = l2.text_input("Arbeidsgiver")
@@ -742,20 +740,21 @@ elif valg == "➕ Ny Registrering":
         ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
-        st.markdown("#### Finansiell Status & Gjeld (Hovedsøker)")
+        # NEW: Finansiell Status for Hovedsøker
+        st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
         hf1, hf2, hf3 = st.columns(3)
         h_ek = hf1.number_input("Egenkapital (kr) - Hoved", 0, step=10000, format="%d")
         h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
         h_gjeld = hf3.number_input("Eksisterende Gjeld (kr) - Hoved", 0, step=10000, format="%d")
 
-        # --- MEDSØKER SECTION ---
+        # --- 👥 MEDSØKER SECTION ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
         m_ek, m_sfo, m_gjeld = 0, "Nei", 0
         
         if has_med:
             st.divider()
-            st.subheader("Medsøker Detaljer")
+            st.subheader("👥 Medsøker Detaljer (100% Symmetric Profile)")
             mc1, mc2 = st.columns(2)
             m_navn = mc1.text_input("Fullt Navn (Medsøker)")
             m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)")
@@ -765,7 +764,7 @@ elif valg == "➕ Ny Registrering":
             m_pass = mc1.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
             m_botid = mc2.text_input("Botid i Norge (Medsøker)", key="ms_botid")
 
-            st.markdown("#### Arbeid & Inntekt (Medsøker)")
+            st.markdown("#### 💼 Arbeid & Inntekt (Medsøker)")
             ml1, ml2, ml3 = st.columns(3)
             m_lonn = ml1.number_input("Årslønn Brutto (Medsøker)", min_value=0, step=1000, format="%d", key="ms_lonn")
             m_arb = ml2.text_input("Arbeidsgiver (Medsøker)", key="ms_arb")
@@ -774,23 +773,24 @@ elif valg == "➕ Ny Registrering":
             m_ekstra = ml2.number_input("Bi-inntekt (Medsøker)", 0, key="ms_extra")
             m_pst = ml3.slider("Stillingsprosent (Medsøker)", 0, 100, 100, key="ms_pst")
 
-            st.markdown("#### Finansiell Status & Gjeld (Medsøker)")
+            st.markdown("#### 🏠 Finansiell Status & Gjeld (Medsøker)")
             mf1, mf2, mf3 = st.columns(3)
             m_ek = mf1.number_input("Egenkapital (kr) - Medsøker", 0, step=10000, format="%d", key="ms_ek")
             m_sfo = mf2.selectbox("SFO / Barnehage? - Medsøker", ["Nei", "Ja"], key="ms_sfo")
             m_gjeld = mf3.number_input("Eksisterende Gjeld (kr) - Medsøker", 0, step=10000, format="%d", key="ms_gjeld")
 
         st.divider()
-        st.subheader("Felles Lånesøknad")
+        st.subheader("📊 Felles Lånesøknad")
         f1, f2, f3 = st.columns(3)
         belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=10000, format="%d")
         barn = f2.number_input("Antall Barn totalt (under 18 år)", 0)
         biler = f3.number_input("Antall Biler totalt", 0)
 
-        notater = st.text_area("Interne Notater")
+        notater = st.text_area("Interne Notater (Viktig info for banken)")
         st.file_uploader("Last opp Vedlegg (PDF/Bilder)")
 
-        # --- SECURITY LOCK ---
+        # --- 🛡️ HARD-LOCK SECURITY (Status Control) ---
+        # Yahan hum role check karte hain aur Ansatt se dropdown chheen lete hain
         user_role = st.session_state.get('role', 'Ansatt').strip().capitalize()
         
         if user_role in ["Admin", "Director"]:
@@ -798,9 +798,9 @@ elif valg == "➕ Ny Registrering":
             final_status = st.selectbox("Sak Status (KUN ADMIN/DIRECTOR)", status_options, index=0)
         else:
             final_status = "Mottatt"
-            st.info("Status settes automatisk til: Mottatt")
+            st.info("ℹ️ Status settes automatisk til: **Mottatt**")
 
-        if st.form_submit_button("SEND SØKNAD TIL BANKEN"):
+        if st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN"):
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
@@ -810,7 +810,7 @@ elif valg == "➕ Ny Registrering":
                 initial_chat = json.dumps([{
                     "role": "Bank",
                     "sender": "BANK CENTRAL",
-                    "text": "Velkommen! Vi har mottatt din søknad.",
+                    "text": "Velkommen! Vi har mottatt din søknad og vil behandle den fortløpende.",
                     "time": datetime.now().strftime("%d-%m-%Y %H:%M")
                 }])
                 
@@ -845,14 +845,15 @@ elif valg == "➕ Ny Registrering":
                     notater,
                     f"P1: {pass_land} | P2: {m_pass} | Botid: {botid}", 
                     current_user, 
-                    final_status, 
+                    final_status, # Security Locked Status
                     "", 
                     initial_chat 
                 ]
                 
                 add_data("MainDB", new_row)
-                st.success(f"Søknad registrert! Status: {final_status}")
+                st.success(f"✅ Søknad registrert! Status: {final_status}")
                 st.balloons()
+
 
 
 elif valg == "📂 Kunde Arkiv":

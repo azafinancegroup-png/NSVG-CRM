@@ -376,6 +376,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
                 
+
 # =================================================================
 # --- 6. DASHBORD (FINAL PROFESSIONAL VERSION WITH BEDI & ADMIN) ---
 # =================================================================
@@ -398,21 +399,27 @@ if valg == "📊 Dashbord":
         # Hum .str.lower() use karenge taake case-sensitivity ka masla na ho
         df_clean = df.copy()
         # Filling NaN values to avoid errors during string operations
-        df_clean['Saksbehandler'] = df_clean['Saksbehandler'].fillna('Ukjent').astype(str)
+        if 'Saksbehandler' in df_clean.columns:
+            df_clean['Saksbehandler'] = df_clean['Saksbehandler'].fillna('Ukjent').astype(str)
+        else:
+            df_clean['Saksbehandler'] = "Ukjent"
+
         if 'Assigned_To' in df_clean.columns:
             df_clean['Assigned_To'] = df_clean['Assigned_To'].fillna('Ingen').astype(str)
+        else:
+            df_clean['Assigned_To'] = "Ingen"
 
         if role in ["Admin", "Director"]:
             view_data = df_clean.copy()
         elif role == "Saksbehandler":
             # Logic: Bedi apni saker (as agent) + jo usay assign hui hain (as processor)
-            mask_mine = df_clean['Saksbehandler'].str.lower() == current_user.lower()
+            mask_mine = df_clean['Saksbehandler'].str.lower() == str(current_user).lower()
             mask_assigned = pd.Series(False, index=df_clean.index)
             if 'Assigned_To' in df_clean.columns:
-                mask_assigned = df_clean['Assigned_To'].str.lower() == current_user.lower()
+                mask_assigned = df_clean['Assigned_To'].str.lower() == str(current_user).lower()
             view_data = df_clean[mask_mine | mask_assigned].copy()
         else:
-            view_data = df_clean[df_clean['Saksbehandler'].str.lower() == current_user.lower()].copy()
+            view_data = df_clean[df_clean['Saksbehandler'].str.lower() == str(current_user).lower()].copy()
         
         # --- NOTIFICATION LOGIC (STABLE) ---
         unread_saker = []
@@ -486,27 +493,22 @@ if valg == "📊 Dashbord":
                 inf_c1, inf_c2 = st.columns(2)
                 with inf_c1:
                     st.markdown("### 📄 Saksinformasjon")
-                    # Displaying first half of info
+                    # Displaying info rows
                     items = list(r.items())
-                    for k, v in items[:len(items)//2]:
-                        if k in ['Chat_History', 'Assigned_To']: continue
+                    for k, v in items:
+                        if k in ['Chat_History', 'Assigned_To', 'Mangler']: continue
+                        # Splitting display into two columns for cleaner look
                         st.write(f"**{k}:** {v}")
                 
                 with inf_c2:
-                    st.write("") # Spacer
-                    # Displaying second half of info
-                    for k, v in items[len(items)//2:]:
-                        if k in ['Chat_History', 'Assigned_To']: continue
-                        st.write(f"**{k}:** {v}")
-                    
                     # Assignment Dropdown for Admin
                     if role in ["Admin", "Director"]:
-                        st.markdown("---")
-                        st.write("👤 **Tildel Saksbehandler**")
+                        st.markdown("### 👤 Tildel Saksbehandler")
                         # Option to add more saksbehandlers here in the list
-                        new_asgn = st.selectbox("Velg:", ["Ingen", "Bedi"], index=1 if str(assigned_to)=="Bedi" else 0, key=f"as_{sak_id}")
+                        new_asgn = st.selectbox("Velg Saksbehandler:", ["Ingen", "Bedi"], index=1 if str(assigned_to)=="Bedi" else 0, key=f"as_{sak_id}")
                         if st.button("Oppdater Ansvar", key=f"asb_{sak_id}"):
                             if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
+                                st.success("Ansvar oppdatert!")
                                 st.rerun()
 
                 # --- MODIFICATION SYSTEM ---
@@ -521,6 +523,7 @@ if valg == "📊 Dashbord":
                             
     else:
         st.warning("Ingen data tilgjengelig i databasen.")
+        
         
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":

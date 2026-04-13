@@ -734,28 +734,32 @@ elif valg == "📂 Kunde Arkiv":
 
                 st.write(f"**📝 Kommentarer:** {r.get('Notater', 'Ingen kommentarer lagret.')}")
 
-                # --- NEW FEATURE: ASSIGN SAKSBEHANDLER (FOR ADMIN/DIRECTOR) ---
+                # --- 🚀 NEW FEATURE: SEND TIL BEDI (KUN ADMIN) ---
                 if role in ["Admin", "Director"]:
                     st.divider()
                     st.subheader("👨‍💼 Tildel Saksbehandler")
-                    saksbehandler_liste = ["-- Velg --", "Bedi", "Admin", "Yasin"] 
+                    # Admin aur Yasin nikal diye hain
+                    saksbehandler_liste = ["-- Velg --", "Bedi"] 
+                    
                     current_sb = r.get('Saksbehandler', "-- Velg --")
                     if current_sb not in saksbehandler_liste:
                         current_sb = "-- Velg --"
                     
-                    selected_sb = st.selectbox(f"Velg behandler for {r.get('Navn')}:", 
+                    selected_sb = st.selectbox(f"Send saken til:", 
                                                saksbehandler_liste, 
                                                index=saksbehandler_liste.index(current_sb),
                                                key=f"sb_assign_{sak_id}")
                     
-                    if st.button("✅ Bekreft Tildeling", key=f"btn_sb_{sak_id}"):
+                    if st.button("🚀 Send sak nå", key=f"btn_sb_{sak_id}"):
                         if selected_sb != "-- Velg --":
-                            if update_sak_in_sheet(sak_id, {"Saksbehandler": selected_sb}):
-                                st.success(f"✅ Sak tildelt til {selected_sb}!")
+                            # "Status": "Ny" ensures it lands in the Saksbehandler's New Tasks
+                            if update_sak_in_sheet(sak_id, {"Saksbehandler": selected_sb, "Status": "Ny"}):
+                                st.toast(f"✅ Sak sendt til {selected_sb}!", icon="🚀")
+                                st.success(f"Saken er tildelt {selected_sb} og vil vises i deres Ny Oppgaver.")
                                 st.cache_data.clear()
                                 st.rerun()
                         else:
-                            st.warning("Vennligst velg en saksbehandler.")
+                            st.warning("Vennligst velg Bedi for å sende saken.")
 
                 display_bank_messaging_hub(sak_id, chat_historikk, role, current_user, agent_navn)
 
@@ -802,7 +806,7 @@ elif valg == "📂 Kunde Arkiv":
                     st.divider()
                     st.markdown("#### 🏦 Bankbehandling & Godkjenning")
                     up_belop = st.number_input("Søkt Lånebeløp (kr)", value=int(r.get('Lånebeløp', 0)), step=10000)
-                    up_mangler = st.text_area("Mangler fra kunden (Beskjed sendes via portalen)", value=str(r.get('Mangler', '')))
+                    up_mangler = st.text_area("Mangler fra kunden", value=str(r.get('Mangler', '')))
                     up_notat = st.text_area("Bankens interne notater", value=str(r.get('Notater', '')))
 
                     if role in ["Admin", "Director"]:
@@ -829,7 +833,7 @@ elif valg == "📂 Kunde Arkiv":
                             st.success(f"✅ Søknad {sak_id} er oppdatert!")
                             st.rerun()
 
-                # --- 🗑️ MODERNE SLETTING (KUN FOR ADMIN & DIRECTOR) ---
+                # --- 🗑️ SLETTING ---
                 if role in ["Admin", "Director"]:
                     st.divider()
                     with st.expander("⚠️ Faresone: Slett denne søknaden"):
@@ -851,7 +855,6 @@ elif valg == "🏦 Bankens Renters":
     with col2:
         st.metric("Billån", "6.20%", "Stabil")
         st.metric("Forbrukslån", "11.5%", "Stabil")
-    st.write("⚠️ *Merk: Rentene kan variere basert på kundens kredittscore.*")
 
 elif valg == "📞 Support Center":
     st.header("📞 Bank Support Center")
@@ -886,7 +889,6 @@ elif valg == "📞 Support Center":
         except:
             st.error("Kunne ikke hente historikk.")
             
-
 
 
 # --- 9. MASTER KONTROLLPANEL ---
@@ -1261,73 +1263,50 @@ elif valg == "📜 Dokumentmaler":
     st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
 # =================================================================
-# --- 💼 SAKSBEHANDLER PANEL (PROFESSIONAL CASE READY ENGINE) ---
+# --- 💼 SAKSBEHANDLER PANEL (Linked with Ny Oppgaver) ---
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
-    st.header("💼 Saksbehandler Kontrollpanel")
+    st.header("💼 Saksbehandler Arbeidsbenk")
     
-    # Debugging line (sirf check karne ke liye, baad mein hata sakte hain)
-    # st.write(f"Logget inn som: {username}") 
-
+    # 1. Filter: Sirf wo cases jo IS user ko assign hain aur status "Ny" ya "Klargjøring" hai
     try:
-        if 'Saksbehandler' in df.columns:
-            # Match logic: Dono taraf se spaces khatam kar ke match karega
-            assigned_cases = df[df['Saksbehandler'].astype(str).str.lower().str.strip() == username.lower().strip()]
-        else:
-            st.error("Kunne ikke finne 'Saksbehandler'-kolonnen i Google Sheets.")
-            assigned_cases = pd.DataFrame()
-    except Exception as e:
-        st.error(f"Feil ved henting av data: {e}")
-        assigned_cases = pd.DataFrame()
+        # Hum check kar rahe hain ke Saksbehandler column match kare aur Status khatam na hui ho
+        mask = (df['Saksbehandler'].astype(str).str.lower() == username.lower())
+        ny_oppgaver_df = df[mask]
+    except:
+        ny_oppgaver_df = pd.DataFrame()
 
-    if not assigned_cases.empty:
-        case_list = assigned_cases['Navn'].tolist()
-        selected_sak_name = st.selectbox("🎯 Velg sak du vil jobbe med:", case_list)
+    if not ny_oppgaver_df.empty:
+        st.subheader(f"📥 Ny Oppgaver ({len(ny_oppgaver_df)})")
         
-        if selected_sak_name:
-            sak_data = assigned_cases[assigned_cases['Navn'] == selected_sak_name].iloc[0]
+        # Selectbox for active tasks
+        selected_name = st.selectbox("Velg oppgave for å starte behandling:", ["-- Velg sak --"] + ny_oppgaver_df['Navn'].tolist())
+        
+        if selected_name != "-- Velg sak --":
+            sak_data = ny_oppgaver_df[ny_oppgaver_df['Navn'] == selected_name].iloc[0]
             sak_id = sak_data.get('ID', 'N/A')
             
-            tab_info, tab_bank, tab_docs = st.tabs(["📄 Saksinformasjon", "🏦 Bank-Klargjøring", "📂 Dokumenter"])
-            
-            with tab_info:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"**👤 Kunde:** {sak_data.get('Navn', 'N/A')}")
-                    st.markdown(f"**💰 Lånesum:** {sak_data.get('Lånesum', '0')} NOK")
-                with c2:
-                    st.markdown(f"**🚦 Status:** {sak_data.get('Status', 'Ny')}")
-                    st.markdown(f"**🆔 Sak-ID:** {sak_id}")
+            # --- BANK TOOLS SECTION ---
+            st.markdown("### 🏦 Bank Portal Copy Tool")
+            summary_text = f"""NAVN: {sak_data.get('Navn')}
+FØDSELSNR: {sak_data.get('Fodselsnr', 'Se vedlegg')}
+SUM: {sak_data.get('Lånesum')} NOK
+INNTEKT: {sak_data.get('Inntekt')}
+GJELD: {sak_data.get('Gjeld')}"""
 
-            with tab_bank:
-                st.subheader("🚀 Bank-klare data")
-                summary_text = f"""--- KUNDEPROFIL ---
-Navn: {sak_data.get('Navn')}
-Fødselsnr: {sak_data.get('Fodselsnr', 'Se vedlegg')}
-Søknadssum: {sak_data.get('Lånesum')} NOK
-Inntekt: {sak_data.get('Inntekt', 'N/A')}
-Gjeld: {sak_data.get('Gjeld', '0')}
--------------------""".strip()
-                
-                st.text_area("Kopier herfra:", value=summary_text, height=200)
-                
-                st.divider()
-                st.markdown("### 🚦 Oppdater Status")
-                status_list = ["Ny", "Klargjøring", "Sendt til Bank", "Venter på Tilbud", "Signert", "Avslått", "Utbetalt"]
-                current_status = str(sak_data.get('Status', 'Ny'))
-                idx = status_list.index(current_status) if current_status in status_list else 0
-                
-                new_status = st.selectbox("Velg ny status:", status_list, index=idx)
-                
-                if st.button("💾 Lagre status"):
-                    if update_sak_in_sheet(sak_id, {"Status": new_status}):
-                        st.success(f"✅ Status oppdatert!")
-                        st.cache_data.clear()
-                        st.rerun()
+            st.code(summary_text, language="text") # Code block for easy one-click copy
+            st.caption("Klar til kopiering: Bruk knappen øverst til høyre i boksen.")
+
+            # --- STATUS UPDATE ---
+            st.divider()
+            new_st = st.selectbox("Oppdater status direkte:", ["Ny", "Sendt til Bank", "Venter på Tilbud", "Fullført"])
+            if st.button("Lagre framdrift"):
+                if update_sak_in_sheet(sak_id, {"Status": new_st}):
+                    st.toast("✅ Status oppdatert!")
+                    st.rerun()
     else:
-        st.warning("☕ Ingen tildelte saker funnet på ditt navn.")
-        st.info("Gå til Google Sheets og skriv 'bedi' i Saksbehandler-kolonnen for en test-kunde.")
-
+        st.info("📭 Ingen nye oppgaver tildelt deg ennå.")
+        
 
 
 # --- FOOTER (FIXED Error Line) ---

@@ -1250,28 +1250,27 @@ elif valg == "📜 Dokumentmaler":
     st.markdown("---")
     st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
-
 # =================================================================
 # --- 💼 SAKSBEHANDLER PANEL (PROFESSIONAL CASE READY ENGINE) ---
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
     st.header("💼 Saksbehandler Kontrollpanel")
-    st.info("Klargjør søknader for bankinnsending her. Kopier data eller oppdater status.")
+    
+    # Debugging line (sirf check karne ke liye, baad mein hata sakte hain)
+    # st.write(f"Logget inn som: {username}") 
 
-    # 1. Filter data: Henter saker tildelt denne brukeren
     try:
         if 'Saksbehandler' in df.columns:
-            # Vi fjerner mellomrom og gjør alt til små bokstaver for å sikre match
+            # Match logic: Dono taraf se spaces khatam kar ke match karega
             assigned_cases = df[df['Saksbehandler'].astype(str).str.lower().str.strip() == username.lower().strip()]
         else:
-            st.error("Kunne ikke finne 'Saksbehandler'-kolonnen i databasen.")
+            st.error("Kunne ikke finne 'Saksbehandler'-kolonnen i Google Sheets.")
             assigned_cases = pd.DataFrame()
     except Exception as e:
-        st.error(f"Feil ved henting av oppgaver: {e}")
+        st.error(f"Feil ved henting av data: {e}")
         assigned_cases = pd.DataFrame()
 
     if not assigned_cases.empty:
-        # Case selector
         case_list = assigned_cases['Navn'].tolist()
         selected_sak_name = st.selectbox("🎯 Velg sak du vil jobbe med:", case_list)
         
@@ -1279,65 +1278,47 @@ elif valg == "💼 Saksbehandler Panel":
             sak_data = assigned_cases[assigned_cases['Navn'] == selected_sak_name].iloc[0]
             sak_id = sak_data.get('ID', 'N/A')
             
-            # --- ACTION TABS ---
             tab_info, tab_bank, tab_docs = st.tabs(["📄 Saksinformasjon", "🏦 Bank-Klargjøring", "📂 Dokumenter"])
             
             with tab_info:
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.write(f"**👤 Kunde:** {sak_data.get('Navn', 'N/A')}")
-                    st.write(f"**💰 Lånesum:** {sak_data.get('Lånesum', '0')} NOK")
-                    st.write(f"**📞 Telefon:** {sak_data.get('Telefon', 'N/A')}")
+                    st.markdown(f"**👤 Kunde:** {sak_data.get('Navn', 'N/A')}")
+                    st.markdown(f"**💰 Lånesum:** {sak_data.get('Lånesum', '0')} NOK")
                 with c2:
-                    st.write(f"**🚦 Status:** {sak_data.get('Status', 'Ny')}")
-                    st.write(f"**📧 E-post:** {sak_data.get('E-post', 'N/A')}")
-                    st.write(f"**🆔 Sak-ID:** {sak_id}")
+                    st.markdown(f"**🚦 Status:** {sak_data.get('Status', 'Ny')}")
+                    st.markdown(f"**🆔 Sak-ID:** {sak_id}")
 
             with tab_bank:
                 st.subheader("🚀 Bank-klare data")
-                st.caption("Kopier informasjonen nedenfor og lim den inn i bankens portal.")
-                
-                # --- SMART COPY BOX ---
-                summary_text = f"""--- KUNDEPROFIL FOR BANKINNSENDING ---
+                summary_text = f"""--- KUNDEPROFIL ---
 Navn: {sak_data.get('Navn')}
 Fødselsnr: {sak_data.get('Fodselsnr', 'Se vedlegg')}
 Søknadssum: {sak_data.get('Lånesum')} NOK
-Inntekt (Brutto): {sak_data.get('Inntekt', 'N/A')}
+Inntekt: {sak_data.get('Inntekt', 'N/A')}
 Gjeld: {sak_data.get('Gjeld', '0')}
-Arbeidsgiver: {sak_data.get('Arbeidsgiver', 'N/A')}
-Status: Verifisert av NSVG
---------------------------------------""".strip()
+-------------------""".strip()
                 
-                st.text_area("📋 Utklippstavle (Kopier herfra):", value=summary_text, height=220)
-                st.info("💡 Tips: Bruk CTRL+A og CTRL+C for å kopiere raskt.")
+                st.text_area("Kopier herfra:", value=summary_text, height=200)
                 
                 st.divider()
-                
-                # --- STATUS UPDATER ---
-                st.markdown("### 🚦 Oppdater framdrift")
+                st.markdown("### 🚦 Oppdater Status")
                 status_list = ["Ny", "Klargjøring", "Sendt til Bank", "Venter på Tilbud", "Signert", "Avslått", "Utbetalt"]
-                
                 current_status = str(sak_data.get('Status', 'Ny'))
-                current_idx = status_list.index(current_status) if current_status in status_list else 0
+                idx = status_list.index(current_status) if current_status in status_list else 0
                 
-                new_status = st.selectbox("Endre status til:", status_list, index=current_idx)
+                new_status = st.selectbox("Velg ny status:", status_list, index=idx)
                 
-                if st.button("💾 Lagre statusoppdatering"):
+                if st.button("💾 Lagre status"):
                     if update_sak_in_sheet(sak_id, {"Status": new_status}):
-                        st.success(f"✅ Status er nå oppdatert til: {new_status}")
+                        st.success(f"✅ Status oppdatert!")
                         st.cache_data.clear()
                         st.rerun()
-
-            with tab_docs:
-                st.subheader("📂 Dokumentpakke")
-                st.write(f"Søker etter dokumenter for ID: {sak_id}...")
-                # Her kan vi koble til din eksisterende dokumentlogikk senere
-                st.warning("Dokumentvisning blir tilgjengelig i neste oppdatering.")
-                
     else:
-        st.warning("☕ Ingen tildelte saker på deg akkurat nå.")
-        st.write("Dersom du mener dette er feil, vennligst sjekk 'Saksbehandler'-kolonnen i Google Sheets.")
-        
+        st.warning("☕ Ingen tildelte saker funnet på ditt navn.")
+        st.info("Gå til Google Sheets og skriv 'bedi' i Saksbehandler-kolonnen for en test-kunde.")
+
+
 
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")

@@ -376,25 +376,45 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
                 
-# --- 6. DASHBORD (FINAL VERSION WITH BEDI & ADMIN ASSIGNMENT TOOL) ---
+# =================================================================
+# --- 6. DASHBORD (FINAL PROFESSIONAL VERSION WITH BEDI & ADMIN) ---
+# =================================================================
 if valg == "📊 Dashbord":
-    st.header(f"Oversikt - {current_user.capitalize()}")
+    # --- PROFESSIONAL DYNAMIC HEADER ---
+    if role in ["Admin", "Director"]:
+        st.title(f"🏛️ Velkommen, {username}")
+        st.subheader("Systemoversikt og Admin Kontroll")
+    elif role == "Saksbehandler":
+        st.title(f"💼 Velkommen, {username}")
+        st.subheader("Din arbeidsflyt og tildelte saker")
+    else:
+        st.title(f"👋 Hei, {username}")
+        st.subheader("Oversikt over dine registreringer")
+
+    st.divider()
     
     if not df.empty:
         # --- ROLE BASED DATA FILTERING (STABLE) ---
+        # Hum .str.lower() use karenge taake case-sensitivity ka masla na ho
+        df_clean = df.copy()
+        # Filling NaN values to avoid errors during string operations
+        df_clean['Saksbehandler'] = df_clean['Saksbehandler'].fillna('Ukjent').astype(str)
+        if 'Assigned_To' in df_clean.columns:
+            df_clean['Assigned_To'] = df_clean['Assigned_To'].fillna('Ingen').astype(str)
+
         if role in ["Admin", "Director"]:
-            view_data = df.copy()
+            view_data = df_clean.copy()
         elif role == "Saksbehandler":
-            # Logic: Bedi apni saker (as agent) + jo usay assign hui hain (as processor) dono dekhega
-            mask_mine = df['Saksbehandler'].astype(str).str.lower() == current_user.lower()
-            mask_assigned = pd.Series(False, index=df.index)
-            if 'Assigned_To' in df.columns:
-                mask_assigned = df['Assigned_To'].astype(str).str.lower() == current_user.lower()
-            view_data = df[mask_mine | mask_assigned].copy()
+            # Logic: Bedi apni saker (as agent) + jo usay assign hui hain (as processor)
+            mask_mine = df_clean['Saksbehandler'].str.lower() == current_user.lower()
+            mask_assigned = pd.Series(False, index=df_clean.index)
+            if 'Assigned_To' in df_clean.columns:
+                mask_assigned = df_clean['Assigned_To'].str.lower() == current_user.lower()
+            view_data = df_clean[mask_mine | mask_assigned].copy()
         else:
-            view_data = df[df['Saksbehandler'].astype(str).str.lower() == current_user.lower()].copy()
+            view_data = df_clean[df_clean['Saksbehandler'].str.lower() == current_user.lower()].copy()
         
-        # --- NOTIFICATION LOGIC (UNCHANGED) ---
+        # --- NOTIFICATION LOGIC (STABLE) ---
         unread_saker = []
         me_clean = str(current_user).lower().strip() 
         for i, r in view_data.iterrows():
@@ -417,7 +437,7 @@ if valg == "📊 Dashbord":
                     st.session_state.active_tab = "📂 Kunde Arkiv" 
                     st.rerun()
 
-        # --- METRICS SECTION (UNCHANGED) ---
+        # --- METRICS SECTION ---
         c1, c2, c3 = st.columns(3)
         loan_vals = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').fillna(0)
         percent_vals = pd.to_numeric(view_data['Provisjon_Prosent'], errors='coerce').fillna(0) if 'Provisjon_Prosent' in view_data.columns else 0
@@ -425,8 +445,8 @@ if valg == "📊 Dashbord":
         total_p = (loan_vals * percent_vals / 100).sum()
         
         c1.metric("Antall Saker", len(view_data))
-        c2.metric("Total Volum (kr)", f"{total_v:,.0f} kr")
-        c3.metric("Din Provisjon", f"{total_p:,.0f} kr")
+        c2.metric("Total Volum", f"{total_v:,.0f} kr")
+        c3.metric("Beregnet Provisjon", f"{total_p:,.0f} kr")
         
         st.divider()
         st.subheader("Siste Registrerte Saker")
@@ -436,7 +456,7 @@ if valg == "📊 Dashbord":
             hoved = r.get('Hovedsøker', 'N/A')
             belop = r.get('Lånebeløp', '0')
             b_status = r.get('Bank_Status', 'Mottatt')
-            sak_id = r.get('ID', i)
+            sak_id = str(r.get('ID', i))
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
             assigned_to = r.get('Assigned_To', 'Ingen')
@@ -448,16 +468,16 @@ if valg == "📊 Dashbord":
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
                 
-                # --- NEW: BEDI'S BANK COPY TOOL (Visible only to Bedi or Admin) ---
+                # --- BEDI'S BANK COPY TOOL ---
                 if role == "Saksbehandler" or role in ["Admin", "Director"]:
                     st.info("📋 **Bank Portal Copy Tool**")
                     copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {r.get('Fødselsnummer', 'N/A')}\nTLF: {r.get('Telefon', 'N/A')}"
                     st.text_area("Klar til kopiering:", value=copy_text, height=100, key=f"cp_{sak_id}")
                     if st.button("🚀 Marker som 'Sendt til Bank'", key=f"bsent_{sak_id}"):
-                        update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"})
-                        st.rerun()
+                        if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
+                            st.rerun()
 
-                # --- BANKING CHAT HUB (STABLE) ---
+                # --- BANKING CHAT HUB ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
                 st.divider()
@@ -466,39 +486,42 @@ if valg == "📊 Dashbord":
                 inf_c1, inf_c2 = st.columns(2)
                 with inf_c1:
                     st.markdown("### 📄 Saksinformasjon")
-                    # Aapka purana dynamic display loop
-                    for count, (col_name, value) in enumerate(r.items()):
-                        if col_name in ['Mangler', 'Chat_History', 'Assigned_To']: continue
-                        if count % 2 == 0: st.write(f"**{col_name}:** {value}")
+                    # Displaying first half of info
+                    items = list(r.items())
+                    for k, v in items[:len(items)//2]:
+                        if k in ['Chat_History', 'Assigned_To']: continue
+                        st.write(f"**{k}:** {v}")
                 
                 with inf_c2:
-                    for count, (col_name, value) in enumerate(r.items()):
-                        if col_name in ['Mangler', 'Chat_History', 'Assigned_To']: continue
-                        if count % 2 != 0: st.write(f"**{col_name}:** {value}")
+                    st.write("") # Spacer
+                    # Displaying second half of info
+                    for k, v in items[len(items)//2:]:
+                        if k in ['Chat_History', 'Assigned_To']: continue
+                        st.write(f"**{k}:** {v}")
                     
-                    # Naya Assignment Dropdown for Admin
+                    # Assignment Dropdown for Admin
                     if role in ["Admin", "Director"]:
                         st.markdown("---")
                         st.write("👤 **Tildel Saksbehandler**")
+                        # Option to add more saksbehandlers here in the list
                         new_asgn = st.selectbox("Velg:", ["Ingen", "Bedi"], index=1 if str(assigned_to)=="Bedi" else 0, key=f"as_{sak_id}")
                         if st.button("Oppdater Ansvar", key=f"asb_{sak_id}"):
-                            update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn})
-                            st.rerun()
+                            if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
+                                st.rerun()
 
-                # --- MODIFICATION SYSTEM (UNCHANGED) ---
+                # --- MODIFICATION SYSTEM ---
                 st.markdown("---")
                 old_notater = str(r.get('Notater', ''))
-                new_notater = st.text_area("Oppdater Notater", value=old_notater, key=f"edit_not_{i}")
+                new_notater = st.text_area("Oppdater Notater", value=old_notater, key=f"edit_not_{sak_id}")
                 
-                if st.button("💾 Lagre Endringer", key=f"save_mod_{i}"):
+                if st.button("💾 Lagre Endringer", key=f"save_mod_{sak_id}"):
                     if update_sak_in_sheet(sak_id, {"Notater": new_notater}):
                         st.success("Oppdatert!")
                         st.rerun()
                             
     else:
-        st.warning("Ingen data tilgjengelig.")
+        st.warning("Ingen data tilgjengelig i databasen.")
         
-
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")

@@ -1262,53 +1262,43 @@ elif valg == "📜 Dokumentmaler":
     st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
 # =================================================================
-# --- 💼 SAKSBEHANDLER PANEL (Mukammal Clean Version) ---
+# --- 💼 SAKSBEHANDLER PANEL (Error Fixed Version) ---
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
     st.header(f"💼 Saksbehandler: {current_user}")
 
-    # 1. Data Filter
-    sb_df = df.copy()
-    
-    # Filter for New Tasks (Ny Oppgaver) - Jo sirf Admin ne bheji hain
-    ny_mask = (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & (sb_df['Status'] == "Ny")
-    ny_saker = sb_df[ny_mask]
+    # Safety Check: Check if dataframe is not empty
+    if df is not None and not df.empty:
+        # Create a copy to work with
+        sb_df = df.copy()
 
-    # 📥 NY OPPGAVER SECTION
-    st.subheader("📥 Ny Oppgaver (Fra Admin)")
-    if not ny_saker.empty:
-        for idx, row in ny_saker.iterrows():
-            with st.expander(f"🆕 NY SAK: {row['Navn']} | ID: {row['ID']}", expanded=True):
-                st.write(f"**💰 Lånebeløp:** {row['Lånebeløp']} kr")
-                st.write(f"**👤 Kunde:** {row['Navn']}")
-                
-                # --- BANK PORTAL YAHAN SE MUHAMMAD BHAI NE HATWA DIYA HAI ---
-                st.info("Denne saken er tildelt deg. Trykk under for å starte.")
+        # Check if 'Saksbehandler' column exists in your Sheet/DF
+        if 'Saksbehandler' in sb_df.columns:
+            # Safe Filtering
+            # Hum .astype(str) se pehle check kar rahe hain ke data hai
+            ny_mask = (sb_df['Saksbehandler'].fillna('').astype(str).str.lower() == str(current_user).lower()) & \
+                      (sb_df.get('Status', '') == "Ny")
+            
+            ny_saker = sb_df[ny_mask]
 
-                if st.button(f"✅ Start Behandling", key=f"start_{row['ID']}"):
-                    if update_sak_in_sheet(row['ID'], {"Status": "Under Behandling"}):
-                        st.success("Saken er flyttet til ditt arkiv.")
-                        st.rerun()
+            # --- DISPLAY LOGIC ---
+            st.subheader("📥 Ny Oppgaver")
+            if not ny_saker.empty:
+                for idx, row in ny_saker.iterrows():
+                    sak_id = str(row.get('ID', idx))
+                    with st.expander(f"🆕 NY SAK: {row.get('Navn', 'Ukjent')}"):
+                        st.write(f"**Beløp:** {row.get('Lånebeløp', '0')} kr")
+                        if st.button(f"✅ Start Behandling", key=f"start_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Status": "Under Behandling"}):
+                                st.success("Saken er flyttet!")
+                                st.rerun()
+            else:
+                st.info("Ingen nye oppgaver.")
+        else:
+            # Agar column name sheet mein kuch aur hai toh yahan error dikhayega
+            st.error("⚠️ Kolonnen 'Saksbehandler' ble ikke funnet i databasen. Sjekk overskriften i Google Sheets.")
     else:
-        st.info("📭 Ingen nye oppgaver fra Admin.")
-
-    st.divider()
-
-    # 📂 MITT ARKIV / MINE SAKER
-    st.subheader("📂 Mitt Arkiv")
-    # Wo cases jo 'Ny' nahi hain lekin Bedi ko assign hain
-    arkiv_mask = (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & (sb_df['Status'] != "Ny")
-    arkiv_saker = sb_df[arkiv_mask]
-
-    if not arkiv_saker.empty:
-        for idx, row in arkiv_saker.iterrows():
-            with st.expander(f"👤 {row['Navn']} | Status: {row['Status']}"):
-                # Normal details show karein
-                st.write(f"**ID:** {row['ID']}")
-                st.write(f"**Produkt:** {row['Produkt']}")
-                # YAHAN BHI AGAR BANK PORTAL HAI TOH USAY DELETE KAR DEIN
-    else:
-        st.write("Du har ingen aktive saker i arkivet.")
+        st.warning("Databasen er tom eller ikke lastet inn.")
         
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")

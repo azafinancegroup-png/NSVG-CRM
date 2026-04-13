@@ -157,13 +157,18 @@ def display_bank_checklist(selected_bank):
 # =================================================================
 
 def connect_to_sheet(sheet_name):
+    """
+    Establish connection to the specific worksheet in NSVG_CRM_Data.
+    """
     try:
+        from oauth2client.service_account import ServiceAccountCredentials
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds_dict = st.secrets["gcp_service_account"]
-        from oauth2client.service_account import ServiceAccountCredentials
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        # Yeh aapki main spreadsheet file ko open karega
+        
+        # Yeh aapki main spreadsheet file "NSVG_CRM_Data" ko open karega
+        # Aur jo 'sheet_name' (e.g. "MainDB") aap bhejenge us tab ko select karega
         return client.open("NSVG_CRM_Data").worksheet(sheet_name)
     except Exception as e:
         st.error(f"Tilkoblingsfeil (Connection Error): {e}")
@@ -171,11 +176,15 @@ def connect_to_sheet(sheet_name):
 
 @st.cache_data(ttl=60)
 def get_data(sheet_name):
+    """
+    Read all data from the sheet and return as a DataFrame.
+    """
     sh = connect_to_sheet(sheet_name)
     if sh:
         try:
             data = sh.get_all_records()
             df = pd.DataFrame(data)
+            # Column names se extra spaces khatam karne ke liye
             df.columns = [str(c).strip() for c in df.columns]
             return df
         except Exception as e:
@@ -185,6 +194,9 @@ def get_data(sheet_name):
     return pd.DataFrame()
 
 def add_data(sheet_name, row_list):
+    """
+    Append a new row to the Google Sheet.
+    """
     sh = connect_to_sheet(sheet_name)
     if sh: 
         try:
@@ -208,9 +220,9 @@ def update_sheet_data_internal(worksheet_name, df):
             df_filled = df.fillna("")
             data_to_update = [df_filled.columns.values.tolist()] + df_filled.values.tolist()
             
-            # Pure data ko A1 cell se start karke update karna (Zyada stable method)
+            # Pure data ko A1 cell se start karke update karna
             sh.update('A1', data_to_update)
-            st.cache_data.clear() # Cache mitaein taake naya jawab foran dikhe
+            st.cache_data.clear() # Cache mitaein taake updates foran dikhein
             return True
         except Exception as e:
             st.error(f"⚠️ Google Sheets Update Error: {e}")
@@ -219,28 +231,30 @@ def update_sheet_data_internal(worksheet_name, df):
 
 def delete_sak_from_sheet(sak_id): 
     """ 
-    Google Sheet se specific ID wali row ko delete karne ka function.
+    Google Sheet se specific ID wali row ko dhoond kar delete karne ka function.
+    Is mein kisi naye 'delete column' ki zaroorat nahi hai.
     """
     try:
-        # Hum wahi function use karenge jo upar define kiya hai
+        # Sheet open karein (Aapki worksheet ka naam "MainDB" hai)
         sh = connect_to_sheet("MainDB")
         if sh:
             rows = sh.get_all_records()
+            # Loop laga kar har row mein 'ID' check karein
             for index, row in enumerate(rows):
                 if str(row.get('ID')) == str(sak_id):
-                    # +2 adjustment (1 for header, 1 for 0-index)
-                    row_to_delete = index + 2
-                    sh.delete_rows(row_to_delete)
-                    st.cache_data.clear()
+                    # row_to_delete = index + 2 
+                    # (+1 for header, +1 because gspread rows start at 1)
+                    row_num = index + 2
+                    sh.delete_rows(row_num)
+                    st.cache_data.clear() # Cache saaf karein taake list update ho jaye
                     return True
-            return False
+            return False # Agar ID na mile
         else:
             st.error("Kunne ikke koble til databasen (MainDB).")
             return False
     except Exception as e:
         st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
-        
         
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data

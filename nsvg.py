@@ -1263,51 +1263,63 @@ elif valg == "📜 Dokumentmaler":
     st.warning("🛡️ **NSVG Security:** Alle filer må sjekkes for KYC/AML-compliance før de sendes til banken.")
 
 # =================================================================
-# --- 💼 SAKSBEHANDLER PANEL (Linked with Ny Oppgaver) ---
+# --- 💼 SAKSBEHANDLER PANEL (Bedi's View) ---
 # =================================================================
 elif valg == "💼 Saksbehandler Panel":
-    st.header("💼 Saksbehandler Arbeidsbenk")
+    st.header(f"💼 Velkommen, {current_user}")
     
-    # 1. Filter: Sirf wo cases jo IS user ko assign hain aur status "Ny" ya "Klargjøring" hai
-    try:
-        # Hum check kar rahe hain ke Saksbehandler column match kare aur Status khatam na hui ho
-        mask = (df['Saksbehandler'].astype(str).str.lower() == username.lower())
-        ny_oppgaver_df = df[mask]
-    except:
-        ny_oppgaver_df = pd.DataFrame()
+    # 1. DATA HENTING
+    # Hum poora dataframe check karenge
+    sb_df = df.copy()
 
-    if not ny_oppgaver_df.empty:
-        st.subheader(f"📥 Ny Oppgaver ({len(ny_oppgaver_df)})")
-        
-        # Selectbox for active tasks
-        selected_name = st.selectbox("Velg oppgave for å starte behandling:", ["-- Velg sak --"] + ny_oppgaver_df['Navn'].tolist())
-        
-        if selected_name != "-- Velg sak --":
-            sak_data = ny_oppgaver_df[ny_oppgaver_df['Navn'] == selected_name].iloc[0]
-            sak_id = sak_data.get('ID', 'N/A')
-            
-            # --- BANK TOOLS SECTION ---
-            st.markdown("### 🏦 Bank Portal Copy Tool")
-            summary_text = f"""NAVN: {sak_data.get('Navn')}
-FØDSELSNR: {sak_data.get('Fodselsnr', 'Se vedlegg')}
-SUM: {sak_data.get('Lånesum')} NOK
-INNTEKT: {sak_data.get('Inntekt')}
-GJELD: {sak_data.get('Gjeld')}"""
+    # 2. NY OPPGAVER LOGIC (Cases sent by Admin)
+    # Sirf wo cases dikhao jo IS user ko assign hain AUR jin ka status "Ny" hai
+    ny_saker = sb_df[
+        (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & 
+        (sb_df['Status'].astype(str) == "Ny")
+    ]
 
-            st.code(summary_text, language="text") # Code block for easy one-click copy
-            st.caption("Klar til kopiering: Bruk knappen øverst til høyre i boksen.")
+    # 3. MINE SAKER / ARKIV (Cases already being worked on)
+    # Wo cases jo assign hain lekin status "Ny" nahi hai (matlab process shuru ho chuka hai)
+    mine_arkiv_saker = sb_df[
+        (sb_df['Saksbehandler'].astype(str).lower() == current_user.lower()) & 
+        (sb_df['Status'].astype(str) != "Ny")
+    ]
 
-            # --- STATUS UPDATE ---
-            st.divider()
-            new_st = st.selectbox("Oppdater status direkte:", ["Ny", "Sendt til Bank", "Venter på Tilbud", "Fullført"])
-            if st.button("Lagre framdrift"):
-                if update_sak_in_sheet(sak_id, {"Status": new_st}):
-                    st.toast("✅ Status oppdatert!")
-                    st.rerun()
+    # --- SECTION 1: NY OPPGAVER (Admin se aaye huye sak) ---
+    st.subheader("📥 Ny Oppgaver (Fra Admin)")
+    if not ny_saker.empty:
+        for idx, row in ny_saker.iterrows():
+            with st.expander(f"🆕 NY SAK: {row['Navn']} | Beløp: {row['Lånebeløp']} kr", expanded=True):
+                st.write(f"**Fra Admin:** Saken er klar for behandling.")
+                
+                # Copy Tool for Bank Portal
+                st.info("📋 Bank Portal Copy Tool")
+                copy_text = f"Navn: {row['Navn']}\nFnr: {row['Fnr']}\nBeløp: {row['Lånebeløp']}"
+                st.code(copy_text)
+                
+                # Button to Accept and move to Arkiv
+                if st.button(f"Start Behandling (Flytt til Arkiv)", key=f"start_{row['ID']}"):
+                    # Status badal kar "Under Behandling" kar di, ab ye Nyoppgaver se nikal jayega
+                    if update_sak_in_sheet(row['ID'], {"Status": "Under Behandling"}):
+                        st.success("Saken er flyttet til ditt arkiv.")
+                        st.rerun()
     else:
-        st.info("📭 Ingen nye oppgaver tildelt deg ennå.")
-        
+        st.write("✅ Ingen nye oppgaver for øyeblikket.")
 
+    st.divider()
+
+    # --- SECTION 2: SAKSBEHANDLER ARKIV (Bedi's own list) ---
+    st.subheader("📂 Mitt Arkiv / Mine Saker")
+    if not mine_arkiv_saker.empty:
+        # Yahan aapka normal arkiv view chalega
+        for idx, row in mine_arkiv_saker.iterrows():
+            with st.expander(f"👤 {row['Navn']} | Status: {row['Status']}"):
+                st.write(f"ID: {row['ID']}")
+                # Baqi details jo aap dikhana chahein...
+    else:
+        st.info("Du har ingen aktive saker i arkivet.")
+        
 
 # --- FOOTER (FIXED Error Line) ---
 st.sidebar.markdown("---")

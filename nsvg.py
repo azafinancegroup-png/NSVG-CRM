@@ -733,6 +733,30 @@ elif valg == "📂 Kunde Arkiv":
                     st.write(f"**👨‍💼 Ansvarlig:** {agent_navn}")
 
                 st.write(f"**📝 Kommentarer:** {r.get('Notater', 'Ingen kommentarer lagret.')}")
+
+                # --- NEW FEATURE: ASSIGN SAKSBEHANDLER (FOR ADMIN/DIRECTOR) ---
+                if role in ["Admin", "Director"]:
+                    st.divider()
+                    st.subheader("👨‍💼 Tildel Saksbehandler")
+                    saksbehandler_liste = ["-- Velg --", "Bedi", "Admin", "Yasin"] 
+                    current_sb = r.get('Saksbehandler', "-- Velg --")
+                    if current_sb not in saksbehandler_liste:
+                        current_sb = "-- Velg --"
+                    
+                    selected_sb = st.selectbox(f"Velg behandler for {r.get('Navn')}:", 
+                                               saksbehandler_liste, 
+                                               index=saksbehandler_liste.index(current_sb),
+                                               key=f"sb_assign_{sak_id}")
+                    
+                    if st.button("✅ Bekreft Tildeling", key=f"btn_sb_{sak_id}"):
+                        if selected_sb != "-- Velg --":
+                            if update_sak_in_sheet(sak_id, {"Saksbehandler": selected_sb}):
+                                st.success(f"✅ Sak tildelt til {selected_sb}!")
+                                st.cache_data.clear()
+                                st.rerun()
+                        else:
+                            st.warning("Vennligst velg en saksbehandler.")
+
                 display_bank_messaging_hub(sak_id, chat_historikk, role, current_user, agent_navn)
 
             else:
@@ -802,32 +826,24 @@ elif valg == "📂 Kunde Arkiv":
                         
                         if update_sak_in_sheet(sak_id, data_til_oppdatering):
                             st.cache_data.clear()
-                            st.success(f"✅ Søknad {sak_id} er oppdatert i bankportalen!")
+                            st.success(f"✅ Søknad {sak_id} er oppdatert!")
                             st.rerun()
 
                 # --- 🗑️ MODERNE SLETTING (KUN FOR ADMIN & DIRECTOR) ---
                 if role in ["Admin", "Director"]:
                     st.divider()
                     with st.expander("⚠️ Faresone: Slett denne søknaden"):
-                        st.warning(f"Vil du slette saken til **{r.get('Navn')}** permanent? Dette kan ikke angres.")
-                        # Checkbox for extra security
-                        bekreft_sletting = st.checkbox(f"Jeg bekrefter sletting av sak {sak_id}", key=f"del_confirm_{sak_id}")
-                        
+                        st.warning(f"Vil du slette saken til **{r.get('Navn')}** permanent?")
+                        bekreft_sletting = st.checkbox(f"Bekreft sletting av sak {sak_id}", key=f"del_confirm_{sak_id}")
                         if st.button(f"🗑️ SLETT SØKNAD PERMANENT", key=f"del_btn_{sak_id}", disabled=not bekreft_sletting):
-                            if delete_sak_from_sheet(sak_id): # Yeh function call hoga
+                            if delete_sak_from_sheet(sak_id):
                                 st.cache_data.clear()
-                                st.error(f"✅ Sak {sak_id} er nå fjernet fra systemet.")
+                                st.error(f"✅ Sak {sak_id} er fjernet.")
                                 st.rerun()
-                            else:
-                                st.error("Kunne ikke slette saken. Sjekk databasetilkoblingen.")
-
-
-# ... (Kunde Arkiv ka code khatam hone ke baad) ...
 
 elif valg == "🏦 Bankens Renters":
     st.header("🏦 Aktuelle Bankrenter")
     st.info("Oversikt over gjeldende renter for ulike låneprodukter.")
-    
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Boliglån (Flytende)", "4.85%", "+0.25%")
@@ -835,16 +851,11 @@ elif valg == "🏦 Bankens Renters":
     with col2:
         st.metric("Billån", "6.20%", "Stabil")
         st.metric("Forbrukslån", "11.5%", "Stabil")
-    
     st.write("⚠️ *Merk: Rentene kan variere basert på kundens kredittscore.*")
-
-
 
 elif valg == "📞 Support Center":
     st.header("📞 Bank Support Center")
-    
     tab1, tab2 = st.tabs(["📩 Send Forespørsel", "📜 Min Historikk"])
-    
     with tab1:
         st.success("Vår supportavdeling er tilgjengelig: Man-Fre (09:00 - 16:00)")
         with st.form("support_form"):
@@ -854,13 +865,11 @@ elif valg == "📞 Support Center":
                 if sup_msg:
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     sender = st.session_state.get('navn', st.session_state.get('user_id', 'Ukjent'))
-                    # Data: Time, Name, Topic, Msg, Status, Admin Reply
                     support_data = [now, sender, sup_topic, sup_msg, "Åpen", "Venter på svar..."]
                     if add_data("Support", support_data):
                         st.balloons()
                         st.success("✅ Forespørsel sendt!")
                         st.rerun()
-
     with tab2:
         st.subheader("Mine tidligere henvendelser")
         try:
@@ -875,7 +884,8 @@ elif valg == "📞 Support Center":
             else:
                 st.info("Du har ingen registrerte forespørsler.")
         except:
-            st.error("Kunne ikke hente historikk.")                
+            st.error("Kunne ikke hente historikk.")
+            
 
 
 

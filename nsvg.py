@@ -570,24 +570,44 @@ if valg == "📊 Dashbord":
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
-        # --- SAKER LIST ---
+        # --- SAKER LIST (CLEAN HEADER LOGIC) ---
         for i, r in view_data.tail(15).iterrows():
-            hoved = r.get('Hovedsøker', 'N/A')
-            belop = r.get('Lånebeløp', '0')
+            # Name Clean
+            hoved = str(r.get('Hovedsøker', 'Ukjent Kunde')).strip()
+            if hoved in ["nan", "None", "", "N/A"]:
+                hoved = "Ukjent Kunde"
+
+            # Amount Clean
+            try:
+                belop_raw = r.get('Lånebeløp', 0)
+                belop = float(belop_raw) if not pd.isna(belop_raw) else 0
+            except:
+                belop = 0
+
+            # Status Clean
             b_status = r.get('Bank_Status', 'Mottatt')
+            st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
+            
+            # Assigned To Header Clean (Fixes the JSON in header issue)
+            assigned_raw = str(r.get('Assigned_To', 'Ingen')).strip()
+            if "[" in assigned_raw or "{" in assigned_raw or assigned_raw.lower() in ["nan", "none", ""]:
+                assigned_to_header = "Ingen"
+            else:
+                assigned_to_header = assigned_raw
+
             sak_id = str(r.get('ID', i))
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
-            assigned_to = r.get('Assigned_To', 'Ingen')
 
-            st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
-            
-            with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
+            # --- DISPLAY EXPANDER ---
+            with st.expander(f"{st_icon} {hoved} | {belop:,.0f} kr | Ansvar: {assigned_to_header}"):
                 
                 # --- BEDI'S COPY TOOL ---
                 if role in ["Saksbehandler", "Admin", "Director"]:
                     st.info("📋 **Portal Copy Tool**")
-                    copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {r.get('Fødselsnummer', 'N/A')}\nTLF: {r.get('Telefon', 'N/A')}"
+                    fnr_val = r.get('Fødselsnummer', 'N/A')
+                    tlf_val = r.get('Telefon', 'N/A')
+                    copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {fnr_val}\nTLF: {tlf_val}"
                     st.text_area("Klar til kopiering:", value=copy_text, height=100, key=f"cp_{sak_id}")
                     if st.button("🚀 Marker som 'Sendt til Bank'", key=f"bsent_{sak_id}"):
                         if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
@@ -600,8 +620,14 @@ if valg == "📊 Dashbord":
                 if role in ["Admin", "Director"]:
                     st.divider()
                     st.markdown("### 👤 Tildel Saksbehandler")
+                    # Index handling for Selectbox
+                    current_as = assigned_to_header
+                    idx = 0
+                    if current_as == "Bedi": idx = 1
+                    elif current_as == "Iqbal": idx = 2
+                    
                     new_asgn = st.selectbox("Velg:", ["Ingen", "Bedi", "Iqbal"], 
-                                            index=0 if str(assigned_to)=="Ingen" else (1 if str(assigned_to)=="Bedi" else 2),
+                                            index=idx,
                                             key=f"as_{sak_id}")
                     if st.button("Oppdater Ansvar", key=f"asb_{sak_id}"):
                         if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
@@ -615,7 +641,7 @@ if valg == "📊 Dashbord":
                         st.write(f"**{k}:** {v}")
                 
                 old_notater = str(r.get('Notater', ''))
-                new_notater = st.text_area("Oppdater Notater", value=old_notater, key=f"edit_not_{sak_id}")
+                new_notater = st.text_area("Oppdater Notater", value=old_notater if old_notater != "nan" else "", key=f"edit_not_{sak_id}")
                 if st.button("💾 Lagre Endringer", key=f"save_mod_{sak_id}"):
                     if update_sak_in_sheet(sak_id, {"Notater": new_notater}):
                         st.success("Lagret!")

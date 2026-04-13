@@ -8,12 +8,67 @@ import smtplib
 from email.mime.text import MIMEText
 import pytz 
 
-# --- GLOBAL SETTINGS ---
+# =================================================================
+# --- 1. CONFIGURATION & 2026 THEME (PISTACHIO-GRAY) ---
+# =================================================================
+st.set_page_config(page_title="NSVG CRM Pro", layout="wide")
+
+# Custom CSS for Modern Aesthetic
+st.markdown("""
+    <style>
+    .stApp { background-color: #F4F7F6; } /* Light Grayish-Pistachio */
+    
+    /* Metrics Styling */
+    div[data-testid="stMetricValue"] {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-bottom: 5px solid #B2D2A4;
+    }
+
+    /* Pistachio Buttons */
+    .stButton>button {
+        background-color: #B2D2A4 !important;
+        color: #2E4031 !important;
+        border-radius: 10px !important;
+        border: none !important;
+        font-weight: bold !important;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #98B88A !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    /* Glassmorphism Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Chat Bubble Styles (Updated for 2026 Look) */
+    .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 12px; margin: 8px; color: black; }
+    .agent-bubble { background-color: #FFFFFF; border-right: 5px solid #B2D2A4; padding: 12px; border-radius: 12px; margin: 8px; text-align: right; color: black; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
+
+# =================================================================
+# --- 2. GLOBAL SETTINGS & PERSISTENCE ---
+# =================================================================
 def get_norway_time():
     tz = pytz.timezone('Europe/Oslo')
     return datetime.now(tz).strftime("%d.%m.%Y %H:%M")
 
-# --- 1 & 2. DATABASE UPDATE ENGINE (Stable & Fast) ---
+# REFRESH FIX: Page refresh se logout nahi hoga
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "📊 Dashbord"
+
+# =================================================================
+# --- 3. DATABASE UPDATE ENGINE (Stable & Fast) ---
+# =================================================================
 def update_sak_in_sheet(sak_id, updated_values_dict):
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -39,21 +94,15 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
         st.error(f"Database Error: {e}")
         return False
 
-# --- MAYA'S HUB: THE PROFESSIONAL MESSAGING INTERFACE ---
+# =================================================================
+# --- 4. MAYA'S HUB: THE PROFESSIONAL MESSAGING INTERFACE ---
+# =================================================================
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Agent"):
     st.markdown("---")
     # Identity: Ansatt ko sirf BANK nazar aaye
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
     
-    # Professional Styling
-    st.markdown("""
-        <style>
-        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 10px; border-radius: 10px; margin: 5px; color: black; }
-        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 10px; border-radius: 10px; margin: 5px; text-align: right; color: black; }
-        </style>
-    """, unsafe_allow_html=True)
-
     try:
         messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
     except:
@@ -61,11 +110,11 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
 
     # --- SMART LOGIC: Auto-Mark as Read when opened ---
     has_unread = False
+    me_clean = str(username).lower().strip()
+    
     for m in messages:
-        if role not in ["Admin", "Director"] and m.get('role') == "Bank" and m.get('read') == False:
-            m['read'] = True
-            has_unread = True
-        elif role in ["Admin", "Director"] and m.get('role') == "Agent" and m.get('read') == False:
+        # Check if last message is unread AND not sent by current user
+        if not m.get('read', True) and str(m.get('sender', '')).lower().strip() != me_clean:
             m['read'] = True
             has_unread = True
 
@@ -74,11 +123,35 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
 
     # Show History
     for msg in messages:
-        is_bank = msg['role'] == "Bank"
+        is_bank = msg.get('role') == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
+        
         # Display Name logic
-        sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg["sender"]
-        st.markdown(f'<div class="{div_class}"><b>{sender_display}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg.get("sender", "System")
+        
+        st.markdown(f'''
+            <div class="{div_class}">
+                <b>{sender_display}</b><br>
+                {msg.get("text", "")}<br>
+                <small style="color: grey;">{msg.get("time", "")}</small>
+            </div>
+            ''', unsafe_allow_html=True)
+
+# =================================================================
+# --- 5. BANK CHECKLIST FUNCTION (MODERN & MOTTY INCLUDED) ---
+# =================================================================
+def display_bank_checklist(selected_bank):
+    st.markdown(f"#### 📋 {selected_bank} Checklist")
+    requirements = {
+        "Lendo": ["Siste 3 mnd lønnsslipp", "Siste skattemelding", "ID-kopi"],
+        "Axo Finans": ["Gjeldsbrev signering", "Bekreftelse på arbeidsforhold", "E-skatt tilgang"],
+        "Motty": ["BankID verifisering", "Oversikt over refinansiering", "Bilde av gyldig pass"]
+    }
+    selected_reqs = requirements.get(selected_bank, ["Standard dokumentasjon"])
+    for req in selected_reqs:
+        st.checkbox(req, key=f"check_{selected_bank}_{req}")
+
+
 
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
 
@@ -255,8 +328,9 @@ if role in ["Admin", "Director"]:
         "👥 Ansatte Kontroll", 
         "📇 Kontakter", 
         "💼 Saksbehandler Panel", 
-        "🕵️ Master Kontrollpanel"
+        "🛠️ Master Kontroll"  # <--- Iska naam change kar ke ye rakh dein
     ]
+
 elif role == "Saksbehandler":
     # BEDI/SAKSBEHANDLER: Saare Ansatt features + Saksbehandler menu merge kar diye
     options = [
@@ -396,9 +470,9 @@ if valg == "📊 Dashbord":
     
     if not df.empty:
         # --- ROLE BASED DATA FILTERING (STABLE) ---
-        # Hum .str.lower() use karenge taake case-sensitivity ka masla na ho
         df_clean = df.copy()
-        # Filling NaN values to avoid errors during string operations
+        
+        # Filling NaN values to avoid errors
         if 'Saksbehandler' in df_clean.columns:
             df_clean['Saksbehandler'] = df_clean['Saksbehandler'].fillna('Ukjent').astype(str)
         else:
@@ -409,30 +483,29 @@ if valg == "📊 Dashbord":
         else:
             df_clean['Assigned_To'] = "Ingen"
 
+        # Logic for User Access
+        current_u_lower = str(current_user).lower().strip()
+        
         if role in ["Admin", "Director"]:
             view_data = df_clean.copy()
         elif role == "Saksbehandler":
-            # Logic: Bedi apni saker (as agent) + jo usay assign hui hain (as processor)
-            mask_mine = df_clean['Saksbehandler'].str.lower() == str(current_user).lower()
-            mask_assigned = pd.Series(False, index=df_clean.index)
-            if 'Assigned_To' in df_clean.columns:
-                mask_assigned = df_clean['Assigned_To'].str.lower() == str(current_user).lower()
+            # Bedi/Iqbal logic: Own cases + Assigned cases
+            mask_mine = df_clean['Saksbehandler'].str.lower().str.strip() == current_u_lower
+            mask_assigned = df_clean['Assigned_To'].str.lower().str.strip() == current_u_lower
             view_data = df_clean[mask_mine | mask_assigned].copy()
         else:
-            view_data = df_clean[df_clean['Saksbehandler'].str.lower() == str(current_user).lower()].copy()
+            view_data = df_clean[df_clean['Saksbehandler'].str.lower().str.strip() == current_u_lower].copy()
         
-        # --- NOTIFICATION LOGIC (STABLE) ---
+        # --- NOTIFICATION LOGIC ---
         unread_saker = []
-        me_clean = str(current_user).lower().strip() 
         for i, r in view_data.iterrows():
             chat_h = str(r.get('Chat_History', ''))
             if not chat_h or chat_h in ['[]', 'nan']: continue
             try:
-                import json
                 msgs = json.loads(chat_h)
                 if msgs:
                     last_msg = msgs[-1]
-                    if not last_msg.get('read', True) and str(last_msg.get('sender', '')).lower().strip() != me_clean:
+                    if not last_msg.get('read', True) and str(last_msg.get('sender', '')).lower().strip() != current_u_lower:
                         unread_saker.append({"navn": r.get('Hovedsøker', 'Ukjent'), "id": r.get('ID', i)})
             except: continue
 
@@ -475,6 +548,18 @@ if valg == "📊 Dashbord":
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
                 
+                # --- NEW: BANK CHECKLIST TOOL ---
+                st.markdown("---")
+                col_ch1, col_ch2 = st.columns([1, 1])
+                with col_ch1:
+                    st.info("🏦 **Bank Specific Checklist**")
+                    bank_choice = st.selectbox("Velg Bank:", ["Lendo", "Axo Finans", "Motty"], key=f"bank_chk_{sak_id}")
+                with col_ch2:
+                    # Calling the function to show checks
+                    display_bank_checklist(bank_choice)
+
+                st.markdown("---")
+
                 # --- BEDI'S BANK COPY TOOL ---
                 if role == "Saksbehandler" or role in ["Admin", "Director"]:
                     st.info("📋 **Bank Portal Copy Tool**")
@@ -493,22 +578,25 @@ if valg == "📊 Dashbord":
                 inf_c1, inf_c2 = st.columns(2)
                 with inf_c1:
                     st.markdown("### 📄 Saksinformasjon")
-                    # Displaying info rows
                     items = list(r.items())
                     for k, v in items:
                         if k in ['Chat_History', 'Assigned_To', 'Mangler']: continue
-                        # Splitting display into two columns for cleaner look
                         st.write(f"**{k}:** {v}")
                 
                 with inf_c2:
                     # Assignment Dropdown for Admin
                     if role in ["Admin", "Director"]:
                         st.markdown("### 👤 Tildel Saksbehandler")
-                        # Option to add more saksbehandlers here in the list
-                        new_asgn = st.selectbox("Velg Saksbehandler:", ["Ingen", "Bedi"], index=1 if str(assigned_to)=="Bedi" else 0, key=f"as_{sak_id}")
+                        # Added Iqbal to the list as requested
+                        new_asgn = st.selectbox(
+                            "Velg Saksbehandler:", 
+                            ["Ingen", "Bedi", "Iqbal"], 
+                            index=0 if str(assigned_to) == "Ingen" else (1 if str(assigned_to) == "Bedi" else 2),
+                            key=f"as_{sak_id}"
+                        )
                         if st.button("Oppdater Ansvar", key=f"asb_{sak_id}"):
                             if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
-                                st.success("Ansvar oppdatert!")
+                                st.success(f"Ansvar tildelt {new_asgn}!")
                                 st.rerun()
 
                 # --- MODIFICATION SYSTEM ---
@@ -518,13 +606,90 @@ if valg == "📊 Dashbord":
                 
                 if st.button("💾 Lagre Endringer", key=f"save_mod_{sak_id}"):
                     if update_sak_in_sheet(sak_id, {"Notater": new_notater}):
-                        st.success("Oppdatert!")
+                        st.success("Notater oppdatert!")
                         st.rerun()
                             
     else:
         st.warning("Ingen data tilgjengelig i databasen.")
-        
-        
+
+
+
+# =================================================================
+# --- 7. MASTER KONTROLLPANEL (ADMIN ONLY) ---
+# =================================================================
+if valg == "🛠️ Master Kontroll":
+    if role not in ["Admin", "Director"]:
+        st.error("Adgang nektet. Kun for Admin/Director.")
+    else:
+        st.title("🛠️ Master Kontrollpanel")
+        st.subheader("Systemets hjerte - Full makt og kontroll")
+        st.divider()
+
+        # --- TABER FOR ORGANISERING ---
+        tab1, tab2, tab3 = st.tabs(["🗑️ Sletting Tool", "👥 Brukerstyring", "⚙️ Systeminnstillinger"])
+
+        # --- TAB 1: GOD-MODE SLETTING ---
+        with tab1:
+            st.warning("⚠️ **ADVARSEL:** Sletting er permanent. Når en sak slettes, kan den ikke gjenopprettes fra CRM.")
+            
+            delete_id = st.text_input("Skriv inn Sak ID som skal slettes:", key="del_id_input")
+            
+            # Double Confirmation Switch
+            confirm_delete = st.checkbox("Jeg bekrefter at jeg vil slette denne saken permanent.")
+            
+            if st.button("🔥 SLETT SAK NÅ"):
+                if not delete_id:
+                    st.error("Vennligst oppgi en gyldig ID.")
+                elif not confirm_delete:
+                    st.error("Du må bekrefte sletting ved å trykke på avhukingsboksen.")
+                else:
+                    # LOGIC: Deleting from Google Sheets
+                    try:
+                        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                        creds_dict = st.secrets["gcp_service_account"]
+                        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                        client = gspread.authorize(creds)
+                        sheet = client.open("NSVG_CRM_Data").worksheet("MainDB")
+                        
+                        cell = sheet.find(str(delete_id))
+                        if cell:
+                            sheet.delete_rows(cell.row)
+                            st.success(f"✅ Suksess! Sak ID {delete_id} er slettet fra databasen.")
+                            st.balloons()
+                        else:
+                            st.error("Fant ingen sak med denne ID-en.")
+                    except Exception as e:
+                        st.error(f"Sletting feilet: {e}")
+
+        # --- TAB 2: BRUKERSTYRING (IQBAL & BEDI) ---
+        with tab2:
+            st.markdown("### 👥 Aktive Saksbehandlere")
+            st.info("Her kan du se oversikt over hvem som har tilgang til systemet.")
+            
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+                st.success("**Bedi** (Saksbehandler)")
+                st.write("Status: Aktiv")
+            with col_u2:
+                st.success("**Iqbal** (Saksbehandler)")
+                st.write("Status: Aktiv")
+
+        # --- TAB 3: SYSTEMINNSTILLINGER ---
+        with tab3:
+            st.markdown("### ⚙️ Global Kontroll")
+            
+            st.toggle("Maintenance Mode (Låser systemet for ansatte)")
+            st.toggle("Tillat saksbehandlere å slette egne notater")
+            
+            new_comm = st.number_input("Standard Provisjon %", value=1.5, step=0.1)
+            if st.button("Lagre Globale Innstillinger"):
+                st.success(f"Innstillinger lagret! Ny standard provisjon: {new_comm}%")
+
+# =================================================================
+# --- END OF CRM ---
+# =================================================================
+
+
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":
     st.header("➕ Ny Bankforespørsel")

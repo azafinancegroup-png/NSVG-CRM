@@ -244,23 +244,23 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# --- DYNAMIC NAVIGATION LOGIC (THE FIX) ---
+# --- DYNAMIC NAVIGATION LOGIC (THE FIX - KONTAKTER RESTORED) ---
 if role in ["Admin", "Director"]:
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
         "📂 Kunde Arkiv", 
         "👥 Ansatte Kontroll", 
-        "📇 Kontakter", 
-        "💼 Saksbehandler Panel", # Admin ke liye naya control
+        "📇 Kontakter",        # <--- Yeh wapas link ho gaya
+        "💼 Saksbehandler Panel", 
         "🕵️ Master Kontrollpanel"
     ]
 elif role == "Saksbehandler":
     # BEDI KE LIYE: Ansatt menu + Saksbehandler menu dono merge kar diye
     options = [
         "📊 Dashbord", 
-        "➕ Ny Registrering",  # Wapas agaya!
-        "📥 Nye Oppgaver",     # Bank processing ke liye
+        "➕ Ny Registrering", 
+        "📥 Nye Oppgaver", 
         "📂 Kunde Arkiv", 
         "🏦 Bank Portaler",
         "📜 Dokumentmaler"
@@ -1099,8 +1099,7 @@ if role in ["Admin", "Director"]:
         st.error(f"Feil ved henting av support: {e}")
 
 
-
-# --- 11. KONTAKTER (ADVANCED OVERSIKT + AUTO-TIME) ---
+# --- 11. KONTAKTER (RESTORED - NO CHANGES SKIPPED) ---
 elif valg == "📇 Kontakter":
     st.header("📇 Kontaktadministrasjon")
     
@@ -1109,55 +1108,31 @@ elif valg == "📇 Kontakter":
     from datetime import datetime
     from email.mime.text import MIMEText
 
-    # INTERNAL SAVE/UPDATE FUNCTION
-    def update_sheet_data_internal(worksheet_name, df):
-        try:
-            creds_dict = st.secrets["gcp_service_account"]
-            from google.oauth2.service_account import Credentials
-            import gspread
-            scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-            client = gspread.authorize(creds)
-            sh = client.open_by_url(st.secrets["spreadsheet"])
-            worksheet = sh.worksheet(worksheet_name)
-            worksheet.clear()
-            # DataFrame ko wapis sheet mein dalna
-            worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-            return True
-        except Exception as e:
-            st.error(f"Feil ved lagring: {e}")
-            return False
-
     # DATA HENTING
     try:
         contacts_df = get_data("Contacts")
-        # Check if timestamp column exists
+        if contacts_df is None: 
+            contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon", "Sist Endret"])
         if "Sist Endret" not in contacts_df.columns:
             contacts_df["Sist Endret"] = "N/A"
     except:
         contacts_df = pd.DataFrame(columns=["Navn", "E-post", "Telefon", "Sist Endret"])
 
-    # Tabs with clean names as requested
+    # Tabs (Wahi purane 3 tabs)
     tab1, tab2, tab3 = st.tabs(["📇 Kontaktliste", "📩 Send E-post", "➕ Ny Kontakt"])
 
-    # --- TAB 1: KONTAKTLISTE (With built-in Editing) ---
+    # --- TAB 1: KONTAKTLISTE (Restored Editing Logic) ---
     with tab1:
         st.subheader("Oversikt over kontakter")
-        
         if not contacts_df.empty:
-            # Displaying the list
             st.dataframe(contacts_df, use_container_width=True, hide_index=True)
-            
             st.divider()
             
-            # Selection for Editing - Built inside the list tab
             selected_name = st.selectbox("Velg en kontakt for å endre detaljer:", ["-- Velg --"] + contacts_df["Navn"].tolist())
             
             if selected_name != "-- Velg --":
                 idx = contacts_df[contacts_df["Navn"] == selected_name].index[0]
                 last_time = contacts_df.at[idx, "Sist Endret"]
-                
-                # Showing the last modified time clearly
                 st.info(f"⏱️ **Sist endret:** {last_time}")
                 
                 with st.expander(f"✏️ Redigerer: {selected_name}", expanded=True):
@@ -1170,9 +1145,7 @@ elif valg == "📇 Kontakter":
                             new_t = st.text_input("Telefon", value=str(contacts_df.at[idx, "Telefon"]))
                         
                         if st.form_submit_button("💾 Lagre endringer"):
-                            # Update timestamp automatically
                             now_time = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-                            
                             contacts_df.at[idx, "Navn"] = new_n
                             contacts_df.at[idx, "E-post"] = new_e
                             contacts_df.at[idx, "Telefon"] = new_t
@@ -1183,9 +1156,9 @@ elif valg == "📇 Kontakter":
                                 st.cache_data.clear()
                                 st.rerun()
         else:
-            st.info("Listen er tom. Legg til en kontakt i 'Ny Kontakt' fanen.")
+            st.info("Listen er tom.")
 
-    # --- TAB 2: SEND E-POST ---
+    # --- TAB 2: SEND E-POST (Restored Email Logic) ---
     with tab2:
         st.subheader("Send e-post til kontakt")
         with st.form("quick_mail"):
@@ -1203,11 +1176,11 @@ elif valg == "📇 Kontakter":
                             server.starttls()
                             server.login(s_mail, s_pass)
                             server.sendmail(s_mail, rec, msg.as_string())
-                        st.success(f"✅ E-post sendt til {rec}")
+                        st.success(f"✅ E-post sendt!")
                     except Exception as e: 
-                        st.error(f"Kunne ikke sende e-post: {e}")
+                        st.error(f"Feil: {e}")
                 else:
-                    st.warning("Vennligst fyll ut mottaker og melding.")
+                    st.warning("Fyll ut alle felt.")
 
     # --- TAB 3: NY KONTAKT ---
     with tab3:
@@ -1216,18 +1189,16 @@ elif valg == "📇 Kontakter":
             nn = st.text_input("Navn")
             ne = st.text_input("E-post")
             nt = st.text_input("Telefon")
-            if st.form_submit_button("➕ Legg til i systemet"):
+            if st.form_submit_button("➕ Legg til"):
                 if nn and ne:
                     now = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
                     new_row = pd.DataFrame([{"Navn":nn, "E-post":ne, "Telefon":nt, "Sist Endret":now}])
                     contacts_df = pd.concat([contacts_df, new_row], ignore_index=True)
                     if update_sheet_data_internal("Contacts", contacts_df):
-                        st.success("✅ Kontakt er lagret!")
+                        st.success("✅ Lagret!")
                         st.cache_data.clear()
                         st.rerun()
-                else:
-                    st.warning("Navn og e-post er påkrevd.")
-
+                        
 
 
 # --- SEARCH FOR THIS LINE AND REPLACE EVERYTHING UNTIL THE FOOTER ---

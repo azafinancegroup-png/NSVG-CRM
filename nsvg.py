@@ -244,28 +244,31 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# --- DYNAMIC NAVIGATION LOGIC (THE FIX - KONTAKTER RESTORED) ---
+# --- DYNAMIC NAVIGATION LOGIC (THE FIX - BEDI FULL FEATURES RESTORED) ---
 if role in ["Admin", "Director"]:
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
         "📂 Kunde Arkiv", 
         "👥 Ansatte Kontroll", 
-        "📇 Kontakter",        # <--- Yeh wapas link ho gaya
+        "📇 Kontakter", 
         "💼 Saksbehandler Panel", 
         "🕵️ Master Kontrollpanel"
     ]
 elif role == "Saksbehandler":
-    # BEDI KE LIYE: Ansatt menu + Saksbehandler menu dono merge kar diye
+    # BEDI/SAKSBEHANDLER KE LIYE: Saare Ansatt features + Saksbehandler menu merge kar diye
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
-        "📥 Nye Oppgaver", 
+        "📥 Nye Oppgaver",      # Saksbehandler Feature
         "📂 Kunde Arkiv", 
-        "🏦 Bank Portaler",
-        "📜 Dokumentmaler"
+        "🏦 Bank Portaler",      # Saksbehandler Feature
+        "🏦 Bankens Renters",    # Ansatt Feature (Restored)
+        "📜 Dokumentmaler",      # Ansatt Feature (Restored)
+        "📞 Support Center"      # Ansatt Feature (Restored)
     ]
 else:
+    # Regular Ansatt (Employees)
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 

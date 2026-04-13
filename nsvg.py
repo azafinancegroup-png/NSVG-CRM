@@ -450,31 +450,53 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
                 
-
 # =================================================================
-# --- 6. DASHBORD (FIXED ERROR & MODERN GRAY THEME) ---
+# --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL LOGIC) ---
 # =================================================================
 
-# --- APPLYING MEDIUM GRAY THEME (ALL USERS) ---
+# --- APPLYING MODERN LIGHT THEME (AS REQUESTED) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #2D3436; color: #DFE6E9; }
-    div[data-testid="stMetricValue"], .stExpander {
-        background-color: #3B4244 !important;
-        color: white !important;
-        border-radius: 12px;
-        border: 1px solid #636E72 !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    /* Arctic Light Background */
+    .stApp {
+        background-color: #F1F4F8;
+        color: #2D3436;
     }
+    
+    /* Metrics & Cards: Clean White with Soft Borders */
+    div[data-testid="stMetricValue"], .stExpander {
+        background-color: #FFFFFF !important;
+        color: #2D3436 !important;
+        border-radius: 15px;
+        border: 1px solid #D1D8E0 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    /* Professional Blue Buttons */
     .stButton>button {
-        background-color: #636E72 !important;
+        background-color: #4A69BD !important;
         color: white !important;
         border-radius: 8px !important;
-        border: 0.5px solid #B2D2A4 !important;
+        border: none !important;
+        font-weight: 500 !important;
     }
-    .stButton>button:hover { background-color: #B2D2A4 !important; color: #2D3436 !important; }
-    [data-testid="stSidebar"] { background-color: #1E272E !important; }
-    input, textarea, .stSelectbox { background-color: #485460 !important; color: white !important; }
+    .stButton>button:hover {
+        background-color: #1E3799 !important;
+        color: white !important;
+    }
+
+    /* Sidebar: Professional Off-White */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E1E8ED !important;
+    }
+    
+    /* Input & Select Boxes */
+    input, textarea, .stSelectbox {
+        background-color: #FFFFFF !important;
+        color: #2D3436 !important;
+        border: 1px solid #CED6E0 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -494,7 +516,7 @@ if valg == "📊 Dashbord":
     if not df.empty:
         df_clean = df.copy()
         
-        # Data Cleaning
+        # Data Cleaning (Wahi purana logic)
         for col in ['Saksbehandler', 'Assigned_To']:
             if col in df_clean.columns:
                 df_clean[col] = df_clean[col].fillna('Ukjent').astype(str)
@@ -562,14 +584,13 @@ if valg == "📊 Dashbord":
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
                 
-                # --- FIXED BANK CHECKLIST (Unique Keys) ---
+                # --- FIXED BANK CHECKLIST ---
                 st.markdown("---")
                 col_ch1, col_ch2 = st.columns([1, 1])
                 with col_ch1:
                     st.info("🏦 **Bank Specific Checklist**")
                     bank_choice = st.selectbox("Velg Bank:", ["Lendo", "Axo Finans", "Motty"], key=f"bank_sel_{sak_id}")
                 with col_ch2:
-                    # FIX: Integrated checklist directly to avoid duplicate key error
                     reqs = {"Lendo": ["3 mnd lønnsslipp", "Skattemelding", "ID-kopi"],
                             "Axo Finans": ["Gjeldsbrev", "Arbeidsforhold", "E-skatt"],
                             "Motty": ["BankID", "Refinansiering", "Pass-kopi"]}
@@ -658,8 +679,7 @@ if valg == "🛠️ Master Kontroll":
             st.toggle("Maintenance Mode")
             new_comm = st.number_input("Standard Provisjon %", value=1.5, step=0.1)
             if st.button("Lagre"): st.success("Lagret!")
-
-
+                
 
 # --- 7. NY REGISTRERING (100% ORIGINAL LOGIC + BANKING HUB INTEGRATION) ---
 elif valg == "➕ Ny Registrering":

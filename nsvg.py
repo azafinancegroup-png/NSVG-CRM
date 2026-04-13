@@ -454,7 +454,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 # --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL LOGIC) ---
 # =================================================================
 
-# --- APPLYING MODERN LIGHT THEME (AS REQUESTED) ---
+# --- APPLYING MODERN LIGHT THEME ---
 st.markdown("""
     <style>
     /* Arctic Light Background */
@@ -463,7 +463,7 @@ st.markdown("""
         color: #2D3436;
     }
     
-    /* Metrics & Cards: Clean White with Soft Borders */
+    /* Metrics & Cards */
     div[data-testid="stMetricValue"], .stExpander {
         background-color: #FFFFFF !important;
         color: #2D3436 !important;
@@ -516,7 +516,7 @@ if valg == "📊 Dashbord":
     if not df.empty:
         df_clean = df.copy()
         
-        # Data Cleaning (Wahi purana logic)
+        # Data Cleaning
         for col in ['Saksbehandler', 'Assigned_To']:
             if col in df_clean.columns:
                 df_clean[col] = df_clean[col].fillna('Ukjent').astype(str)
@@ -584,25 +584,9 @@ if valg == "📊 Dashbord":
             
             with st.expander(f"{st_icon} {hoved} | {belop} kr | Ansvar: {assigned_to}"):
                 
-                # --- FIXED BANK CHECKLIST ---
-                st.markdown("---")
-                col_ch1, col_ch2 = st.columns([1, 1])
-                with col_ch1:
-                    st.info("🏦 **Bank Specific Checklist**")
-                    bank_choice = st.selectbox("Velg Bank:", ["Lendo", "Axo Finans", "Motty"], key=f"bank_sel_{sak_id}")
-                with col_ch2:
-                    reqs = {"Lendo": ["3 mnd lønnsslipp", "Skattemelding", "ID-kopi"],
-                            "Axo Finans": ["Gjeldsbrev", "Arbeidsforhold", "E-skatt"],
-                            "Motty": ["BankID", "Refinansiering", "Pass-kopi"]}
-                    selected_reqs = reqs.get(bank_choice, ["Standard dokumentasjon"])
-                    for req in selected_reqs:
-                        st.checkbox(req, key=f"chk_{sak_id}_{bank_choice}_{req}")
-
-                st.markdown("---")
-
                 # --- BEDI'S COPY TOOL ---
                 if role in ["Saksbehandler", "Admin", "Director"]:
-                    st.info("📋 **Bank Portal Copy Tool**")
+                    st.info("📋 **Portal Copy Tool**")
                     copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {r.get('Fødselsnummer', 'N/A')}\nTLF: {r.get('Telefon', 'N/A')}"
                     st.text_area("Klar til kopiering:", value=copy_text, height=100, key=f"cp_{sak_id}")
                     if st.button("🚀 Marker som 'Sendt til Bank'", key=f"bsent_{sak_id}"):
@@ -638,7 +622,7 @@ if valg == "📊 Dashbord":
                         st.rerun()
     else:
         st.warning("Ingen data tilgjengelig.")
-
+        
 
 # =================================================================
 # --- 0. MASTER KONTROLLPANEL (ADMIN ONLY) ---

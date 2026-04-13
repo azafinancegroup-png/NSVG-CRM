@@ -215,7 +215,9 @@ if not st.session_state['logged_in']:
     st.stop()
 
 
-# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION - SAKSBEHANDLER UPDATE) ---
+# =================================================================
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
+# =================================================================
 
 if st.session_state.get('logged_in'):
     raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
@@ -244,7 +246,7 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# --- DYNAMIC NAVIGATION LOGIC (THE FIX - BEDI FULL FEATURES RESTORED) ---
+# --- DYNAMIC NAVIGATION LOGIC (BEDI FULL FEATURES RESTORED) ---
 if role in ["Admin", "Director"]:
     options = [
         "📊 Dashbord", 
@@ -256,15 +258,15 @@ if role in ["Admin", "Director"]:
         "🕵️ Master Kontrollpanel"
     ]
 elif role == "Saksbehandler":
-    # BEDI/SAKSBEHANDLER KE LIYE: Saare Ansatt features + Saksbehandler menu merge kar diye
+    # BEDI/SAKSBEHANDLER: Saare Ansatt features + Saksbehandler menu merge kar diye
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
         "📥 Nye Oppgaver",      # Saksbehandler Feature
         "📂 Kunde Arkiv", 
-        "🏦 Bankens Renters",    # Ansatt Feature (Restored)
-        "📜 Dokumentmaler",      # Ansatt Feature (Restored)
-        "📞 Support Center"      # Ansatt Feature (Restored)
+        "🏦 Bankens Renters",    # Ansatt Feature
+        "📜 Dokumentmaler",      # Ansatt Feature
+        "📞 Support Center"      # Ansatt Feature
     ]
 else:
     # Regular Ansatt (Employees)
@@ -308,7 +310,9 @@ if st.sidebar.button("🔴 Logg ut"):
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
     me_clean = str(username).lower().strip()
-    target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
+    # Handle agent_name if it's None
+    agent_display = str(agent_name).upper() if agent_name else "AGENT"
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_display
     
     st.subheader(f"💬 Meldinger med {target_label}")
 

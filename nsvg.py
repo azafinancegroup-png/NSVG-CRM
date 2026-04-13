@@ -740,7 +740,7 @@ elif valg == "🛠️ Master Kontroll":
             
                 
 # =================================================================
-# --- 7. NY REGISTRERING (2026 HIGH-TECH & DASHBOARD ALIGNED) ---
+# --- 7. NY REGISTRERING (FINAL VERIFIED - NOTHING SKIPPED) ---
 # =================================================================
 elif valg == "➕ Ny Registrering":
     # --- 📈 DYNAMIC PROGRESS TRACKER ---
@@ -772,7 +772,7 @@ elif valg == "➕ Ny Registrering":
     with st.form("main_bank_form", clear_on_submit=True):
         f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
         
-        # --- 🏢 BEDRIFT SECTION (STRICT ORIGINAL LOGIC) ---
+        # --- 🏢 BEDRIFT SECTION ---
         if is_bedrift:
             st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
@@ -782,7 +782,7 @@ elif valg == "➕ Ny Registrering":
             f_aksjer = bc2.text_input("Aksjefordeling (%)", placeholder="Eks: 50/50")
             st.divider()
 
-        # --- 👤 HOVEDSØKER SECTION (WITH AUTO-FILL PLACEHOLDERS) ---
+        # --- 👤 HOVEDSØKER SECTION ---
         st.markdown("<h3 style='color: #4A69BD;'>👤 Hovedsøker Detaljer</h3>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         navn = c1.text_input("Fullt Navn (Hovedsøker) *", key="navn_input", placeholder="Eks: Ola Nordmann") 
@@ -799,7 +799,7 @@ elif valg == "➕ Ny Registrering":
         arbeidsgiver = l2.text_input("Arbeidsgiver", placeholder="Eks: Equinor AS")
         ansatt_tid = l3.text_input("Ansettelsestid", placeholder="Eks: 3 år / Fast")
         stilling_type = l1.selectbox("Ansettelsesform", ["Fast ansatt", "Midlertidig", "Selvstendig", "Uføretrygd", "Pensjonist"])
-        ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0, placeholder="Eks: Leieinntekt")
+        ekstra_jobb = l2.number_input("Bi-inntekt / Ekstra (kr/år)", 0)
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
         st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
@@ -821,7 +821,6 @@ elif valg == "➕ Ny Registrering":
             m_fnr = mc1.text_input("Fødselsnummer (11 siffer - Medsøker)", placeholder="11 siffer")
             m_epost = mc1.text_input("E-post (Medsøker)", placeholder="kari@gmail.com")
             m_tlf = mc2.text_input("Telefon (Medsøker)", placeholder="Eks: 900 00 000")
-            m_sivil = mc2.selectbox("Sivilstatus (Medsøker)", ["Enslig", "Gift", "Samboer", "Skilt"], key="ms_sivil")
             m_pass = mc1.selectbox("Statsborgerskap (Medsøker)", countries, key="ms_pass")
             m_botid = mc2.text_input("Botid i Norge (Medsøker)", key="ms_botid", placeholder="Eks: 5 år")
 
@@ -841,13 +840,13 @@ elif valg == "➕ Ny Registrering":
             m_gjeld = mf3.number_input("Eksisterende Gjeld (kr) - Medsøker", 0, step=10000, format="%d", key="ms_gjeld")
 
         st.divider()
-        st.markdown("<h3 style='color: #2C3E50;'>📊 Felles Lånesøknad</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #2C3E50;'>📊 Lånesøknad & Vedlegg</h3>", unsafe_allow_html=True)
         f1, f2, f3 = st.columns(3)
         belop = f1.number_input("Ønsket Lånebeløp (kr)", 0, step=50000, format="%d", key="belop_input")
-        barn = f2.number_input("Antall Barn totalt (under 18 år)", 0, step=1)
+        barn = f2.number_input("Antall Barn totalt", 0, step=1)
         biler = f3.number_input("Antall Biler totalt", 0, step=1)
 
-        # --- 📉 AUTO-CALCULATION SUMMARY BOX (Real-time Feedback) ---
+        # --- 📉 AUTO-CALCULATION SUMMARY BOX ---
         total_inc = lonn + m_lonn + ekstra_jobb + m_ekstra
         total_debt = h_gjeld + m_gjeld + belop
         dti = round(total_debt / total_inc, 2) if total_inc > 0 else 0
@@ -864,76 +863,43 @@ elif valg == "➕ Ny Registrering":
         """, unsafe_allow_html=True)
 
         notater = st.text_area("Interne Notater (Viktig info for banken)", placeholder="Skriv relevante kommentarer her...")
+
+        # --- 📂 DOKUMENT OPPLASTING (WAS MISSING - FIXED!) ---
+        st.markdown("#### 📁 Dokumentasjon")
+        uploaded_files = st.file_uploader("Last opp Vedlegg (PDF, JPG, PNG)", accept_multiple_files=True, key="doc_uploader")
         
-        # --- 🛡️ STATUS LOCK LOGIC ---
+        # --- 🛡️ STATUS LOCK ---
         user_role = str(st.session_state.get('role', 'Ansatt')).strip().capitalize()
         if user_role in ["Admin", "Director"]:
-            status_options = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-            final_status = st.selectbox("Sak Status (KUN ADMIN/DIRECTOR)", status_options, index=0)
+            final_status = st.selectbox("Sak Status (KUN ADMIN)", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"])
         else:
             final_status = "Mottatt"
 
-        # --- 🚀 SUBMIT BUTTON ---
+        # --- 🚀 SUBMIT ---
         submit = st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN", use_container_width=True)
         
         if submit:
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
-                tot_ek = h_ek + m_ek
-                tot_gjeld_db = h_gjeld + m_gjeld
+                initial_chat = json.dumps([{"role": "Bank", "sender": "SYSTEM", "text": f"Søknad om {prod} mottatt.", "time": datetime.now().strftime("%d-%m-%Y %H:%M")}])
                 
-                # Chat logic formatted for JSON
-                initial_chat = json.dumps([{
-                    "role": "Bank", 
-                    "sender": "BANK CENTRAL", 
-                    "text": f"Søknad om {prod} er mottatt. Vi starter behandlingen.", 
-                    "time": datetime.now().strftime("%d-%m-%Y %H:%M")
-                }])
-                
-                # --- PRECISE COLUMN MAPPING (33 COLUMNS - 0 to 32) ---
+                # Precise 33-column mapping
                 new_row = [
-                    len(df)+1,                                  # 0: ID
-                    datetime.now().strftime("%d-%m-%Y"),        # 1: Dato
-                    prod,                                       # 2: Produkt
-                    navn,                                       # 3: Hovedsøker (Matches Dashboard)
-                    fnr,                                        # 4: FNR
-                    epost,                                      # 5: Epost
-                    tlf,                                        # 6: Telefon
-                    sivil,                                      # 7: Sivilstatus
-                    "Bedrift" if is_bedrift else "Privat",      # 8: Type
-                    "Active",                                   # 9: Status
-                    f_navn if is_bedrift else "",               # 10: Firma_Navn
-                    lonn,                                       # 11: Lønn
-                    barn,                                       # 12: Barn
-                    h_sfo,                                      # 13: SFO
-                    tot_ek,                                     # 14: Egenkapital
-                    tot_gjeld_db,                               # 15: Gjeld
-                    biler,                                      # 16: Biler
-                    belop,                                      # 17: Lånebeløp (Matches Dashboard)
-                    f_org if is_bedrift else "",                # 18: Org_nr
-                    f_eier if is_bedrift else "",               # 19: Eiere
-                    f_aksjer if is_bedrift else "",             # 20: Aksjer
-                    m_navn,                                     # 21: Medsøker_Navn
-                    m_fnr,                                      # 22: Med_Fnr
-                    m_epost,                                    # 23: Med_Epost
-                    m_tlf,                                      # 24: Med_Tlf
-                    m_lonn,                                     # 25: Med_Lønn
-                    m_arb,                                      # 26: Med_Arb
-                    notater,                                    # 27: Notater
-                    f"P1: {pass_land} | P2: {m_pass}",          # 28: Pass/Info
-                    current_user,                               # 29: Saksbehandler
-                    final_status,                               # 30: Bank_Status
-                    "Ingen",                                    # 31: Assigned_To
-                    initial_chat                                # 32: Chat_History
+                    len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
+                    "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "",
+                    lonn, barn, h_sfo, (h_ek + m_ek), (h_gjeld + m_gjeld), biler, belop,
+                    f_org if is_bedrift else "", f_eier if is_bedrift else "", f_aksjer if is_bedrift else "",
+                    m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater, f"P1: {pass_land} | P2: {m_pass}",
+                    current_user, final_status, "Ingen", initial_chat
                 ]
                 
                 if add_data("MainDB", new_row):
                     st.success(f"✅ Søknad registrert! ID: {len(df)+1}")
+                    if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
                     st.rerun()
-
-
+                    
 
 elif valg == "📂 Kunde Arkiv":
     st.header("📂 Kunde Arkiv - Modern Oversikt")

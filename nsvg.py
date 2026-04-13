@@ -666,49 +666,48 @@ if valg == "📊 Dashbord":
         
 
 # =================================================================
-# --- 8. MASTER KONTROLL (ADMIN ONLY - WITH DELETE & CLEANUP) ---
+# --- 8. MASTER KONTROLL (FIXED VERSION) ---
 # =================================================================
 elif valg == "🛠️ Master Kontroll":
     if role not in ["Admin", "Director"]:
         st.error("Kun tilgjengelig for Admin/Director")
     else:
         st.title("🛠️ Global Sakshåndtering")
-        st.info("Her kan du se alle saker i systemet, tildele ansvar, og slette feilregistreringer.")
+        st.info("Her kan du se alle saker, tildele ansvar, og slette feilregistreringer.")
 
         if not df.empty:
-            # 1. Search & Filter for Master List
-            search_m = st.text_input("Søk i alle saker (Navn, ID, FNR)...", key="master_search")
+            search_m = st.text_input("🔍 Søk i alle saker (Navn, ID, FNR)...", key="master_search")
             
-            # Data Cleaning for Master View
             m_data = df.copy()
             if search_m:
                 m_data = m_data[m_data.astype(str).apply(lambda x: x.str.contains(search_m, case=False)).any(axis=1)]
 
-            st.write(f"Viser {len(m_data)} totalt registrerte saker.")
+            st.write(f"Viser **{len(m_data)}** saker.")
 
-            # --- MASTER LIST LOOP ---
             for i, r in m_data.iterrows():
                 sak_id = str(r.get('ID', i))
-                hoved = str(r.get('Hovedsøker', 'Ukjent')).strip()
-                if hoved in ["nan", "", "N/A"]: hoved = "Ukjent Kunde"
+                
+                # FIX: Check for 'Navn' if 'Hovedsøker' is empty
+                hoved = str(r.get('Hovedsøker', r.get('Navn', 'Ukjent Kunde'))).strip()
+                if hoved in ["nan", "", "N/A", "None"]: hoved = "Ukjent Kunde"
                 
                 belop = r.get('Lånebeløp', '0')
-                ansvar = str(r.get('Assigned_To', 'Ingen')).strip()
-                if "[" in ansvar or "{" in ansvar or ansvar.lower() in ["nan", "none"]:
-                    ansvar = "Ingen"
+                
+                # Clean up Assigned_To logic for header
+                ansvar_raw = str(r.get('Assigned_To', 'Ingen')).strip()
+                if "[" in ansvar_raw or "{" in ansvar_raw or ansvar_raw.lower() in ["nan", "none", ""]:
+                    ansvar_display = "Ingen"
+                else:
+                    ansvar_display = ansvar_raw
 
-                # Header for Master Item
-                with st.expander(f"🆔 {sak_id} | 👤 {hoved} | 💰 {belop} kr | 🛡️ Ansvar: {ansvar}"):
-                    
+                with st.expander(f"🆔 {sak_id} | 👤 {hoved} | 💰 {belop} kr | 🛡️ Ansvar: {ansvar_display}"):
                     mc1, mc2 = st.columns(2)
                     
-                    # --- ACTION 1: ASSIGNMENT ---
                     with mc1:
                         st.markdown("### 👤 Endre Ansvar")
-                        current_as = ansvar
                         idx = 0
-                        if current_as == "Bedi": idx = 1
-                        elif current_as == "Iqbal": idx = 2
+                        if ansvar_display == "Bedi": idx = 1
+                        elif ansvar_display == "Iqbal": idx = 2
                         
                         new_asgn = st.selectbox("Velg Saksbehandler:", ["Ingen", "Bedi", "Iqbal"], 
                                                 index=idx, key=f"m_as_{sak_id}")
@@ -717,28 +716,23 @@ elif valg == "🛠️ Master Kontroll":
                                 st.success("Oppdatert!")
                                 st.rerun()
 
-                    # --- ACTION 2: DELETE (⚠️ THE MISSING BUTTON) ---
                     with mc2:
                         st.markdown("### 🗑️ Slette Sak")
-                        st.warning("Dette vil fjerne saken permanent fra databasen.")
+                        st.warning("Dette fjerner saken permanent fra databasen.")
                         confirm_delete = st.checkbox("Jeg bekrefter sletting", key=f"del_conf_{sak_id}")
                         
-                        if st.button(f"❌ SLETT SAK {sak_id}", key=f"del_btn_{sak_id}", type="secondary"):
+                        # FIX: Calling the correct function name from Section 2
+                        if st.button(f"❌ SLETT SAK {sak_id}", key=f"del_btn_{sak_id}"):
                             if confirm_delete:
-                                # Yahan hum delete_row function call karenge jo humne pehle discuss kiya tha
-                                try:
-                                    if delete_data_row("MainDB", sak_id):
-                                        st.success(f"Sak {sak_id} er slettet!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Kunne ikke slette fra Google Sheets.")
-                                except Exception as e:
-                                    st.error(f"Feil: {str(e)}")
+                                if delete_sak_from_sheet(sak_id):
+                                    st.success(f"Sak {sak_id} slettet!")
+                                    st.rerun()
+                                else:
+                                    st.error("Kunne ikke slette. Sjekk tilkoblingen.")
                             else:
                                 st.error("Du må bekrefte sletting først!")
 
                     st.divider()
-                    # --- FULL DATA PREVIEW ---
                     st.markdown("### 🔍 Fullstendige Data")
                     st.json(r.to_dict())
         else:

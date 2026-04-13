@@ -152,8 +152,9 @@ def display_bank_checklist(selected_bank):
         st.checkbox(req, key=f"check_{selected_bank}_{req}")
 
 
-
+# =================================================================
 # --- 2. GOOGLE SHEETS CONNECTION ENGINE (Maya Optimized) ---
+# =================================================================
 
 def connect_to_sheet(sheet_name):
     try:
@@ -195,7 +196,6 @@ def add_data(sheet_name, row_list):
             return False
     return False
 
-# YE RHA NAYA UPDATED FUNCTION (Jo aapne manga tha)
 def update_sheet_data_internal(worksheet_name, df):
     """
     Puri sheet ko naye data se update karne ke liye (Svar/Reply save karne ke liye).
@@ -217,12 +217,12 @@ def update_sheet_data_internal(worksheet_name, df):
             return False
     return False
 
-# AAPKA DELETE FUNCTION (Yeh skip nahi hua!)
 def delete_sak_from_sheet(sak_id): 
     """ 
     Google Sheet se specific ID wali row ko delete karne ka function.
     """
     try:
+        # Hum wahi function use karenge jo upar define kiya hai
         sh = connect_to_sheet("MainDB")
         if sh:
             rows = sh.get_all_records()
@@ -233,13 +233,14 @@ def delete_sak_from_sheet(sak_id):
                     sh.delete_rows(row_to_delete)
                     st.cache_data.clear()
                     return True
+            return False
         else:
             st.error("Kunne ikke koble til databasen (MainDB).")
             return False
-        return False
     except Exception as e:
         st.error(f"⚠️ Database Error ved sletting: {e}")
         return False
+        
         
 # --- 3. CACHING COUNTRIES (SPEED BOOSTER) ---
 @st.cache_data

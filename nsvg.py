@@ -1035,7 +1035,9 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
         st.warning("Ingen ansatte funnet.")
 
 
-if role in ["Admin", "Director"]:
+# --- SUPPORT MANAGEMENT FOR ADMIN (Yeh Dashboard ya Main area mein rahega) ---
+
+if role in ["Admin", "Director"] and valg == "📊 Dashbord": # Maine isse Dashboard se link kar diya hai
     st.divider()
     st.header("📥 Support Management (Admin)")
     
@@ -1043,14 +1045,14 @@ if role in ["Admin", "Director"]:
         # Henter data fra Google Sheets
         support_df = get_data("Support")
         
-        if not support_df.empty:
+        if support_df is not None and not support_df.empty:
             # Viser de nyeste meldingene først
             for i, row in support_df.sort_index(ascending=False).iterrows():
                 
-                # Sjekker om det er en hastesak
+                # Check priority
                 priority_tag = "⚠️ HASTE" if row['Tema'] == "Prioritert utbetaling" else ""
                 
-                # Fargeindikator basert på status
+                # Status indicator
                 color = "🔴" if row['Status'] == "Åpen" else "🟢"
                 
                 with st.expander(f"{color} {priority_tag} Fra: {row['Fra_Bruker']} | Tema: {row['Tema']} | Tid: {row['Tidspunkt']}"):
@@ -1071,19 +1073,15 @@ if role in ["Admin", "Director"]:
                     
                     with col1:
                         if st.button("💾 Lagre Svar & Oppdater", key=f"save_{i}"):
-                            # Oppdaterer lokalt i programmet
                             support_df.at[i, 'Svar_Fra_Admin'] = new_reply
                             support_df.at[i, 'Status'] = new_status
                             
-                            # Lagrer til Google Sheets
                             with st.spinner("Lagrer svar..."):
                                 if update_sheet_data_internal("Support", support_df):
-                                    st.cache_data.clear() # Sletter minne så endringen vises med en gang
-                                    st.success("✅ Svar er lagret og sendt!")
+                                    st.cache_data.clear()
+                                    st.success("✅ Svar er lagret!")
                                     st.rerun() 
-                                else:
-                                    st.error("Kunne ikke lagre. Prøv igjen.")
-
+                    
                     with col2:
                         if st.button("🗑️ Slett Melding", key=f"del_msg_{i}"):
                             new_df = support_df.drop(i)
@@ -1093,10 +1091,11 @@ if role in ["Admin", "Director"]:
                                     st.warning("Melding slettet!")
                                     st.rerun()
         else:
-            st.info("Ingen support-forespørsler funnet.")
+            st.info("Ingen aktive support-forespørsler.")
             
     except Exception as e:
         st.error(f"Feil ved henting av support: {e}")
+
 
 
 # --- 11. KONTAKTER (RESTORED - NO CHANGES SKIPPED) ---

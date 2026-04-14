@@ -691,6 +691,7 @@ elif valg == "➕ Ny Registrering":
     c_top1, c_top2 = st.columns([2, 1])
     prod = c_top1.selectbox("🎯 Velg Produkt Type", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
+    is_billan = prod == "Billån"
 
     st.markdown("---")
     st.info("💡 **Tips:** Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
@@ -699,7 +700,7 @@ elif valg == "➕ Ny Registrering":
     with st.form("main_bank_form", clear_on_submit=True):
         f_navn, f_org, f_eier, f_aksjer = "", "", "", ""
         
-        # --- 🏢 BEDRIFT SECTION ---
+        # --- 🏢 BEDRIFT SECTION (STAYS UNCHANGED) ---
         if is_bedrift:
             st.subheader("🏢 Bedrift / Firma Detaljer")
             bc1, bc2 = st.columns(2)
@@ -707,6 +708,19 @@ elif valg == "➕ Ny Registrering":
             f_org = bc1.text_input("Organisasjonsnummer (9 siffer)", placeholder="987 654 321")
             f_eier = bc2.text_area("Navn & Personnummer på alle eiere", placeholder="Ola Nordmann (010180 12345) - 50%")
             f_aksjer = bc2.text_input("Aksjefordeling (%)", placeholder="Eks: 50/50")
+            st.divider()
+
+        # --- 🚗 EXCLUSIVE BILLÅN SECTION (NEW PROFESSIONAL ADDITION) ---
+        if is_billan:
+            st.markdown("<h3 style='color: #F39C12;'>🚗 Kjøretøy Detaljer (Billån)</h3>", unsafe_allow_html=True)
+            v1, v2, v3 = st.columns(3)
+            bil_merke = v1.text_input("Bilmerke & Modell", placeholder="Eks: Tesla Model 3")
+            bil_reg = v2.text_input("Registreringsnummer", placeholder="Eks: EL 12345")
+            bil_km = v3.text_input("Kilometerstand", placeholder="Eks: 45 000 km")
+            
+            v4, v5 = st.columns([2, 1])
+            finn_link = v4.text_input("Finn.no Link (Valgfritt)", placeholder="https://www.finn.no/car/used/ad.html?finnkode=...")
+            bil_egenkapital = v5.number_input("Egenkapital til bil (kr)", min_value=0, step=5000)
             st.divider()
 
         # --- 👤 HOVEDSØKER SECTION ---
@@ -730,12 +744,13 @@ elif valg == "➕ Ny Registrering":
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
         st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
-        hf1, hf2, hf3 = st.columns(3)
+        hf1, hf2, hf3, hf4 = st.columns(4) # Added column for Boliglån
         h_ek = hf1.number_input("Egenkapital (kr) - Hoved", 0, step=10000, format="%d")
         h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
-        h_gjeld = hf3.number_input("Eksisterende Gjeld (kr) - Hoved", 0, step=10000, format="%d")
+        h_gjeld = hf3.number_input("Forbruksgjeld (kr) - Hoved", 0, step=10000, format="%d")
+        h_boliglan = hf4.number_input("Boliglån (kr) - Hoved", 0, step=50000, format="%d")
 
-        # --- 👥 MEDSØKER SECTION ---
+        # --- 👥 MEDSØKER SECTION (STAYS UNCHANGED) ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
         m_ek, m_sfo, m_gjeld = 0, "Nei", 0
@@ -775,7 +790,7 @@ elif valg == "➕ Ny Registrering":
 
         # --- 📉 AUTO-CALCULATION SUMMARY BOX ---
         total_inc = lonn + m_lonn + ekstra_jobb + m_ekstra
-        total_debt = h_gjeld + m_gjeld + belop
+        total_debt = h_gjeld + m_gjeld + h_boliglan + belop
         dti = round(total_debt / total_inc, 2) if total_inc > 0 else 0
         
         st.markdown(f"""
@@ -783,13 +798,18 @@ elif valg == "➕ Ny Registrering":
                 <h4 style='margin:0; color: #4A69BD;'>📊 Økonomisk Oversikt (Live Analysis)</h4>
                 <div style='display: flex; justify-content: space-between; margin-top: 10px;'>
                     <span>Total Inntekt: <b>{total_inc:,.0f} kr</b></span>
-                    <span>Total Gjeld: <b>{total_debt:,.0f} kr</b></span>
+                    <span>Total Gjeld (inkl. bolig): <b>{total_debt:,.0f} kr</b></span>
                     <span>Gjeldsgrad: <span style='color:{"#E74C3C" if dti > 5 else "#27AE60"};'><b>{dti}x</b></span></span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
 
-        notater = st.text_area("Interne Notater (Viktig info for banken)", placeholder="Skriv relevante kommentarer her...")
+        # Merge car info into notes if it's a Billån
+        if is_billan:
+            car_info = f"\n\n--- BILLÅN INFO ---\nBil: {bil_merke}\nReg nr: {bil_reg}\nKM: {bil_km}\nEgenkapital: {bil_egenkapital} kr\nLink: {finn_link}"
+            notater = st.text_area("Interne Notater", value=car_info, placeholder="Skriv relevante kommentarer her...")
+        else:
+            notater = st.text_area("Interne Notater (Viktig info for banken)", placeholder="Skriv relevante kommentarer her...")
 
         # --- 📂 DOKUMENT OPPLASTING ---
         st.markdown("#### 📁 Dokumentasjon")
@@ -813,21 +833,22 @@ elif valg == "➕ Ny Registrering":
                 from datetime import datetime
                 initial_chat = json.dumps([{"role": "Bank", "sender": "SYSTEM", "text": f"Søknad om {prod} mottatt.", "time": datetime.now().strftime("%d-%m-%Y %H:%M")}])
                 
-                # Precise 33-column mapping (AS PER ORIGINAL)
+                # Precise 33-column mapping (PRESERVED 100%)
                 new_row = [
                     len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
                     "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "",
-                    lonn, barn, h_sfo, (h_ek + m_ek), (h_gjeld + m_gjeld), biler, belop,
+                    lonn, barn, h_sfo, (h_ek + m_ek), (h_gjeld + m_gjeld + h_boliglan), biler, belop,
                     f_org if is_bedrift else "", f_eier if is_bedrift else "", f_aksjer if is_bedrift else "",
                     m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater, f"P1: {pass_land} | P2: {m_pass}",
                     current_user, final_status, "Ingen", initial_chat
                 ]
                 
                 if add_data("MainDB", new_row):
-                    st.success(f"✅ Søknad registrert! ID: {len(df)+1}")
+                    st.success(f"✅ {prod} registrert! ID: {len(df)+1}")
                     if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
-                    st.rerun()                
+                    st.rerun()
+                    
 
                     
 

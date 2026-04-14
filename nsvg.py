@@ -9,6 +9,19 @@ from email.mime.text import MIMEText
 import pytz 
 
 # =================================================================
+# --- 0. SESSION STATE INITIALIZATION (NEW: ANTI-DATA LOSS) ---
+# =================================================================
+# Ise sabse upar rakha hai taake refresh hone par data na uday
+if 'form_data' not in st.session_state:
+    st.session_state.form_data = {
+        "hovedsøker": "",
+        "lånebeløp": 0.0,
+        "telefon": "",
+        "epost": "",
+        "notater": ""
+    }
+
+# =================================================================
 # --- 1. CONFIGURATION & 2026 THEME (PISTACHIO-GRAY) ---
 # =================================================================
 st.set_page_config(page_title="NSVG CRM Pro", layout="wide")
@@ -99,7 +112,6 @@ def update_sak_in_sheet(sak_id, updated_values_dict):
 # =================================================================
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Agent"):
     st.markdown("---")
-    # Identity: Ansatt ko sirf BANK nazar aaye
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_name.upper()
     st.subheader(f"💬 Meldinger med {target_label}")
     
@@ -108,12 +120,10 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
     except:
         messages = []
 
-    # --- SMART LOGIC: Auto-Mark as Read when opened ---
     has_unread = False
     me_clean = str(username).lower().strip()
     
     for m in messages:
-        # Check if last message is unread AND not sent by current user
         if not m.get('read', True) and str(m.get('sender', '')).lower().strip() != me_clean:
             m['read'] = True
             has_unread = True
@@ -121,12 +131,9 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
     if has_unread:
         update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
 
-    # Show History
     for msg in messages:
         is_bank = msg.get('role') == "Bank"
         div_class = "bank-bubble" if is_bank else "agent-bubble"
-        
-        # Display Name logic
         sender_display = "BANK" if is_bank and role not in ["Admin", "Director"] else msg.get("sender", "System")
         
         st.markdown(f'''
@@ -150,6 +157,7 @@ def display_bank_checklist(selected_bank):
     selected_reqs = requirements.get(selected_bank, ["Standard dokumentasjon"])
     for req in selected_reqs:
         st.checkbox(req, key=f"check_{selected_bank}_{req}")
+
 
 
 # =================================================================
@@ -307,16 +315,16 @@ if not st.session_state['logged_in']:
 # --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
 # =================================================================
 
+# LOGIN PERSISTENCE: Check if session is active
 if st.session_state.get('logged_in'):
     raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
     
-    # BEDI PEHCHAN: Role define ho raha hai lekin features Ansatt wale bhi rahen ge
+    # BEDI PEHCHAN logic remains exactly as you wrote
     if raw_user == "bedi":
         role = "Saksbehandler"
     else:
         role = st.session_state.get('user_role', 'Guest')
         
-    # FIX: Pehle check karein ke 'navn' (Name) hai, warna user_id dikhaye
     username = st.session_state.get('navn') or st.session_state.get('user_id') or "Bruker"
     current_user = st.session_state.get('user_id', 'Guest')
 else:
@@ -334,7 +342,7 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# --- DYNAMIC NAVIGATION LOGIC (BEDI FULL FEATURES RESTORED) ---
+# --- DYNAMIC NAVIGATION LOGIC (Role based as per your original) ---
 if role in ["Admin", "Director"]:
     options = [
         "📊 Dashbord", 
@@ -343,22 +351,20 @@ if role in ["Admin", "Director"]:
         "👥 Ansatte Kontroll", 
         "📇 Kontakter", 
         "💼 Saksbehandler Panel", 
-        "🛠️ Master Kontroll"  # <--- Linked to Section 9
+        "🛠️ Master Kontroll"
     ]
 
 elif role == "Saksbehandler":
-    # BEDI/SAKSBEHANDLER: Saare Ansatt features + Saksbehandler menu merge kar diye
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
-        "📥 Nye Oppgaver",      # Saksbehandler Feature
+        "📥 Nye Oppgaver", 
         "📂 Kunde Arkiv", 
-        "🏦 Bankens Renters",    # Ansatt Feature
-        "📜 Dokumentmaler",      # Ansatt Feature
-        "📞 Support Center"      # Ansatt Feature
+        "🏦 Bankens Renters", 
+        "📜 Dokumentmaler", 
+        "📞 Support Center"
     ]
 else:
-    # Regular Ansatt (Employees)
     options = [
         "📊 Dashbord", 
         "➕ Ny Registrering", 
@@ -382,7 +388,10 @@ def update_sheet_data_internal(worksheet_name, df_to_save):
         sh = client.open_by_url(st.secrets["spreadsheet"])
         worksheet = sh.worksheet(worksheet_name)
         worksheet.clear()
-        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
+        
+        # SAFETY: Convert NaN to empty string to avoid Google Sheets errors
+        df_filled = df_to_save.fillna("")
+        worksheet.update([df_filled.columns.values.tolist()] + df_filled.values.tolist())
         return True
     except Exception as e:
         st.error(f"Feil ved lagring: {e}")
@@ -399,7 +408,6 @@ if st.sidebar.button("🔴 Logg ut"):
 def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.markdown("---")
     me_clean = str(username).lower().strip()
-    # Handle agent_name if it's None
     agent_display = str(agent_name).upper() if agent_name else "AGENT"
     target_label = "BANK" if role not in ["Admin", "Director"] else agent_display
     
@@ -446,6 +454,8 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
     st.divider()
     col_msg, col_file = st.columns([3, 1])
+    
+    # Input key handles refresh safety
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
@@ -464,7 +474,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-                
+
 
 # =================================================================
 # --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL + MASTER ADMIN) ---

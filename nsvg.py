@@ -515,14 +515,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- DYNAMIC MENU LOGIC (Master Kontrollpanel visibility) ---
-menu_options = ["📊 Dashbord", "🔍 Søk i Kunder", "➕ Ny Registrering", "📈 Statistikk"]
-if role in ["Admin", "Director"]:
-    menu_options.append("🕵️ Master Kontrollpanel")
-
-# Sidebar selectbox update
-valg = st.sidebar.selectbox("Hovedmeny", menu_options)
-
+# --- DASHBOARD DISPLAY LOGIC ---
 if valg == "📊 Dashbord":
     if role in ["Admin", "Director"]:
         st.title(f"🏛️ Velkommen, {username}")
@@ -664,6 +657,7 @@ if valg == "📊 Dashbord":
                         st.rerun()
     else:
         st.warning("Ingen data tilgjengelig.")
+
 
 
 

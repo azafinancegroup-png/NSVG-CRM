@@ -692,6 +692,7 @@ elif valg == "➕ Ny Registrering":
     prod = c_top1.selectbox("🎯 Velg Produkt Type", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"])
     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
     is_billan = prod == "Billån"
+    is_refin_mellom = prod in ["Refinansiering", "Mellomfinansiering"]
 
     st.markdown("---")
     st.info("💡 **Tips:** Har kunden en Medsøker? Marker her før du fyller ut skjemaet.")
@@ -710,7 +711,19 @@ elif valg == "➕ Ny Registrering":
             f_aksjer = bc2.text_input("Aksjefordeling (%)", placeholder="Eks: 50/50")
             st.divider()
 
-        # --- 🚗 EXCLUSIVE BILLÅN SECTION (NEW PROFESSIONAL ADDITION) ---
+        # --- 🏠 REFINANSIERING / MELLOMFINANSIERING SECTION (NEW!) ---
+        if is_refin_mellom:
+            st.markdown(f"<h3 style='color: #E67E22;'>🏠 Eiendomsdetaljer ({prod})</h3>", unsafe_allow_html=True)
+            r1, r2 = st.columns(2)
+            eks_bank = r1.text_input("Hvilken bank har de i dag?", placeholder="Eks: DNB, SpareBank 1")
+            eks_lan = r2.number_input("Eksisterende boliglån totalt (kr)", min_value=0, step=50000, format="%d")
+            
+            r3, r4 = st.columns(2)
+            bolig_takst = r3.number_input("Makan / Bolig Takst (kr)", min_value=0, step=100000, format="%d")
+            takst_alder = r4.text_input("Hvor gammel er taksten / e-takst?", placeholder="Eks: 2 måneder gammel")
+            st.divider()
+
+        # --- 🚗 EXCLUSIVE BILLÅN SECTION ---
         if is_billan:
             st.markdown("<h3 style='color: #F39C12;'>🚗 Kjøretøy Detaljer (Billån)</h3>", unsafe_allow_html=True)
             v1, v2, v3 = st.columns(3)
@@ -744,13 +757,13 @@ elif valg == "➕ Ny Registrering":
         still_pst = l3.slider("Stillingsprosent (%)", 0, 100, 100)
 
         st.markdown("#### 🏠 Finansiell Status & Gjeld (Hovedsøker)")
-        hf1, hf2, hf3, hf4 = st.columns(4) # Added column for Boliglån
+        hf1, hf2, hf3, hf4 = st.columns(4)
         h_ek = hf1.number_input("Egenkapital (kr) - Hoved", 0, step=10000, format="%d")
         h_sfo = hf2.selectbox("SFO / Barnehage utgifter? - Hoved", ["Nei", "Ja"])
         h_gjeld = hf3.number_input("Forbruksgjeld (kr) - Hoved", 0, step=10000, format="%d")
         h_boliglan = hf4.number_input("Boliglån (kr) - Hoved", 0, step=50000, format="%d")
 
-        # --- 👥 MEDSØKER SECTION (STAYS UNCHANGED) ---
+        # --- 👥 MEDSØKER SECTION ---
         m_navn, m_fnr, m_epost, m_tlf, m_sivil, m_pass, m_botid = "", "", "", "", "Gift", "Norge", ""
         m_lonn, m_arb, m_ansatt_tid, m_stilling, m_ekstra, m_pst = 0, "", "", "Fast ansatt", 0, 100
         m_ek, m_sfo, m_gjeld = 0, "Nei", 0
@@ -790,6 +803,7 @@ elif valg == "➕ Ny Registrering":
 
         # --- 📉 AUTO-CALCULATION SUMMARY BOX ---
         total_inc = lonn + m_lonn + ekstra_jobb + m_ekstra
+        # Include current boliglån in DTI for Refinancing/Mellom cases if appropriate
         total_debt = h_gjeld + m_gjeld + h_boliglan + belop
         dti = round(total_debt / total_inc, 2) if total_inc > 0 else 0
         
@@ -804,12 +818,15 @@ elif valg == "➕ Ny Registrering":
             </div>
         """, unsafe_allow_html=True)
 
-        # Merge car info into notes if it's a Billån
+        # Build dynamic notes based on product
         if is_billan:
-            car_info = f"\n\n--- BILLÅN INFO ---\nBil: {bil_merke}\nReg nr: {bil_reg}\nKM: {bil_km}\nEgenkapital: {bil_egenkapital} kr\nLink: {finn_link}"
-            notater = st.text_area("Interne Notater", value=car_info, placeholder="Skriv relevante kommentarer her...")
+            final_notes = f"--- BILLÅN INFO ---\nBil: {bil_merke}\nReg nr: {bil_reg}\nKM: {bil_km}\nEgenkapital: {bil_egenkapital} kr\nLink: {finn_link}"
+        elif is_refin_mellom:
+            final_notes = f"--- {prod.upper()} INFO ---\nBank i dag: {eks_bank}\nEksisterende lån: {eks_lan:,.0f} kr\nTakst: {bolig_takst:,.0f} kr\nTakst alder: {takst_alder}"
         else:
-            notater = st.text_area("Interne Notater (Viktig info for banken)", placeholder="Skriv relevante kommentarer her...")
+            final_notes = ""
+
+        notater = st.text_area("Interne Notater (Viktig info for banken)", value=final_notes, placeholder="Skriv relevante kommentarer her...")
 
         # --- 📂 DOKUMENT OPPLASTING ---
         st.markdown("#### 📁 Dokumentasjon")
@@ -849,7 +866,6 @@ elif valg == "➕ Ny Registrering":
                     st.balloons()
                     st.rerun()
                     
-
                     
 
 elif valg == "📂 Kunde Arkiv":

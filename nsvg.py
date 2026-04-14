@@ -666,79 +666,7 @@ if valg == "📊 Dashbord":
         st.warning("Ingen data tilgjengelig.")
 
 
-# =================================================================
-# --- 8. MASTER KONTROLL (FIXED VERSION) ---
-# =================================================================
-elif valg == "🛠️ Master Kontroll":
-    if role not in ["Admin", "Director"]:
-        st.error("Kun tilgjengelig for Admin/Director")
-    else:
-        st.title("🛠️ Global Sakshåndtering")
-        st.info("Her kan du se alle saker, tildele ansvar, og slette feilregistreringer.")
 
-        if not df.empty:
-            search_m = st.text_input("🔍 Søk i alle saker (Navn, ID, FNR)...", key="master_search")
-            
-            m_data = df.copy()
-            if search_m:
-                m_data = m_data[m_data.astype(str).apply(lambda x: x.str.contains(search_m, case=False)).any(axis=1)]
-
-            st.write(f"Viser **{len(m_data)}** saker.")
-
-            for i, r in m_data.iterrows():
-                sak_id = str(r.get('ID', i))
-                
-                # FIX: Check for 'Navn' if 'Hovedsøker' is empty
-                hoved = str(r.get('Hovedsøker', r.get('Navn', 'Ukjent Kunde'))).strip()
-                if hoved in ["nan", "", "N/A", "None"]: hoved = "Ukjent Kunde"
-                
-                belop = r.get('Lånebeløp', '0')
-                
-                # Clean up Assigned_To logic for header
-                ansvar_raw = str(r.get('Assigned_To', 'Ingen')).strip()
-                if "[" in ansvar_raw or "{" in ansvar_raw or ansvar_raw.lower() in ["nan", "none", ""]:
-                    ansvar_display = "Ingen"
-                else:
-                    ansvar_display = ansvar_raw
-
-                with st.expander(f"🆔 {sak_id} | 👤 {hoved} | 💰 {belop} kr | 🛡️ Ansvar: {ansvar_display}"):
-                    mc1, mc2 = st.columns(2)
-                    
-                    with mc1:
-                        st.markdown("### 👤 Endre Ansvar")
-                        idx = 0
-                        if ansvar_display == "Bedi": idx = 1
-                        elif ansvar_display == "Iqbal": idx = 2
-                        
-                        new_asgn = st.selectbox("Velg Saksbehandler:", ["Ingen", "Bedi", "Iqbal"], 
-                                                index=idx, key=f"m_as_{sak_id}")
-                        if st.button("Oppdater Ansvar", key=f"m_asb_{sak_id}"):
-                            if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
-                                st.success("Oppdatert!")
-                                st.rerun()
-
-                    with mc2:
-                        st.markdown("### 🗑️ Slette Sak")
-                        st.warning("Dette fjerner saken permanent fra databasen.")
-                        confirm_delete = st.checkbox("Jeg bekrefter sletting", key=f"del_conf_{sak_id}")
-                        
-                        # FIX: Calling the correct function name from Section 2
-                        if st.button(f"❌ SLETT SAK {sak_id}", key=f"del_btn_{sak_id}"):
-                            if confirm_delete:
-                                if delete_sak_from_sheet(sak_id):
-                                    st.success(f"Sak {sak_id} slettet!")
-                                    st.rerun()
-                                else:
-                                    st.error("Kunne ikke slette. Sjekk tilkoblingen.")
-                            else:
-                                st.error("Du må bekrefte sletting først!")
-
-                    st.divider()
-                    st.markdown("### 🔍 Fullstendige Data")
-                    st.json(r.to_dict())
-        else:
-            st.warning("Databasen er tom.")
-            
                 
 # =================================================================
 # --- 7. NY REGISTRERING (FINAL VERIFIED - NOTHING SKIPPED) ---
@@ -1142,74 +1070,113 @@ elif valg == "📞 Support Center":
 
 
 # =================================================================
-# --- 9. MASTER KONTROLLPANEL (ADMIN & DIRECTOR ONLY) ---
+# --- 8 & 9. MASTER KONTROLLPANEL (COMPLETE ADMIN HUB) ---
 # =================================================================
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
     st.markdown(f"""
         <div style='background: #2C3E50; padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;'>
             <h2 style='margin:0; color: #F1C40F;'>🕵️ Master Kontrollpanel</h2>
-            <p style='opacity: 0.8;'>Systemadministrasjon og Agentstyring</p>
+            <p style='opacity: 0.8;'>Global styring av Agenter og Saker</p>
         </div>
     """, unsafe_allow_html=True)
 
-    # --- TABBED INTERFACE FOR CLEAN LOOK ---
-    tab1, tab2 = st.tabs(["➕ Registrer Ny Agent", "👥 Oversikt over Ansatte"])
+    # --- TEEN TABS: Agents, Cases, aur System ---
+    tab_agents, tab_cases, tab_system = st.tabs([
+        "👥 Agentstyring", 
+        "🛠️ Global Sakshåndtering", 
+        "⚙️ System Verktøy"
+    ])
 
-    with tab1:
-        st.subheader("Opprett ny tilgang")
-        with st.form("agent_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            u = col1.text_input("Brukernavn (Login)", placeholder="f.eks: ola123").lower().strip()
-            p = col1.text_input("Passord", type="password", placeholder="Minimum 6 tegn")
-            n = col2.text_input("Fullt Navn", placeholder="Ola Nordmann")
-            pos = col2.selectbox("Stilling / Rolle", ["Senior Agent", "Junior Agent", "Trainee", "Analytiker"])
-            
-            submit_agent = st.form_submit_button("🚀 AKTIVER OG LAGRE AGENT", use_container_width=True)
-            
-            if submit_agent:
-                if u and p and n:
-                    # 1. Lagre i Users tabell for Login-tilgang (Role settes til 'Worker')
-                    add_data("Users", [u, p, "Worker"])
-                    
-                    # 2. Lagre i Agents tabell for Dashboard-profil
-                    # Mapping: username, navn, stilling, arbeidstid, status, kontrakt
-                    add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signert"])
-                    
-                    st.success(f"✅ Suksess! {n} er nå aktivert som {pos} og kan logge inn.")
-                    st.balloons()
-                else:
-                    st.error("Vennligst fyll ut alle feltene!")
-
-    with tab2:
-        st.subheader("Aktive Agenter i Systemet")
-        agents_df = get_data("Agents")
+    # --- TAB 1: AGENTSTYRING (KAL WALA KAAM) ---
+    with tab_agents:
+        sub_tab1, sub_tab2 = st.tabs(["➕ Registrer Ny Agent", "📋 Oversikt Ansatte"])
         
-        if not agents_df.empty:
-            # Clean up display
-            display_df = agents_df.copy()
-            # Sirf relevant columns dikhane ke liye
-            columns_to_show = ['username', 'navn', 'stilling', 'status']
-            available_cols = [c for c in columns_to_show if c in display_df.columns]
-            
-            st.dataframe(
-                display_df[available_cols], 
-                use_container_width=True,
-                column_config={
-                    "username": "Brukernavn",
-                    "navn": "Fullt Navn",
-                    "stilling": "Stilling",
-                    "status": st.column_config.StatusColumn("Status")
-                }
-            )
-        else:
-            st.warning("Ingen agenter registrert i databasen ennå.")
+        with sub_tab1:
+            st.subheader("Opprett ny tilgang")
+            with st.form("agent_form", clear_on_submit=True):
+                col1, col2 = st.columns(2)
+                u = col1.text_input("Brukernavn (Login)", placeholder="f.eks: ola123").lower().strip()
+                p = col1.text_input("Passord", type="password", placeholder="Minimum 6 tegn")
+                n = col2.text_input("Fullt Navn", placeholder="Ola Nordmann")
+                pos = col2.selectbox("Stilling", ["Senior Agent", "Junior Agent", "Trainee", "Analytiker"])
+                
+                if st.form_submit_button("🚀 AKTIVER OG LAGRE AGENT", use_container_width=True):
+                    if u and p and n:
+                        add_data("Users", [u, p, "Worker"])
+                        add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signert"])
+                        st.success(f"✅ {n} er nå aktivert!")
+                        st.balloons()
+                    else:
+                        st.error("Fyll ut alle felt!")
 
-    # --- SYSTEM LOGS (Optional Feature) ---
-    with st.expander("🛠️ System Verktøy"):
-        st.write(f"Innlogget som: **{current_user}** | Rolle: **{role}**")
-        if st.button("Rens Cache / Refresh System"):
+        with sub_tab2:
+            agents_df = get_data("Agents")
+            if not agents_df.empty:
+                st.dataframe(agents_df[['username', 'navn', 'stilling', 'status']], use_container_width=True, hide_index=True)
+            else:
+                st.warning("Ingen agenter funnet.")
+
+    # --- TAB 2: GLOBAL SAKSHÅNDTERING (AAJ WALA KAAM) ---
+    with tab_cases:
+        st.subheader("Global Oversikt over alle Saker")
+        if not df.empty:
+            search_m = st.text_input("🔍 Søk i databasen (Navn, ID, FNR)...", key="master_search")
+            m_data = df.copy()
+            if search_m:
+                m_data = m_data[m_data.astype(str).apply(lambda x: x.str.contains(search_m, case=False)).any(axis=1)]
+
+            st.write(f"Viser **{len(m_data)}** saker.")
+
+            # Dynamic Agent List for assignment
+            agents_list_df = get_data("Agents")
+            agent_names = ["Ingen"] + agents_list_df['navn'].tolist() if not agents_list_df.empty else ["Ingen", "Bedi", "Iqbal"]
+
+            for i, r in m_data.iterrows():
+                sak_id = str(r.get('ID', i))
+                hoved = str(r.get('Hovedsøker', r.get('Navn', 'Ukjent Kunde'))).strip()
+                if hoved in ["nan", "", "N/A", "None"]: hoved = "Ukjent Kunde"
+                belop = r.get('Lånebeløp', '0')
+                ansvar_header = str(r.get('Assigned_To', 'Ingen')).strip()
+                if "[" in ansvar_header or "{" in ansvar_header or ansvar_header.lower() in ["nan", "none", ""]: 
+                    ansvar_header = "Ingen"
+
+                with st.expander(f"🆔 {sak_id} | 👤 {hoved} | 💰 {belop} kr | 🛡️ Ansvar: {ansvar_header}"):
+                    mc1, mc2 = st.columns(2)
+                    
+                    with mc1:
+                        st.markdown("#### 👤 Endre Ansvar")
+                        try:
+                            idx = agent_names.index(ansvar_header) if ansvar_header in agent_names else 0
+                        except: idx = 0
+                        
+                        new_asgn = st.selectbox("Velg Saksbehandler:", agent_names, index=idx, key=f"m_as_{sak_id}")
+                        if st.button("Oppdater Ansvar", key=f"m_asb_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
+                                st.success("Oppdatert!")
+                                st.rerun()
+
+                    with mc2:
+                        st.markdown("#### 🗑️ Slette Sak")
+                        confirm_delete = st.checkbox("Bekreft permanent sletting", key=f"del_conf_{sak_id}")
+                        if st.button(f"❌ SLETT SAK {sak_id}", key=f"del_btn_{sak_id}"):
+                            if confirm_delete:
+                                if delete_sak_from_sheet(sak_id):
+                                    st.success(f"Sak {sak_id} slettet!")
+                                    st.rerun()
+                            else:
+                                st.error("Bekreft sletting først!")
+
+                    st.json(r.to_dict())
+        else:
+            st.warning("Databasen er tom.")
+
+    # --- TAB 3: SYSTEM TOOLS ---
+    with tab_system:
+        st.write(f"Logget inn som: **{current_user}**")
+        if st.button("Rens System Cache"):
             st.cache_data.clear()
             st.rerun()
+            
 
 
 # --- 10. ANSATTE KONTROLL (ADVANCED & SECURE VERSION) ---

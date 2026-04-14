@@ -464,9 +464,9 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-                
+
 # =================================================================
-# --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL LOGIC) ---
+# --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL + MASTER ADMIN) ---
 # =================================================================
 
 # --- APPLYING MODERN LIGHT THEME ---
@@ -515,6 +515,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- DYNAMIC MENU LOGIC (Master Kontrollpanel visibility) ---
+menu_options = ["📊 Dashbord", "🔍 Søk i Kunder", "➕ Ny Registrering", "📈 Statistikk"]
+if role in ["Admin", "Director"]:
+    menu_options.append("🕵️ Master Kontrollpanel")
+
+# Sidebar selectbox update
+valg = st.sidebar.selectbox("Hovedmeny", menu_options)
+
 if valg == "📊 Dashbord":
     if role in ["Admin", "Director"]:
         st.title(f"🏛️ Velkommen, {username}")
@@ -534,9 +542,9 @@ if valg == "📊 Dashbord":
         # Data Cleaning
         for col in ['Saksbehandler', 'Assigned_To']:
             if col in df_clean.columns:
-                df_clean[col] = df_clean[col].fillna('Ukjent').astype(str)
+                df_clean[col] = df_clean[col].fillna('Ingen').astype(str)
             else:
-                df_clean[col] = "Ukjent"
+                df_clean[col] = "Ingen"
 
         current_u_lower = str(current_user).lower().strip()
         
@@ -568,7 +576,7 @@ if valg == "📊 Dashbord":
             for sak in unread_saker:
                 if st.button(f"📩 Ny melding: {sak['navn']} (ID: {sak['id']})", key=f"notif_{sak['id']}"):
                     st.session_state.search_query = str(sak['id']) 
-                    st.session_state.active_tab = "📂 Kunde Arkiv" 
+                    st.session_state.active_tab = "🔍 Søk i Kunder" 
                     st.rerun()
 
         # --- METRICS ---
@@ -587,28 +595,20 @@ if valg == "📊 Dashbord":
 
         # --- SAKER LIST (CLEAN HEADER LOGIC) ---
         for i, r in view_data.tail(15).iterrows():
-            # Name Clean
             hoved = str(r.get('Hovedsøker', 'Ukjent Kunde')).strip()
-            if hoved in ["nan", "None", "", "N/A"]:
-                hoved = "Ukjent Kunde"
+            if hoved in ["nan", "None", "", "N/A"]: hoved = "Ukjent Kunde"
 
-            # Amount Clean
             try:
                 belop_raw = r.get('Lånebeløp', 0)
                 belop = float(belop_raw) if not pd.isna(belop_raw) else 0
-            except:
-                belop = 0
+            except: belop = 0
 
-            # Status Clean
             b_status = r.get('Bank_Status', 'Mottatt')
             st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
             
-            # Assigned To Header Clean (Fixes the JSON in header issue)
-            assigned_raw = str(r.get('Assigned_To', 'Ingen')).strip()
-            if "[" in assigned_raw or "{" in assigned_raw or assigned_raw.lower() in ["nan", "none", ""]:
+            assigned_to_header = str(r.get('Assigned_To', 'Ingen')).strip()
+            if "[" in assigned_to_header or "{" in assigned_to_header or assigned_to_header.lower() in ["nan", "none", ""]:
                 assigned_to_header = "Ingen"
-            else:
-                assigned_to_header = assigned_raw
 
             sak_id = str(r.get('ID', i))
             chat_h = r.get('Chat_History', '')
@@ -631,19 +631,20 @@ if valg == "📊 Dashbord":
                 # --- CHAT HUB ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
-                # --- ADMIN ASSIGNMENT ---
+                # --- ADMIN ASSIGNMENT (DYNAMIC AGENT LIST) ---
                 if role in ["Admin", "Director"]:
                     st.divider()
                     st.markdown("### 👤 Tildel Saksbehandler")
-                    # Index handling for Selectbox
-                    current_as = assigned_to_header
-                    idx = 0
-                    if current_as == "Bedi": idx = 1
-                    elif current_as == "Iqbal": idx = 2
                     
-                    new_asgn = st.selectbox("Velg:", ["Ingen", "Bedi", "Iqbal"], 
-                                            index=idx,
-                                            key=f"as_{sak_id}")
+                    # Fetching agents from DB for the dropdown
+                    agents_data = get_data("Agents")
+                    agent_list = ["Ingen"] + agents_data['navn'].tolist() if not agents_data.empty else ["Ingen", "Bedi", "Iqbal"]
+                    
+                    try:
+                        current_idx = agent_list.index(assigned_to_header) if assigned_to_header in agent_list else 0
+                    except: current_idx = 0
+                    
+                    new_asgn = st.selectbox("Velg Saksbehandler:", agent_list, index=current_idx, key=f"as_{sak_id}")
                     if st.button("Oppdater Ansvar", key=f"asb_{sak_id}"):
                         if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
                             st.success(f"Ansvar tildelt {new_asgn}!")
@@ -663,7 +664,7 @@ if valg == "📊 Dashbord":
                         st.rerun()
     else:
         st.warning("Ingen data tilgjengelig.")
-        
+
 
 # =================================================================
 # --- 8. MASTER KONTROLL (FIXED VERSION) ---
@@ -1140,22 +1141,76 @@ elif valg == "📞 Support Center":
             
 
 
-# --- 9. MASTER KONTROLLPANEL ---
+# =================================================================
+# --- 9. MASTER KONTROLLPANEL (ADMIN & DIRECTOR ONLY) ---
+# =================================================================
 elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
-    st.header("🕵️ Ny Agent Registrering")
-    with st.form("agent_form"):
-        u = st.text_input("Brukernavn").lower().strip()
-        p = st.text_input("Passord", type="password")
-        n = st.text_input("Fullt Navn")
-        pos = st.selectbox("Stilling", ["Senior Agent", "Junior Agent", "Trainee"])
-        if st.form_submit_button("✅ Aktiver og Lagre Agent"):
-            add_data("Users", [u, p, "Worker"])
-            add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signed"])
-            st.success(f"Agent {n} aktivert!")
-    st.divider()
-    st.subheader("👥 Ansatte Liste")
-    agents_df = get_data("Agents")
-    st.table(agents_df[['username', 'navn', 'stilling', 'status']])
+    st.markdown(f"""
+        <div style='background: #2C3E50; padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;'>
+            <h2 style='margin:0; color: #F1C40F;'>🕵️ Master Kontrollpanel</h2>
+            <p style='opacity: 0.8;'>Systemadministrasjon og Agentstyring</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # --- TABBED INTERFACE FOR CLEAN LOOK ---
+    tab1, tab2 = st.tabs(["➕ Registrer Ny Agent", "👥 Oversikt over Ansatte"])
+
+    with tab1:
+        st.subheader("Opprett ny tilgang")
+        with st.form("agent_form", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            u = col1.text_input("Brukernavn (Login)", placeholder="f.eks: ola123").lower().strip()
+            p = col1.text_input("Passord", type="password", placeholder="Minimum 6 tegn")
+            n = col2.text_input("Fullt Navn", placeholder="Ola Nordmann")
+            pos = col2.selectbox("Stilling / Rolle", ["Senior Agent", "Junior Agent", "Trainee", "Analytiker"])
+            
+            submit_agent = st.form_submit_button("🚀 AKTIVER OG LAGRE AGENT", use_container_width=True)
+            
+            if submit_agent:
+                if u and p and n:
+                    # 1. Lagre i Users tabell for Login-tilgang (Role settes til 'Worker')
+                    add_data("Users", [u, p, "Worker"])
+                    
+                    # 2. Lagre i Agents tabell for Dashboard-profil
+                    # Mapping: username, navn, stilling, arbeidstid, status, kontrakt
+                    add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signert"])
+                    
+                    st.success(f"✅ Suksess! {n} er nå aktivert som {pos} og kan logge inn.")
+                    st.balloons()
+                else:
+                    st.error("Vennligst fyll ut alle feltene!")
+
+    with tab2:
+        st.subheader("Aktive Agenter i Systemet")
+        agents_df = get_data("Agents")
+        
+        if not agents_df.empty:
+            # Clean up display
+            display_df = agents_df.copy()
+            # Sirf relevant columns dikhane ke liye
+            columns_to_show = ['username', 'navn', 'stilling', 'status']
+            available_cols = [c for c in columns_to_show if c in display_df.columns]
+            
+            st.dataframe(
+                display_df[available_cols], 
+                use_container_width=True,
+                column_config={
+                    "username": "Brukernavn",
+                    "navn": "Fullt Navn",
+                    "stilling": "Stilling",
+                    "status": st.column_config.StatusColumn("Status")
+                }
+            )
+        else:
+            st.warning("Ingen agenter registrert i databasen ennå.")
+
+    # --- SYSTEM LOGS (Optional Feature) ---
+    with st.expander("🛠️ System Verktøy"):
+        st.write(f"Innlogget som: **{current_user}** | Rolle: **{role}**")
+        if st.button("Rens Cache / Refresh System"):
+            st.cache_data.clear()
+            st.rerun()
+
 
 # --- 10. ANSATTE KONTROLL (ADVANCED & SECURE VERSION) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:

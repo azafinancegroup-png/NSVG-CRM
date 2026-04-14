@@ -711,16 +711,26 @@ elif valg == "➕ Ny Registrering":
             f_aksjer = bc2.text_input("Aksjefordeling (%)", placeholder="Eks: 50/50")
             st.divider()
 
-        # --- 🏠 REFINANSIERING / MELLOMFINANSIERING SECTION (NEW!) ---
+        # --- 🏠 REFINANSIERING / MELLOMFINANSIERING SECTION (MODIFIED) ---
+        eks_bank, eks_lan, bolig_takst, takst_alder = "", 0, 0, ""
+        andre_lan_info, andre_bolig_info = "", ""
+
         if is_refin_mellom:
             st.markdown(f"<h3 style='color: #E67E22;'>🏠 Eiendomsdetaljer ({prod})</h3>", unsafe_allow_html=True)
             r1, r2 = st.columns(2)
             eks_bank = r1.text_input("Hvilken bank har de i dag?", placeholder="Eks: DNB, SpareBank 1")
             eks_lan = r2.number_input("Eksisterende boliglån totalt (kr)", min_value=0, step=50000, format="%d")
             
+            # New Column for multiple loans
+            andre_lan_info = st.text_input("Andre boliglån? (Bank & Beløp)", placeholder="Eks: Nordea 1.2M, Danske Bank 500k")
+            
+            st.markdown("---")
             r3, r4 = st.columns(2)
-            bolig_takst = r3.number_input("Makan / Bolig Takst (kr)", min_value=0, step=100000, format="%d")
-            takst_alder = r4.text_input("Hvor gammel er taksten / e-takst?", placeholder="Eks: 2 måneder gammel")
+            bolig_takst = r3.number_input("Hovedbolig Takst (kr)", min_value=0, step=100000, format="%d")
+            takst_alder = r4.text_input("Takst alder (Hovedbolig)", placeholder="Eks: e-takst fra Mars 2026")
+            
+            # New field for multiple properties
+            andre_bolig_info = st.text_area("Andre Eiendommer? (Takst & Alder)", placeholder="Eks: Utleiebolig Oslo: 4M (Jan 2026), Hytte: 2M (2025)")
             st.divider()
 
         # --- 🚗 EXCLUSIVE BILLÅN SECTION ---
@@ -803,7 +813,6 @@ elif valg == "➕ Ny Registrering":
 
         # --- 📉 AUTO-CALCULATION SUMMARY BOX ---
         total_inc = lonn + m_lonn + ekstra_jobb + m_ekstra
-        # Include current boliglån in DTI for Refinancing/Mellom cases if appropriate
         total_debt = h_gjeld + m_gjeld + h_boliglan + belop
         dti = round(total_debt / total_inc, 2) if total_inc > 0 else 0
         
@@ -822,7 +831,7 @@ elif valg == "➕ Ny Registrering":
         if is_billan:
             final_notes = f"--- BILLÅN INFO ---\nBil: {bil_merke}\nReg nr: {bil_reg}\nKM: {bil_km}\nEgenkapital: {bil_egenkapital} kr\nLink: {finn_link}"
         elif is_refin_mellom:
-            final_notes = f"--- {prod.upper()} INFO ---\nBank i dag: {eks_bank}\nEksisterende lån: {eks_lan:,.0f} kr\nTakst: {bolig_takst:,.0f} kr\nTakst alder: {takst_alder}"
+            final_notes = f"--- {prod.upper()} INFO ---\nBank i dag: {eks_bank}\nEksisterende lån: {eks_lan:,.0f} kr\nAndre lån: {andre_lan_info}\nTakst Hovedbolig: {bolig_takst:,.0f} kr ({takst_alder})\nAndre Eiendommer: {andre_bolig_info}"
         else:
             final_notes = ""
 
@@ -864,8 +873,7 @@ elif valg == "➕ Ny Registrering":
                     st.success(f"✅ {prod} registrert! ID: {len(df)+1}")
                     if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
-                    st.rerun()
-                    
+                    st.rerun()                    
                     
 
 elif valg == "📂 Kunde Arkiv":

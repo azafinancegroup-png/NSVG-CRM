@@ -304,166 +304,117 @@ if not st.session_state['logged_in']:
 
 
 # =================================================================
-# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
+# --- 8 & 9. MASTER KONTROLLPANEL (COMBINED HUB) ---
 # =================================================================
-
-if st.session_state.get('logged_in'):
-    raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
-    
-    # BEDI PEHCHAN: Role define ho raha hai lekin features Ansatt wale bhi rahen ge
-    if raw_user == "bedi":
-        role = "Saksbehandler"
-    else:
-        role = st.session_state.get('user_role', 'Guest')
-        
-    # FIX: Pehle check karein ke 'navn' (Name) hai, warna user_id dikhaye
-    username = st.session_state.get('navn') or st.session_state.get('user_id') or "Bruker"
-    current_user = st.session_state.get('user_id', 'Guest')
-else:
-    role = "Guest"
-    username = "Guest"
-    current_user = "Guest"
-
-import pandas as pd
-try:
-    # Data fetching logic
-    df = get_data("MainDB") 
-    if df is None or df.empty:
-        df = get_data("Kunder")
-except Exception as e:
-    st.error(f"Data loading error: {e}")
-    df = pd.DataFrame()
-
-# --- DYNAMIC NAVIGATION LOGIC (BEDI FULL FEATURES RESTORED) ---
-if role in ["Admin", "Director"]:
-    options = [
-        "📊 Dashbord", 
-        "➕ Ny Registrering", 
-        "📂 Kunde Arkiv", 
-        "👥 Ansatte Kontroll", 
-        "📇 Kontakter", 
-        "💼 Saksbehandler Panel", 
-        "🛠️ Master Kontroll"  # <--- Iska naam change kar ke ye rakh dein
-    ]
-
-elif role == "Saksbehandler":
-    # BEDI/SAKSBEHANDLER: Saare Ansatt features + Saksbehandler menu merge kar diye
-    options = [
-        "📊 Dashbord", 
-        "➕ Ny Registrering", 
-        "📥 Nye Oppgaver",      # Saksbehandler Feature
-        "📂 Kunde Arkiv", 
-        "🏦 Bankens Renters",    # Ansatt Feature
-        "📜 Dokumentmaler",      # Ansatt Feature
-        "📞 Support Center"      # Ansatt Feature
-    ]
-else:
-    # Regular Ansatt (Employees)
-    options = [
-        "📊 Dashbord", 
-        "➕ Ny Registrering", 
-        "📂 Kunde Arkiv", 
-        "🏦 Bankens Renters", 
-        "📜 Dokumentmaler", 
-        "📞 Support Center"
-    ]
-
-valg = st.sidebar.selectbox("Hovedmeny", options)
-
-# --- INTERNAL FUNCTIONS ---
-def update_sheet_data_internal(worksheet_name, df_to_save):
-    try:
-        creds_dict = st.secrets["gcp_service_account"]
-        from google.oauth2.service_account import Credentials
-        import gspread
-        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open_by_url(st.secrets["spreadsheet"])
-        worksheet = sh.worksheet(worksheet_name)
-        worksheet.clear()
-        worksheet.update([df_to_save.columns.values.tolist()] + df_to_save.values.tolist())
-        return True
-    except Exception as e:
-        st.error(f"Feil ved lagring: {e}")
-        return False
-
-if st.sidebar.button("🔴 Logg ut"):
-    st.session_state.clear()
-    st.rerun()
-
-# =================================================================
-# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (STABLE VERSION)
-# =================================================================
-
-def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
-    st.markdown("---")
-    me_clean = str(username).lower().strip()
-    # Handle agent_name if it's None
-    agent_display = str(agent_name).upper() if agent_name else "AGENT"
-    target_label = "BANK" if role not in ["Admin", "Director"] else agent_display
-    
-    st.subheader(f"💬 Meldinger med {target_label}")
-
-    st.markdown("""
-        <style>
-        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
-        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 12px; border-radius: 10px; margin: 8px 0; text-align: right; color: black; }
-        </style>
+# FIX: Connecting with Section 5 menu name "🛠️ Master Kontroll"
+elif valg == "🛠️ Master Kontroll" and role in ["Admin", "Director"]:
+    st.markdown(f"""
+        <div style='background: #2C3E50; padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;'>
+            <h2 style='margin:0; color: #F1C40F;'>🕵️ Master Kontrollpanel</h2>
+            <p style='opacity: 0.8;'>Global styring av Agenter og Saker</p>
+        </div>
     """, unsafe_allow_html=True)
 
-    try:
-        import json
-        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
-    except:
-        messages = []
+    # --- TABS FOR ORGANIZED HUB ---
+    tab_agents, tab_cases, tab_system = st.tabs([
+        "👥 Agentstyring", 
+        "🛠️ Global Sakshåndtering", 
+        "⚙️ System Verktøy"
+    ])
 
-    has_unread = False
-    for m in messages:
-        m_sender = str(m.get('sender', '')).lower().strip()
-        if m.get('read') == False and m_sender != me_clean:
-            m['read'] = True
-            has_unread = True
-
-    if has_unread:
-        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
-
-    for idx, msg in enumerate(messages):
-        is_bank = msg['role'] == "Bank"
-        div_class = "bank-bubble" if is_bank else "agent-bubble"
-        sender_raw = msg.get("sender", "SYSTEM")
-        display_name_msg = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
+    # --- TAB 1: AGENTSTYRING (Registration & Overview) ---
+    with tab_agents:
+        sub_tab1, sub_tab2 = st.tabs(["➕ Registrer Ny Agent", "📋 Oversikt Ansatte"])
         
-        m_col, d_col = st.columns([0.9, 0.1])
-        with m_col:
-            st.markdown(f'<div class="{div_class}"><b>{display_name_msg}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
-        with d_col:
-            if role in ["Admin", "Director"]:
-                if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
-                    messages.pop(idx)
-                    update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
-                    st.rerun()
+        with sub_tab1:
+            st.subheader("Opprett ny tilgang")
+            with st.form("agent_form", clear_on_submit=True):
+                col1, col2 = st.columns(2)
+                u = col1.text_input("Brukernavn (Login)", placeholder="f.eks: ola123").lower().strip()
+                p = col1.text_input("Passord", type="password", placeholder="Minimum 6 tegn")
+                n = col2.text_input("Fullt Navn", placeholder="Ola Nordmann")
+                pos = col2.selectbox("Stilling", ["Senior Agent", "Junior Agent", "Trainee", "Analytiker"])
+                
+                if st.form_submit_button("🚀 AKTIVER OG LAGRE AGENT", use_container_width=True):
+                    if u and p and n:
+                        add_data("Users", [u, p, "Worker"])
+                        add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signert"])
+                        st.success(f"✅ {n} er nå aktivert!")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("Vennligst fyll ut alle feltene!")
 
-    st.divider()
-    col_msg, col_file = st.columns([3, 1])
-    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
-    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
+        with sub_tab2:
+            st.subheader("Aktive Agenter i Systemet")
+            agents_df = get_data("Agents")
+            if not agents_df.empty:
+                st.dataframe(
+                    agents_df[['username', 'navn', 'stilling', 'status']], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.warning("Ingen agenter registrert ennå.")
 
-    if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
-        if msg_input or u_file:
-            full_txt = msg_input
-            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
-            
-            new_msg = {
-                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
-                "sender": me_clean, 
-                "text": full_txt,
-                "time": get_norway_time(), 
-                "read": False 
-            }
-            messages.append(new_msg)
-            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
-                st.rerun()
+    # --- TAB 2: GLOBAL SAKSHÅNDTERING (Assign & Delete) ---
+    with tab_cases:
+        st.subheader("Global Oversikt over alle Saker")
+        if not df.empty:
+            search_m = st.text_input("🔍 Søk i databasen (Navn, ID, FNR)...", key="master_search")
+            m_data = df.copy()
+            if search_m:
+                m_data = m_data[m_data.astype(str).apply(lambda x: x.str.contains(search_m, case=False)).any(axis=1)]
+
+            st.write(f"Viser **{len(m_data)}** saker.")
+
+            # Get Dynamic Agent List for assignment
+            agents_list_db = get_data("Agents")
+            agent_names = ["Ingen"] + agents_list_db['navn'].tolist() if not agents_list_db.empty else ["Ingen", "Bedi", "Iqbal"]
+
+            for i, r in m_data.iterrows():
+                sak_id = str(r.get('ID', i))
+                hoved = str(r.get('Hovedsøker', 'Ukjent Kunde')).strip()
+                ansvar_header = str(r.get('Assigned_To', 'Ingen')).strip()
+                if "[" in ansvar_header or "{" in ansvar_header or ansvar_header.lower() in ["nan", "none", ""]: 
+                    ansvar_header = "Ingen"
+
+                with st.expander(f"🆔 {sak_id} | 👤 {hoved} | 🛡️ Ansvar: {ansvar_header}"):
+                    mc1, mc2 = st.columns(2)
+                    with mc1:
+                        st.markdown("#### 👤 Endre Ansvar")
+                        try:
+                            idx = agent_names.index(ansvar_header) if ansvar_header in agent_names else 0
+                        except: idx = 0
+                        
+                        new_asgn = st.selectbox("Velg Saksbehandler:", agent_names, index=idx, key=f"m_as_{sak_id}")
+                        if st.button("Oppdater Ansvar", key=f"m_asb_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Assigned_To": new_asgn}):
+                                st.success("Oppdatert!")
+                                st.rerun()
+
+                    with mc2:
+                        st.markdown("#### 🗑️ Slette Sak")
+                        confirm_delete = st.checkbox("Bekreft permanent sletting", key=f"del_conf_{sak_id}")
+                        if st.button(f"❌ SLETT SAK {sak_id}", key=f"del_btn_{sak_id}"):
+                            if confirm_delete:
+                                if delete_sak_from_sheet(sak_id):
+                                    st.success(f"Sak {sak_id} slettet!")
+                                    st.rerun()
+                            else:
+                                st.error("Bekreft sletting først!")
+                    
+                    st.json(r.to_dict())
+        else:
+            st.warning("Databasen er tom.")
+
+    # --- TAB 3: SYSTEM VERKTØY ---
+    with tab_system:
+        st.write(f"System status: **Online**")
+        if st.button("Rens Cache / Refresh System"):
+            st.cache_data.clear()
+            st.rerun()
+
 
 # =================================================================
 # --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL + MASTER ADMIN) ---
@@ -1064,9 +1015,9 @@ elif valg == "📞 Support Center":
 
 
 # =================================================================
-# --- 8 & 9. MASTER KONTROLLPANEL (COMPLETE ADMIN HUB) ---
+# --- 9. MASTER KONTROLLPANEL (COMPLETE ADMIN HUB) ---
 # =================================================================
-elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
+elif valg == "🛠️ Master Kontroll" and role in ["Admin", "Director"]:
     st.markdown(f"""
         <div style='background: #2C3E50; padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px;'>
             <h2 style='margin:0; color: #F1C40F;'>🕵️ Master Kontrollpanel</h2>
@@ -1081,7 +1032,7 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
         "⚙️ System Verktøy"
     ])
 
-    # --- TAB 1: AGENTSTYRING (KAL WALA KAAM) ---
+    # --- TAB 1: AGENTSTYRING (Registration & Overview) ---
     with tab_agents:
         sub_tab1, sub_tab2 = st.tabs(["➕ Registrer Ny Agent", "📋 Oversikt Ansatte"])
         
@@ -1100,17 +1051,19 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
                         add_data("Agents", [u, n, pos, "09-17", "Aktiv", "Signert"])
                         st.success(f"✅ {n} er nå aktivert!")
                         st.balloons()
+                        st.rerun()
                     else:
                         st.error("Fyll ut alle felt!")
 
         with sub_tab2:
+            st.subheader("Aktive Agenter")
             agents_df = get_data("Agents")
             if not agents_df.empty:
                 st.dataframe(agents_df[['username', 'navn', 'stilling', 'status']], use_container_width=True, hide_index=True)
             else:
                 st.warning("Ingen agenter funnet.")
 
-    # --- TAB 2: GLOBAL SAKSHÅNDTERING (AAJ WALA KAAM) ---
+    # --- TAB 2: GLOBAL SAKSHÅNDTERING (Cases Management) ---
     with tab_cases:
         st.subheader("Global Oversikt over alle Saker")
         if not df.empty:
@@ -1171,7 +1124,6 @@ elif valg == "🕵️ Master Kontrollpanel" and role in ["Admin", "Director"]:
             st.cache_data.clear()
             st.rerun()
             
-
 
 # --- 10. ANSATTE KONTROLL (ADVANCED & SECURE VERSION) ---
 elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:

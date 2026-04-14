@@ -661,8 +661,6 @@ if valg == "📊 Dashbord":
 
 
 
-
-                
 # =================================================================
 # --- 7. NY REGISTRERING (FINAL VERIFIED - NOTHING SKIPPED) ---
 # =================================================================
@@ -674,12 +672,17 @@ elif valg == "➕ Ny Registrering":
     if st.session_state.get('belop_input'): steps += 25
     if st.session_state.get('epost_input'): steps += 25
 
+    # --- NEW MASTER STYLE HEADER ---
     st.markdown(f"""
-        <div style='background: white; padding: 20px; border-radius: 15px; border-left: 10px solid #4A69BD; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 10px;'>
-            <h2 style='margin:0; color: #2C3E50;'>🚀 Ny Bankforespørsel</h2>
-            <p style='color: #7F8C8D; font-size: 14px;'>Søknad Completion: {steps}%</p>
+        <div style='background: #2C3E50; padding: 20px; border-radius: 15px; color: white; margin-bottom: 20px; border-left: 10px solid #F1C40F;'>
+            <h2 style='margin:0; color: #F1C40F;'>🚀 Ny Bankforespørsel</h2>
+            <p style='opacity: 0.8; margin-bottom: 10px;'>Opprett en ny lånesøknad i systemet</p>
+            <div style='background: rgba(255,255,255,0.1); border-radius: 10px; padding: 5px;'>
+                <small>Søknad Completion: {steps}%</small>
+            </div>
         </div>
     """, unsafe_allow_html=True)
+    
     st.progress(steps / 100)
 
     countries = get_country_list()
@@ -788,7 +791,7 @@ elif valg == "➕ Ny Registrering":
 
         notater = st.text_area("Interne Notater (Viktig info for banken)", placeholder="Skriv relevante kommentarer her...")
 
-        # --- 📂 DOKUMENT OPPLASTING (WAS MISSING - FIXED!) ---
+        # --- 📂 DOKUMENT OPPLASTING ---
         st.markdown("#### 📁 Dokumentasjon")
         uploaded_files = st.file_uploader("Last opp Vedlegg (PDF, JPG, PNG)", accept_multiple_files=True, key="doc_uploader")
         
@@ -806,9 +809,11 @@ elif valg == "➕ Ny Registrering":
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
+                import json
+                from datetime import datetime
                 initial_chat = json.dumps([{"role": "Bank", "sender": "SYSTEM", "text": f"Søknad om {prod} mottatt.", "time": datetime.now().strftime("%d-%m-%Y %H:%M")}])
                 
-                # Precise 33-column mapping
+                # Precise 33-column mapping (AS PER ORIGINAL)
                 new_row = [
                     len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
                     "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "",
@@ -822,7 +827,8 @@ elif valg == "➕ Ny Registrering":
                     st.success(f"✅ Søknad registrert! ID: {len(df)+1}")
                     if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
-                    st.rerun()
+                    st.rerun()                
+
                     
 
 elif valg == "📂 Kunde Arkiv":

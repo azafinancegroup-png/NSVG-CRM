@@ -271,44 +271,66 @@ def get_country_list():
     others = sorted(["Afghanistan", "Albania", "Algerie", "Andorra", "Angola", "Argentina", "Australia", "Bangladesh", "Belgia", "Brasil", "Canada", "Chile", "China", "Egypt", "Finland", "Frankrike", "Hellas", "Island", "Iran", "Irak", "Irland", "Italia", "Japan", "Jordan", "Kuwait", "Latvia", "Libanon", "Malaysia", "Mexico", "Marokko", "Nederland", "New Zealand", "Nigeria", "Oman", "Filippinene", "Polen", "Portugal", "Qatar", "Romania", "Russland", "Saudi Arabia", "Singapore", "Spania", "Sri Lanka", "Sudan", "Sveits", "Syria", "Thailand", "Tunisia", "Tyrkia", "UAE", "Ukraina", "Vietnam"])
     return base + others
     
-# --- 4. LOGIN SYSTEM ---
-if 'logged_in' not in st.session_state:
-    st.session_state.update({'logged_in': False, 'user_role': None, 'user_id': None, 'navn': None})
+# =================================================================
+# --- 4. LOGIN SYSTEM (STABLE & REFRESH-PROOF) ---
+# =================================================================
 
+# Session State Initialization (Agar pehle se nahi hai)
+if 'logged_in' not in st.session_state:
+    st.session_state.update({
+        'logged_in': False, 
+        'user_role': None, 
+        'user_id': None, 
+        'navn': None
+    })
+
+# AGAR LOGGED IN NAHI HAI TO LOGIN PAGE DIKHAO
 if not st.session_state['logged_in']:
     st.title("🛡️ NSVG - Sikker Digital Portal")
-    u_input = st.text_input("Brukernavn").lower().strip()
-    p_input = st.text_input("Passord", type="password")
     
-    if st.button("Logg inn"):
+    # Refresh protection ke liye unique keys lagayi hain
+    u_input = st.text_input("Brukernavn", key="login_user_field").lower().strip()
+    p_input = st.text_input("Passord", type="password", key="login_pass_field")
+    
+    if st.button("Logg inn", use_container_width=True):
         users_df = get_data("Users")
         if not users_df.empty:
+            # Aapki purani matching logic
             match = users_df[(users_df['username'].astype(str).str.lower() == u_input) & 
                              (users_df['password'].astype(str) == p_input)]
             
             if not match.empty:
                 # Role aur ID save karna
                 role = match.iloc[0]['role']
-                st.session_state.update({'logged_in': True, 'user_role': role, 'user_id': u_input})
                 
-                # --- NEW: Agents ki sheet se Full Name nikalna ---
+                # --- PEHLE DATA SAVE KAREIN ---
+                st.session_state['logged_in'] = True
+                st.session_state['user_role'] = role
+                st.session_state['user_id'] = u_input
+                
+                # --- NEW: Agents ki sheet se Full Name nikalna (Aapka original logic) ---
                 try:
                     agents_df = get_data("Agents")
-                    # Username match karke naam uthana
                     agent_match = agents_df[agents_df['username'].astype(str).str.lower() == u_input]
                     if not agent_match.empty:
                         st.session_state['navn'] = agent_match.iloc[0]['navn']
                     else:
-                        st.session_state['navn'] = u_input # Agar naam na mile to ID hi sahi
+                        st.session_state['navn'] = u_input
                 except:
                     st.session_state['navn'] = u_input
-                # -----------------------------------------------
                 
+                # --- SUCCESS & RERUN ---
                 st.success(f"Velkommen, {st.session_state['navn']}!")
                 st.rerun()
             else: 
                 st.error("Feil brukernavn ya passord!")
+    
+    # 🛑 YEH ZAROORI HAI: Jab tak login na ho, baki code load nahi hoga
     st.stop()
+
+# =================================================================
+# LOGIN SUCCESSFUL: Ab baki Section 5 aur Dashboard load hoga
+# =================================================================
 
 
 # =================================================================

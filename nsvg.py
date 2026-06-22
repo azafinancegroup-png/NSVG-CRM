@@ -514,6 +514,179 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
                 st.rerun()
 
 
+
+Arrey yaar, meri hi galti hai! 🤦‍♂️ Maine galti se picli baar bhi code block se pehle jo Urdu mein message likha tha, aapke code editor ne shayad poori screen ka text ya upar ka text copy kar liya.
+
+Is baar main **sirf aur sirf** pure Python code de raha hoon, koi aage peeche baat nahi likh raha taake aap bina kisi jhanjhat ke **Copy Button** daba kar direct replace kar sakein.
+
+```python
+# =================================================================
+# --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
+# =================================================================
+
+# LOGIN PERSISTENCE: Check if session is active
+if st.session_state.get('logged_in'):
+    raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
+    
+    # BEDI PEHCHAN logic remains exactly as you wrote
+    if raw_user == "bedi":
+        role = "Saksbehandler"
+    else:
+        role = st.session_state.get('user_role', 'Guest')
+        
+    username = st.session_state.get('navn') or st.session_state.get('user_id') or "Bruker"
+    current_user = st.session_state.get('user_id', 'Guest')
+else:
+    role = "Guest"
+    username = "Guest"
+    current_user = "Guest"
+
+import pandas as pd
+try:
+    # Data fetching logic
+    df = get_data("MainDB") 
+    if df is None or df.empty:
+        df = get_data("Kunder")
+except Exception as e:
+    st.error(f"Data loading error: {e}")
+    df = pd.DataFrame()
+
+# --- DYNAMIC NAVIGATION LOGIC (Role based as per your original) ---
+if role in ["Admin", "Director"]:
+    options = [
+        "📊 Dashbord", 
+        "➕ Ny Registrering", 
+        "📂 Kunde Arkiv", 
+        "👥 Ansatte Kontroll", 
+        "📇 Kontakter", 
+        "💼 Saksbehandler Panel", 
+        "📋 Oversiktstavle",
+        "🛠️ Master Kontroll"
+    ]
+
+elif role == "Saksbehandler":
+    options = [
+        "📊 Dashbord", 
+        "➕ Ny Registrering", 
+        "📥 Nye Oppgaver", 
+        "📂 Kunde Arkiv", 
+        "🏦 Bankens Renters", 
+        "📜 Dokumentmaler", 
+        "📋 Oversiktstavle",
+        "📞 Support Center"
+    ]
+else:
+    options = [
+        "📊 Dashbord", 
+        "➕ Ny Registrering", 
+        "📂 Kunde Arkiv", 
+        "🏦 Bankens Renters", 
+        "📜 Dokumentmaler", 
+        "📋 Oversiktstavle",
+        "📞 Support Center"
+    ]
+
+valg = st.sidebar.selectbox("Hovedmeny", options)
+
+# --- INTERNAL FUNCTIONS ---
+def update_sheet_data_internal(worksheet_name, df_to_save):
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        from google.oauth2.service_account import Credentials
+        import gspread
+        scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open_by_url(st.secrets["spreadsheet"])
+        worksheet = sh.worksheet(worksheet_name)
+        worksheet.clear()
+        
+        # SAFETY: Convert NaN to empty string to avoid Google Sheets errors
+        df_filled = df_to_save.fillna("")
+        worksheet.update([df_filled.columns.values.tolist()] + df_filled.values.tolist())
+        return True
+    except Exception as e:
+        st.error(f"Feil ved lagring: {e}")
+        return False
+
+if st.sidebar.button("🔴 Logg ut"):
+    st.session_state.clear()
+    st.rerun()
+
+# =================================================================
+# 🏦 FINAL PROFESSIONAL BANKING MESSAGING HUB (STABLE VERSION)
+# =================================================================
+
+def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
+    st.markdown("---")
+    me_clean = str(username).lower().strip()
+    agent_display = str(agent_name).upper() if agent_name else "AGENT"
+    target_label = "BANK" if role not in ["Admin", "Director"] else agent_display
+    
+    st.subheader(f"💬 Meldinger med {target_label}")
+
+    st.markdown("""
+        <style>
+        .bank-bubble { background-color: #E1F5FE; border-left: 5px solid #0288D1; padding: 12px; border-radius: 10px; margin: 8px 0; color: black; }
+        .agent-bubble { background-color: #F5F5F5; border-right: 5px solid #757575; padding: 12px; border-radius: 10px; margin: 8px 0; text-align: right; color: black; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    try:
+        import json
+        messages = json.loads(chat_data) if chat_data and str(chat_data) != 'nan' else []
+    except:
+        messages = []
+
+    has_unread = False
+    for m in messages:
+        m_sender = str(m.get('sender', '')).lower().strip()
+        if m.get('read') == False and m_sender != me_clean:
+            m['read'] = True
+            has_unread = True
+
+    if has_unread:
+        update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+
+    for idx, msg in enumerate(messages):
+        is_bank = msg['role'] == "Bank"
+        div_class = "bank-bubble" if is_bank else "agent-bubble"
+        sender_raw = msg.get("sender", "SYSTEM")
+        display_name_msg = "BANK" if is_bank and role not in ["Admin", "Director"] else sender_raw.upper()
+        
+        m_col, d_col = st.columns([0.9, 0.1])
+        with m_col:
+            st.markdown(f'<div class="{div_class}"><b>{display_name_msg}</b><br>{msg["text"]}<br><small style="color: grey;">{msg["time"]}</small></div>', unsafe_allow_html=True)
+        with d_col:
+            if role in ["Admin", "Director"]:
+                if st.button("🗑️", key=f"del_{sak_id}_{idx}"):
+                    messages.pop(idx)
+                    update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)})
+                    st.rerun()
+
+    st.divider()
+    col_msg, col_file = st.columns([3, 1])
+    
+    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
+    u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
+
+    if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
+        if msg_input or u_file:
+            full_txt = msg_input
+            if u_file: full_txt += f"\n\n📎 **Vedlegg:** {u_file.name}"
+            
+            new_msg = {
+                "role": "Bank" if role in ["Admin", "Director"] else "Agent",
+                "sender": me_clean, 
+                "text": full_txt,
+                "time": get_norway_time(), 
+                "read": False 
+            }
+            messages.append(new_msg)
+            if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
+                st.rerun()
+
+
 # =================================================================
 # --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL) ---
 # =================================================================

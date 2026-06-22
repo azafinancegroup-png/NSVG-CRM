@@ -339,6 +339,13 @@ Humne bas aapki demand ke mutabik navigation options ke andar us naye section ko
 
 Yeh rha aapka mukammal code bina kisi tabdeeli ke:
 
+
+Oh bhai! Galti se jo maine aapse baat karne ke liye Urdu/Hindi mein lines likhi thi, aapne shayad woh lines bhi Python script ke andar copy-paste kar di hain, jiski wajah se Python confuse ho gaya aur `SyntaxError` de diya! 😅
+
+Python script ke andar sirf pure code hona chahiye, meri likhi hui baatein nahi.
+
+Aap is pure niche diye gaye code ko copy karein (isme koi faltu text nahi hai, sirf pure Python code hai jo direct chalega):
+
 ```python
 # =================================================================
 # --- 5. GLOBAL DATA & SIDEBAR (STABLE CONNECTED VERSION) ---
@@ -372,7 +379,6 @@ except Exception as e:
     df = pd.DataFrame()
 
 # --- DYNAMIC NAVIGATION LOGIC (Role based as per your original) ---
-# INTEGRATED: "📋 Oversiktstavle" option added to all relevant menus seamlessly
 if role in ["Admin", "Director"]:
     options = [
         "📊 Dashbord", 
@@ -488,7 +494,6 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
     st.divider()
     col_msg, col_file = st.columns([3, 1])
     
-    # Input key handles refresh safety
     msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
@@ -510,56 +515,25 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name):
 
 
 # =================================================================
-# --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL + MASTER ADMIN) ---
+# --- 6. DASHBORD (ARCTIC LIGHT THEME - 100% ORIGINAL) ---
 # =================================================================
 
-# --- APPLYING MODERN LIGHT THEME ---
 st.markdown("""
     <style>
-    /* Arctic Light Background */
-    .stApp {
-        background-color: #F1F4F8;
-        color: #2D3436;
-    }
-    
-    /* Metrics & Cards */
+    .stApp { background-color: #F1F4F8; color: #2D3436; }
     div[data-testid="stMetricValue"], .stExpander {
-        background-color: #FFFFFF !important;
-        color: #2D3436 !important;
-        border-radius: 15px;
-        border: 1px solid #D1D8E0 !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        background-color: #FFFFFF !important; color: #2D3436 !important;
+        border-radius: 15px; border: 1px solid #D1D8E0 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
-
-    /* Professional Blue Buttons */
     .stButton>button {
-        background-color: #4A69BD !important;
-        color: white !important;
-        border-radius: 8px !important;
-        border: none !important;
-        font-weight: 500 !important;
+        background-color: #4A69BD !important; color: white !important; border-radius: 8px !important; border: none !important; font-weight: 500 !important;
     }
-    .stButton>button:hover {
-        background-color: #1E3799 !important;
-        color: white !important;
-    }
-
-    /* Sidebar: Professional Off-White */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        border-right: 1px solid #E1E8ED !important;
-    }
-    
-    /* Input & Select Boxes */
-    input, textarea, .stSelectbox {
-        background-color: #FFFFFF !important;
-        color: #2D3436 !important;
-        border: 1px solid #CED6E0 !important;
-    }
+    .stButton>button:hover { background-color: #1E3799 !important; color: white !important; }
+    [data-testid="stSidebar"] { background-color: #FFFFFF !important; border-right: 1px solid #E1E8ED !important; }
+    input, textarea, .stSelectbox { background-color: #FFFFFF !important; color: #2D3436 !important; border: 1px solid #CED6E0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- DASHBOARD DISPLAY LOGIC ---
 if valg == "📊 Dashbord":
     if role in ["Admin", "Director"]:
         st.title(f"🏛️ Velkommen, {username}")
@@ -575,8 +549,6 @@ if valg == "📊 Dashbord":
     
     if not df.empty:
         df_clean = df.copy()
-        
-        # Data Cleaning
         for col in ['Saksbehandler', 'Assigned_To']:
             if col in df_clean.columns:
                 df_clean[col] = df_clean[col].fillna('Ingen').astype(str)
@@ -585,7 +557,6 @@ if valg == "📊 Dashbord":
 
         current_u_lower = str(current_user).lower().strip()
         
-        # Filtering Logic
         if role in ["Admin", "Director"]:
             view_data = df_clean.copy()
         elif role == "Saksbehandler":
@@ -595,7 +566,6 @@ if valg == "📊 Dashbord":
         else:
             view_data = df_clean[df_clean['Saksbehandler'].str.lower().str.strip() == current_u_lower].copy()
         
-        # --- NOTIFICATIONS ---
         unread_saker = []
         for i, r in view_data.iterrows():
             chat_h = str(r.get('Chat_History', ''))
@@ -616,7 +586,6 @@ if valg == "📊 Dashbord":
                     st.session_state.active_tab = "🔍 Søk i Kunder" 
                     st.rerun()
 
-        # --- METRICS ---
         c1, c2, c3 = st.columns(3)
         loan_vals = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').fillna(0)
         percent_vals = pd.to_numeric(view_data['Provisjon_Prosent'], errors='coerce').fillna(0) if 'Provisjon_Prosent' in view_data.columns else 0
@@ -630,7 +599,6 @@ if valg == "📊 Dashbord":
         st.divider()
         st.subheader("Siste Registrerte Saker")
 
-        # --- SAKER LIST (CLEAN HEADER LOGIC) ---
         for i, r in view_data.tail(15).iterrows():
             hoved = str(r.get('Hovedsøker', 'Ukjent Kunde')).strip()
             if hoved in ["nan", "None", "", "N/A"]: hoved = "Ukjent Kunde"
@@ -642,7 +610,6 @@ if valg == "📊 Dashbord":
 
             b_status = r.get('Bank_Status', 'Mottatt')
             st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
-            
             assigned_to_header = str(r.get('Assigned_To', 'Ingen')).strip()
             if "[" in assigned_to_header or "{" in assigned_to_header or assigned_to_header.lower() in ["nan", "none", ""]:
                 assigned_to_header = "Ingen"
@@ -651,10 +618,7 @@ if valg == "📊 Dashbord":
             chat_h = r.get('Chat_History', '')
             agent_navn = r.get('Saksbehandler', 'Agent')
 
-            # --- DISPLAY EXPANDER ---
             with st.expander(f"{st_icon} {hoved} | {belop:,.0f} kr | Ansvar: {assigned_to_header}"):
-                
-                # --- BEDI'S COPY TOOL ---
                 if role in ["Saksbehandler", "Admin", "Director"]:
                     st.info("📋 **Portal Copy Tool**")
                     fnr_val = r.get('Fødselsnummer', 'N/A')
@@ -665,15 +629,11 @@ if valg == "📊 Dashbord":
                         if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
                             st.rerun()
 
-                # --- CHAT HUB ---
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
-                # --- ADMIN ASSIGNMENT (DYNAMIC AGENT LIST) ---
                 if role in ["Admin", "Director"]:
                     st.divider()
                     st.markdown("### 👤 Tildel Saksbehandler")
-                    
-                    # Fetching agents from DB for the dropdown
                     agents_data = get_data("Agents")
                     agent_list = ["Ingen"] + agents_data['navn'].tolist() if not agents_data.empty else ["Ingen", "Bedi", "Iqbal"]
                     
@@ -687,7 +647,6 @@ if valg == "📊 Dashbord":
                             st.success(f"Ansvar tildelt {new_asgn}!")
                             st.rerun()
 
-                # --- INFO & NOTES ---
                 st.markdown("### 📄 Saksinformasjon")
                 for k, v in r.items():
                     if k not in ['Chat_History', 'Assigned_To', 'Mangler']:
@@ -702,9 +661,97 @@ if valg == "📊 Dashbord":
     else:
         st.warning("Ingen data tilgjengelig.")
 
+
+# =================================================================
+# --- 12. OVERSIKTSTAVLE & KALENDER (INTEGRATED FEATURE) ---
+# =================================================================
+elif valg == "📋 Oversiktstavle":
+    st.header("📋 Jobb / Oppgjør / Agents – Oversiktstavle")
+    st.caption("Nordic Secure Vault Group | Intern Styringstavle")
+    st.divider()
+
+    st.subheader("📅 Velg Periode og Dato")
+    col_cal1, col_cal2 = st.columns(2)
+    with col_cal1:
+        valgt_maaned = st.selectbox("Måned / År:", [
+            "Mai 2026", "Juni 2026", "Juli 2026", "August 2026", 
+            "September 2026", "Oktober 2026", "November 2026", "Desember 2026"
+        ], index=1)
+    with col_cal2:
+        valgt_dato = st.date_input("Velg spesifikk dato for notat/handling:", value=None)
+
+    st.markdown(f"### 📌 Visning for: **{valgt_maaned}**")
+    if valgt_dato:
+        st.info(f"Valgt dato i kalenderen: **{valgt_dato.strftime('%d.%m.%Y')}**")
+
+    if 'nsvg_board_data' not in st.session_state:
+        st.session_state.nsvg_board_data = pd.DataFrame(columns=[
+            "Aktiv Saker", "Prosess / Status", "Agents / Ansatte", 
+            "Fremtidige Saker", "Innbetalinger", "Utbetalinger", "Godkjente Saker", "Dato"
+        ])
+
+    with st.expander("➕ Legg til ny rad / data i tabellen", expanded=False):
+        with st.form("board_input_form"):
+            st.markdown("##### Fyll ut feltene for å legge til informasjon på tavlen:")
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                in_aktiv = st.text_input("Aktiv Saker (Kunde/Sak navn):", placeholder="Tousif sak")
+                in_prosess = st.text_input("Prosess / Status:", placeholder="sendt storebrand")
+                in_agents = st.text_input("Agents / Ansatte:", placeholder="mangler lønnslipp")
+                in_fremtidig = st.text_input("Fremtidige Saker / Innkommende:", placeholder="Salauddin")
+            with b_col2:
+                in_innbetaling = st.text_input("Innbetalinger:", placeholder="Sparing rev: 00 euro")
+                in_utbetaling = st.text_input("Utbetalinger:", placeholder="7825 kr")
+                in_godkjent = st.text_input("Godkjente Saker:", placeholder="Amir safari")
+            
+            submit_board = st.form_submit_button("🚀 Lagre på Tavlen")
+            if submit_board:
+                new_row = pd.DataFrame([{
+                    "Aktiv Saker": in_aktiv,
+                    "Prosess / Status": in_prosess,
+                    "Agents / Ansatte": in_agents,
+                    "Fremtidige Saker": in_fremtidig,
+                    "Innbetalinger": in_innbetaling,
+                    "Utbetalinger": in_utbetaling,
+                    "Godkjente Saker": in_godkjent,
+                    "Dato": valgt_maaned
+                }])
+                st.session_state.nsvg_board_data = pd.concat([st.session_state.nsvg_board_data, new_row], ignore_index=True)
+                st.success("✅ Informasjon lagt til!")
+                st.rerun()
+
+    st.markdown("---")
+    filtered_board = st.session_state.nsvg_board_data[st.session_state.nsvg_board_data["Dato"] == valgt_maaned]
+
+    if not filtered_board.empty:
+        st.markdown(f"#### 📊 Datatabell for {valgt_maaned}")
+        st.dataframe(filtered_board.drop(columns=["Dato"]), use_container_width=True)
+        
+        st.markdown("##### 🔧 Administrer rader")
+        row_to_delete = st.selectbox("Velg rad-ID som skal slettes:", ["-- Velg Rad --"] + list(filtered_board.index))
+        if row_to_delete != "-- Velg Rad --":
+            if st.button("🗑️ Slett valgt rad"):
+                st.session_state.nsvg_board_data = st.session_state.nsvg_board_data.drop(row_to_delete).reset_index(drop=True)
+                st.warning("Rad slettet.")
+                st.rerun()
+    else:
+        st.info(f"Ingen registrerte data på tavlen for {valgt_maaned} ennå.")
+
+    st.divider()
+    st.subheader("📝 Interne Notater for denne måneden")
+    if 'internal_board_notes' not in st.session_state:
+        st.session_state.internal_board_notes = {}
+        
+    current_notes_key = f"notes_{valgt_maaned}"
+    saved_notes_value = st.session_state.internal_board_notes.get(current_notes_key, "")
+    mnd_notat = st.text_area(f"Skriv viktige merknader for {valgt_maaned}:", value=saved_notes_value, height=150)
+    
+    if st.button("💾 Lagre månedens notater"):
+        st.session_state.internal_board_notes[current_notes_key] = mnd_notat
+        st.success("✅ Notater lagret!")
+
 ```
 
-Aap is block ko purane wale se replace kar dein, aapki existing functionality aur menu options bilkul safe hain!
 
 
 # =================================================================

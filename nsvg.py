@@ -1951,6 +1951,12 @@ if valg == "📊 Dashbord":
 
 
 
+The error occurs because chat text was accidentally pasted inside your `nsvg.py` file around line 1611. Python is trying to execute that conversational text as actual programming code.
+
+To fix this permanently, open your `nsvg.py` file, go to line 1611, and **delete** that text entirely from your script.
+
+Here is the clean code block for **Section 12** to replace it:
+
 ```python
 # =================================================================
 # --- 12. OVERSIKTSTAVLE & KALENDER (INTEGRATED FEATURE) ---

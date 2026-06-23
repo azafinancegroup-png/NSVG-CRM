@@ -1611,6 +1611,14 @@ elif valg == "💼 Saksbehandler Panel":
 
 
 
+Based on your image `WhatsApp Image 2026-06-22 at 23.26.35.jpeg`, the layout needs to match a multi-column kanban/grid layout where each section functions as an independent, editable list rather than a single horizontal table row.
+
+To allow full editing capabilities (adding, modifying, or deleting entries within any specific category), the data structure uses a separate key per column stored dynamically inside `st.session_state`.
+
+Here is the clean code for Section 12 mapped precisely to your image columns:
+
+
+
 # =================================================================
 # --- 12. OVERSIKTSTAVLE & KALENDER (INTEGRATED FEATURE) ---
 # =================================================================
@@ -1627,78 +1635,78 @@ elif valg == "📋 Oversiktstavle":
             "September 2026", "Oktober 2026", "November 2026", "Desember 2026"
         ], index=1)
     with col_cal2:
-        valgt_dato = st.date_input("Velg spesifikk dato for notat/handling:", value=None, help="Velg en dato fra kalenderen")
+        valgt_dato = st.date_input("Velg spesifikk dato for notat/handling:", value=None)
 
-    st.markdown(f"### 📌 Visning for: **{valgt_maaned}**")
-    if valgt_dato:
-        st.info(f"Valgt dato i kalenderen: **{valgt_dato.strftime('%d.%m.%Y')}**")
-
-    if 'nsvg_board_data' not in st.session_state:
-        st.session_state.nsvg_board_data = pd.DataFrame(columns=[
-            "Aktiv Saker", "Prosess / Status", "Agents / Ansatte", 
-            "Fremtidige Saker", "Innbetalinger", "Utbetalinger", "Godkjente Saker", "Dato"
-        ])
-
-    with st.expander("➕ Legg til ny rad / data i tabellen", expanded=False):
-        with st.form("board_input_form"):
-            st.markdown("##### Fyll ut feltene for å legge til informasjon på tavlen:")
-            b_col1, b_col2 = st.columns(2)
-            with b_col1:
-                in_aktiv = st.text_input("Aktiv Saker (Kunde/Sak navn):", placeholder="F.eks. Tousif sak")
-                in_prosess = st.text_input("Prosess / Status:", placeholder="F.eks. sendt storebrand / ikke klar")
-                in_agents = st.text_input("Agents / Ansatte:", placeholder="F.eks. mangler lønnslipp / direkte")
-                in_fremtidig = st.text_input("Fremtidige Saker / Innkommende:", placeholder="F.eks. Salauddin")
-            with b_col2:
-                in_innbetaling = st.text_input("Innbetalinger:", placeholder="F.eks. Sparing rev: 00 euro")
-                in_utbetaling = st.text_input("Utbetalinger:", placeholder="F.eks. 7825 kr")
-                in_godkjent = st.text_input("Godkjente Saker:", placeholder="F.eks. Amir safari")
-            
-            submit_board = st.form_submit_button("🚀 Lagre på Tavlen")
-            if submit_board:
-                new_row = pd.DataFrame([{
-                    "Aktiv Saker": in_aktiv,
-                    "Prosess / Status": in_prosess,
-                    "Agents / Ansatte": in_agents,
-                    "Fremtidige Saker": in_fremtidig,
-                    "Innbetalinger": in_innbetaling,
-                    "Utbetalinger": in_utbetaling,
-                    "Godkjente Saker": in_godkjent,
-                    "Dato": valgt_maaned
-                }])
-                st.session_state.nsvg_board_data = pd.concat([st.session_state.nsvg_board_data, new_row], ignore_index=True)
-                st.success("✅ Informasjon lagt til på tavlen!")
-                st.rerun()
-
-    st.markdown("---")
-    filtered_board = st.session_state.nsvg_board_data[st.session_state.nsvg_board_data["Dato"] == valgt_maaned]
-
-    if not filtered_board.empty:
-        st.markdown(f"#### 📊 Datatabell for {valgt_maaned}")
-        st.dataframe(filtered_board.drop(columns=["Dato"]), use_container_width=True, hide_index=False)
-        
-        st.markdown("##### 🔧 Administrer rader")
-        row_to_delete = st.selectbox("Velg rad-ID som skal slettes:", ["-- Velg Rad --"] + list(filtered_board.index))
-        if row_to_delete != "-- Velg Rad --":
-            if st.button("🗑️ Slett valgt rad"):
-                st.session_state.nsvg_board_data = st.session_state.nsvg_board_data.drop(row_to_delete).reset_index(drop=True)
-                st.warning(f"Rad {row_to_delete} slettet.")
-                st.rerun()
-    else:
-        st.info(f"Ingen registrerte data på tavlen for {valgt_maaned} ennå. Bruk skjemaet ovenfor til å legge inn data.")
-
+    st.markdown(f"## **{valgt_maaned} ::::**\n### **/ Jobb / Oppgjør / Agents /**")
     st.divider()
-    st.subheader("📝 Interne Notater for denne måneden")
-    if 'internal_board_notes' not in st.session_state:
-        st.session_state.internal_board_notes = {}
-        
-    current_notes_key = f"notes_{valgt_maaned}"
-    saved_notes_value = st.session_state.internal_board_notes.get(current_notes_key, "")
-    mnd_notat = st.text_area(f"Skriv viktige merknader eller huskeliste for {valgt_maaned}:", value=saved_notes_value, height=150)
-    
-    if st.button("💾 Lagre månedens notater", key="save_mnd_notes"):
-        st.session_state.internal_board_notes[current_notes_key] = mnd_notat
-        st.success(f"✅ Notater for {valgt_maaned} er lagret!")
 
-# --- FOOTER ---
-st.sidebar.markdown("---")
-st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")
+    # --- DATABASES FOR SECTIONS ---
+    board_columns = [
+        "Aktiv Saker", 
+        "Process", 
+        "Agents", 
+        "Fremkommer saker", 
+        "Inn-betaling", 
+        "Utbetaling", 
+        "Godkjent saker"
+    ]
+
+    if 'nsvg_board_dict' not in st.session_state:
+        st.session_state.nsvg_board_dict = {col: [] for col in board_columns}
+
+    # --- ADD DATA TO SPECIFIC SECTIONS ---
+    with st.expander("➕ Administrer Data (Legg til / Rediger i Seksjoner)", expanded=False):
+        col_select, col_input = st.columns([1, 2])
+        with col_select:
+            selected_section = st.selectbox("Velg Seksjon:", board_columns)
+        with col_input:
+            new_value = st.text_input(f"Skriv tekst til '{selected_section}':", key="section_input_field")
+        
+        if st.button("🚀 Legg til i Seksjon"):
+            if new_value.strip():
+                st.session_state.nsvg_board_dict[selected_section].append(new_value.strip())
+                st.rerun()
+
+    # --- DYNAMIC GRID LAYOUT MATCHING THE IMAGE ---
+    st.markdown("---")
+    ui_cols = st.columns(len(board_columns))
+
+    for idx, col_name in enumerate(board_columns):
+        with ui_cols[idx]:
+            # Section Header Button/Style Block
+            st.markdown(f"<div style='background-color:#F0F2F6; padding:8px; border-radius:4px; text-align:center; font-weight:bold; border:1px solid #D1D8E0;'>{col_name}</div>", unsafe_allow_html=True)
+            st.write("")
+            
+            items = st.session_state.nsvg_board_dict[col_name]
+            
+            # Display entries as editable components
+            for item_idx, current_item_val in enumerate(items):
+                # Unique key generation per element
+                unique_key = f"edit_{col_name}_{item_idx}"
+                
+                # Text Input for inline modifications
+                updated_val = st.text_input(
+                    label=f"ID: {item_idx+1}",
+                    value=current_item_val,
+                    key=unique_key,
+                    label_visibility="collapsed"
+                )
+                
+                # Update item if text changes
+                if updated_val != current_item_val:
+                    st.session_state.nsvg_board_dict[col_name][item_idx] = updated_val
+                
+                # Action layout container
+                action_col1, action_col2 = st.columns([1, 1])
+                with action_col1:
+                    if st.button("💾", key=f"save_{col_name}_{item_idx}", help="Lagre endring"):
+                        st.rerun()
+                with action_col2:
+                    if st.button("🗑️", key=f"del_{col_name}_{item_idx}", help="Slett"):
+                        st.session_state.nsvg_board_dict[col_name].pop(item_idx)
+                        st.rerun()
+                st.markdown("---")
+
+    # --- FOOTER ---
+    st.sidebar.markdown("---")
+    st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

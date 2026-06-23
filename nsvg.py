@@ -1706,4 +1706,3 @@ elif valg == "📋 Oversiktstavle":
 # --- FOOTER ---
 st.sidebar.markdown("---")
 st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")
-

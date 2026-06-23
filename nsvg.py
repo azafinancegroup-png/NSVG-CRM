@@ -1610,20 +1610,6 @@ elif valg == "💼 Saksbehandler Panel":
 
 
 
-
-Based on your image `WhatsApp Image 2026-06-22 at 23.26.35.jpeg`, the layout needs to match a multi-column kanban/grid layout where each section functions as an independent, editable list rather than a single horizontal table row.
-
-To allow full editing capabilities (adding, modifying, or deleting entries within any specific category), the data structure uses a separate key per column stored dynamically inside `st.session_state`.
-
-Here is the clean code for Section 12 mapped precisely to your image columns:
-
-
-
-The error occurs because regular conversational text explanation was accidentally left inside or right outside the Python code block in your `nsvg.py` script.
-
-Delete all conversational text around line 1614 and replace Section 12 with this completely isolated Python block:
-
-
 # =================================================================
 # --- 12. OVERSIKTSTAVLE & KALENDER (INTEGRATED FEATURE) ---
 # =================================================================

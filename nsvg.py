@@ -1611,15 +1611,15 @@ elif valg == "💼 Saksbehandler Panel":
 
 
 # =================================================================
-# --- 12. OVERSIKTSTAVLE & KALENDER (PRO WORKSPACE VERSION) ---
+# --- 12. OVERSIKTSTAVLE & KALENDER (PRO WORKSPACE VERSION V3) ---
 # =================================================================
 elif valg == "📋 Oversiktstavle":
     st.header("📋 Digital Styringstavle & CRM Workspace")
     st.caption("Nordic Secure Vault Group | Intern Styringstavle")
     st.divider()
 
-    # --- 1. PERIOD & TARGET MANAGEMENT ---
-    st.subheader("📅 Velg Periode og Månedens Mål")
+    # --- 1. PERIOD SELECTION ---
+    st.subheader("📅 Velg Periode")
     col_cal1, col_cal2 = st.columns(2)
     with col_cal1:
         valgt_maaned = st.selectbox("Arbeidsmåned:", [
@@ -1628,20 +1628,6 @@ elif valg == "📋 Oversiktstavle":
         ], index=1)
     with col_cal2:
         valgt_dato = st.date_input("Dagens Dato:", value=None)
-
-    # Initialize Targets & Notes Database
-    if 'nsvg_targets' not in st.session_state:
-        st.session_state.nsvg_targets = {}
-    
-    current_target_key = f"target_{valgt_maaned}"
-    saved_target = st.session_state.nsvg_targets.get(current_target_key, "")
-    
-    maaned_target = st.text_area(f"🎯 Månedens Mål og Notater for {valgt_maaned}:", value=saved_target, height=70, placeholder="Skriv månedens hovedmål her...")
-    if maaned_target != saved_target:
-        st.session_state.nsvg_targets[current_target_key] = maaned_target
-
-    st.markdown(f"## **{valgt_maaned} ::::**\n### **/ Intern Logg & Økonomistyring /**")
-    st.divider()
 
     # --- 2. CORE DATABASE INITIALIZATION ---
     if 'nsvg_workspace_data' not in st.session_state:
@@ -1652,24 +1638,44 @@ elif valg == "📋 Oversiktstavle":
             "Utbetaling": []
         }
 
-    # Configuration Lists
     agent_options = ["Bedi", "Umer", "Direkte"]
     bank_options = ["Ingen / Ikke sendt", "Sparebank Øst", "BN Bank", "Storebrand", "Nordea"]
 
-    # --- 3. DYNAMIC INPUT FORMS (TABS) ---
-    st.markdown("### ➕ Legg til ny informasjon")
-    tab1, tab2, tab3, tab4 = st.tabs(["🔹 Aktiv Sak", "🔸 Fremtidig Sak", "💰 Innbetaling", "💸 Utbetaling"])
+    # Helper function to extract numeric values from text input strings (e.g. "10 000 kr" -> 10000)
+    def rens_belop(tekst):
+        try:
+            tall = "".join([c for c in str(tekst) if c.isdigit() or c == "."])
+            return float(tall) if tall else 0.0
+        except:
+            return 0.0
+
+    # --- 3. LIVE ECONOMY FINANCIAL OVERVIEW (TOP BANNER) ---
+    st.markdown("### 📊 Økonomisk Oversikt for " + valgt_maaned)
+    
+    total_inn_forventet = sum([rens_belop(i["belop"]) for i in st.session_state.nsvg_workspace_data["Innbetaling"] if i["dato"] == valgt_maaned])
+    total_ut_forventet = sum([rens_belop(u["belop"]) for u in st.session_state.nsvg_workspace_data["Utbetaling"] if u["dato"] == valgt_maaned])
+    netto_balanse = total_inn_forventet - total_ut_forventet
+
+    fin_c1, fin_c2, fin_c3 = st.columns(3)
+    fin_c1.metric("💰 Totalt Innbetalinger (Skal Komme)", f"{total_inn_forventet:,.2f} kr".replace(",", " "))
+    fin_c2.metric("💸 Totalt Utbetalinger (Skal Ut)", f"{total_ut_forventet:,.2f} kr".replace(",", " "))
+    fin_c3.metric("📈 Netto Forventet Balanse", f"{netto_balanse:,.2f} kr".replace(",", " "), delta=netto_balanse)
+    st.divider()
+
+    # --- 4. DYNAMIC INPUT FORMS (TABS FOR REGISTRATION) ---
+    st.markdown("### ➕ Registrer Ny Data")
+    tab1, tab2, tab3, tab4 = st.tabs(["🔹 Aktiv Sak", "🔸 Fremtidig Sak", "📥 Innbetaling Plan", "📤 Utbetaling Plan"])
 
     with tab1:
         with st.form("form_aktiv_sak"):
             col1, col2 = st.columns(2)
             sak_navn = col1.text_input("Kunde / Sak Navn:", placeholder="F.eks. Tousif sak")
             sak_agent = col1.selectbox("Hvilken Agent?", agent_options)
-            sak_deal = col2.text_input("Deal Størrelse (Beløp/Paise):", placeholder="F.eks. 50 000 kr")
+            sak_deal = col2.text_input("Deal Størrelse (Bare tall for summering):", placeholder="F.eks. 50000")
             sak_bank = col2.selectbox("Sendt til hvilken Bank?", bank_options)
             sak_status = st.text_area("Status og Mangler (Hvor står saken i dag? Hva mangler?)", placeholder="F.eks. Sendt til Storebrand. Mangler lønnslipp fra kunde.")
             
-            if st.form_submit_button("🚀 Lagre Aktiv Sak"):
+            if st.form_submit_button("🚀 Registrer Aktiv Sak"):
                 if sak_navn.strip():
                     st.session_state.nsvg_workspace_data["Aktiv Saker"].append({
                         "navn": sak_navn, "agent": sak_agent, "deal": sak_deal, 
@@ -1682,10 +1688,10 @@ elif valg == "📋 Oversiktstavle":
             col1, col2 = st.columns(2)
             f_navn = col1.text_input("Kunde / Fremtidig Sak Navn:", placeholder="F.eks. Salauddin")
             f_agent = col1.selectbox("Hvilken Agent?", agent_options, key="f_ag")
-            f_deal = col2.text_input("Forventet Deal Størrelse:", placeholder="F.eks. 30 000 kr")
+            f_deal = col2.text_input("Forventet Deal Størrelse:", placeholder="F.eks. 30000")
             f_status = st.text_area("Hva har dere snakket om? (Detaljer)", placeholder="F.eks. Snakket på telefon, venter på dokumenter.")
             
-            if st.form_submit_button("🚀 Lagre Fremtidig Sak"):
+            if st.form_submit_button("🚀 Registrer Fremtidig Sak"):
                 if f_navn.strip():
                     st.session_state.nsvg_workspace_data["Fremkommer Saker"].append({
                         "navn": f_navn, "agent": f_agent, "deal": f_deal, 
@@ -1697,10 +1703,10 @@ elif valg == "📋 Oversiktstavle":
         with st.form("form_innbetaling"):
             col1, col2 = st.columns(2)
             inn_fra = col1.text_input("Hvem skal betale inn?", placeholder="F.eks. Sparing rev / Kunde navn")
-            inn_belop = col2.text_input("Beløp som kommer inn:", placeholder="F.eks. 15 000 kr / 200 euro")
+            inn_belop = col2.text_input("Beløp (Bare tall):", placeholder="F.eks. 15000")
             inn_status = st.text_input("Status på betaling:", placeholder="F.eks. Venter i slutten av måneden")
             
-            if st.form_submit_button("💰 Lagre Innbetaling"):
+            if st.form_submit_button("📥 Registrer Innbetaling"):
                 if inn_fra.strip():
                     st.session_state.nsvg_workspace_data["Innbetaling"].append({
                         "fra": inn_fra, "belop": inn_belop, "status": inn_status, "dato": valgt_maaned
@@ -1711,30 +1717,34 @@ elif valg == "📋 Oversiktstavle":
         with st.form("form_utbetaling"):
             col1, col2 = st.columns(2)
             ut_til = col1.text_input("Hvem skal du betale? (Kostnad/Utgift)", placeholder="F.eks. Kontor / Ansatt bonus")
-            ut_belop = col2.text_input("Beløp som skal ut:", placeholder="F.eks. 7 825 kr")
+            ut_belop = col2.text_input("Beløp (Bare tall):", placeholder="F.eks. 7825")
             ut_status = st.text_input("Status på utgiften:", placeholder="F.eks. Betalt / Ikke betalt")
             
-            if st.form_submit_button("💸 Lagre Utbetaling"):
+            if st.form_submit_button("📤 Registrer Utbetaling"):
                 if ut_til.strip():
                     st.session_state.nsvg_workspace_data["Utbetaling"].append({
                         "til": ut_til, "belop": ut_belop, "status": ut_status, "dato": valgt_maaned
                     })
                     st.rerun()
 
-    # --- 4. THE MODERN INTERACTIVE WORKSPACE GRID ---
+    # --- 5. THE MODERN INTERACTIVE WORKSPACE GRID (LIST VIEW INSIDE WORKSPACE) ---
     st.markdown("---")
+    st.markdown(f"## **{valgt_maaned} ::::**\n### **/ Gjeldende Seksjonslister /**")
+    
     ui_cols = st.columns(4)
 
-    # COLUMN 1: AKTIV SAKER
+    # COLUMN 1: AKTIV SAKER LIST
     with ui_cols[0]:
         st.markdown("<div style='background-color:#E3F2FD; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #2196F3; color:#0D47A1;'>🔹 AKTIV SAKER</div>", unsafe_allow_html=True)
         st.write("")
         
         aktiv_liste = st.session_state.nsvg_workspace_data["Aktiv Saker"]
-        for idx, item in enumerate(aktiv_liste):
-            if item["dato"] == valgt_maaned:
-                with st.expander(f"📁 {item['navn']}", expanded=True):
-                    # Inline changes saved directly back to the database items
+        filter_aktiv = [idx for idx, item in enumerate(aktiv_liste) if item["dato"] == valgt_maaned]
+        
+        if filter_aktiv:
+            for idx in filter_aktiv:
+                item = aktiv_liste[idx]
+                with st.expander(f"📁 {item['navn']} ({item['deal']} kr)", expanded=False):
                     item["navn"] = st.text_input("Navn:", value=item["navn"], key=f"act_n_{idx}")
                     item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item["agent"] in agent_options else 0, key=f"act_a_{idx}")
                     item["deal"] = st.text_input("Deal/Penger:", value=item["deal"], key=f"act_d_{idx}")
@@ -1742,72 +1752,89 @@ elif valg == "📋 Oversiktstavle":
                     item["status"] = st.text_area("Daglige oppdateringer / Mangler:", value=item["status"], key=f"act_s_{idx}", height=100)
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾", key=f"act_sv_{idx}", help="Lagre endringer"):
+                    if c_save.button("💾 Lagre", key=f"act_sv_{idx}"):
                         st.rerun()
-                    if c_del.button("🗑️", key=f"act_dl_{idx}", help="Slett sak"):
+                    if c_del.button("🗑️ Slett", key=f"act_dl_{idx}"):
                         st.session_state.nsvg_workspace_data["Aktiv Saker"].pop(idx)
                         st.rerun()
+        else:
+            st.caption("Ingen aktive saker registrert for denne måneden.")
 
-    # COLUMN 2: FREMKOMMER SAKER
+    # COLUMN 2: FREMKOMMER SAKER LIST
     with ui_cols[1]:
         st.markdown("<div style='background-color:#FFF3E0; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #FF9800; color:#E65100;'>🔸 FREMTIDIGE SAKER</div>", unsafe_allow_html=True)
         st.write("")
         
         frem_liste = st.session_state.nsvg_workspace_data["Fremkommer Saker"]
-        for idx, item in enumerate(frem_liste):
-            if item["dato"] == valgt_maaned:
-                with st.expander(f"⏳ {item['navn']}", expanded=True):
+        filter_frem = [idx for idx, item in enumerate(frem_liste) if item["dato"] == valgt_maaned]
+        
+        if filter_frem:
+            for idx in filter_frem:
+                item = frem_liste[idx]
+                with st.expander(f"⏳ {item['navn']} ({item['deal']} kr)", expanded=False):
                     item["navn"] = st.text_input("Navn:", value=item["navn"], key=f"frm_n_{idx}")
                     item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item["agent"] in agent_options else 0, key=f"frm_a_{idx}")
                     item["deal"] = st.text_input("Forventet Deal:", value=item["deal"], key=f"frm_d_{idx}")
                     item["status"] = st.text_area("Samtale Detaljer:", value=item["status"], key=f"frm_s_{idx}", height=80)
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾", key=f"frm_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"frm_sv_{idx}"):
                         st.rerun()
-                    if c_del.button("🗑️", key=f"frm_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"frm_dl_{idx}"):
                         st.session_state.nsvg_workspace_data["Fremkommer Saker"].pop(idx)
                         st.rerun()
+        else:
+            st.caption("Ingen fremtidige saker registrert.")
 
-    # COLUMN 3: INNBETALING
+    # COLUMN 3: INNBETALING LIST
     with ui_cols[2]:
-        st.markdown("<div style='background-color:#E8F5E9; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #4CAF50; color:#1B5E20;'>💰 INNBETALINGER</div>", unsafe_allow_html=True)
+        st.markdown("<div style='background-color:#E8F5E9; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #4CAF50; color:#1B5E20;'>📥 INNBETALINGER</div>", unsafe_allow_html=True)
         st.write("")
         
         inn_liste = st.session_state.nsvg_workspace_data["Innbetaling"]
-        for idx, item in enumerate(inn_liste):
-            if item["dato"] == valgt_maaned:
-                with st.expander(f"📥 {item['fra']}", expanded=True):
+        filter_inn = [idx for idx, item in enumerate(inn_liste) if item["dato"] == valgt_maaned]
+        
+        if filter_inn:
+            for idx in filter_inn:
+                item = inn_liste[idx]
+                with st.expander(f"💰 {item['fra']} ({item['belop']} kr)", expanded=False):
                     item["fra"] = st.text_input("Fra hvem:", value=item["fra"], key=f"inn_f_{idx}")
                     item["belop"] = st.text_input("Beløp:", value=item["belop"], key=f"inn_b_{idx}")
                     item["status"] = st.text_input("Status:", value=item["status"], key=f"inn_s_{idx}")
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾", key=f"inn_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"inn_sv_{idx}"):
                         st.rerun()
-                    if c_del.button("🗑️", key=f"inn_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"inn_dl_{idx}"):
                         st.session_state.nsvg_workspace_data["Innbetaling"].pop(idx)
                         st.rerun()
+        else:
+            st.caption("Ingen registrerte innbetalinger.")
 
-    # COLUMN 4: UTBETALING
+    # COLUMN 4: UTBETALING LIST
     with ui_cols[3]:
         st.markdown("<div style='background-color:#FFEBEE; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #F44336; color:#B71C1C;'>💸 UTBETALINGER</div>", unsafe_allow_html=True)
         st.write("")
         
         ut_liste = st.session_state.nsvg_workspace_data["Utbetaling"]
-        for idx, item in enumerate(ut_liste):
-            if item["dato"] == valgt_maaned:
-                with st.expander(f"📤 {item['til']}", expanded=True):
+        filter_ut = [idx for idx, item in enumerate(ut_liste) if item["dato"] == valgt_maaned]
+        
+        if filter_ut:
+            for idx in filter_ut:
+                item = ut_liste[idx]
+                with st.expander(f"💸 {item['til']} ({item['belop']} kr)", expanded=False):
                     item["til"] = st.text_input("Til hvem:", value=item["til"], key=f"ut_t_{idx}")
                     item["belop"] = st.text_input("Beløp:", value=item["belop"], key=f"ut_b_{idx}")
                     item["status"] = st.text_input("Status:", value=item["status"], key=f"ut_s_{idx}")
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾", key=f"ut_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"ut_sv_{idx}"):
                         st.rerun()
-                    if c_del.button("🗑️", key=f"ut_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"ut_dl_{idx}"):
                         st.session_state.nsvg_workspace_data["Utbetaling"].pop(idx)
                         st.rerun()
+        else:
+            st.caption("Ingen registrerte utbetalinger.")
 
 # --- FOOTER ---
 st.sidebar.markdown("---")

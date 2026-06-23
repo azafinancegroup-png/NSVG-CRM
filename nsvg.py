@@ -1619,6 +1619,11 @@ Here is the clean code for Section 12 mapped precisely to your image columns:
 
 
 
+The error occurs because regular conversational text explanation was accidentally left inside or right outside the Python code block in your `nsvg.py` script.
+
+Delete all conversational text around line 1614 and replace Section 12 with this completely isolated Python block:
+
+
 # =================================================================
 # --- 12. OVERSIKTSTAVLE & KALENDER (INTEGRATED FEATURE) ---
 # =================================================================
@@ -1640,7 +1645,6 @@ elif valg == "📋 Oversiktstavle":
     st.markdown(f"## **{valgt_maaned} ::::**\n### **/ Jobb / Oppgjør / Agents /**")
     st.divider()
 
-    # --- DATABASES FOR SECTIONS ---
     board_columns = [
         "Aktiv Saker", 
         "Process", 
@@ -1654,7 +1658,6 @@ elif valg == "📋 Oversiktstavle":
     if 'nsvg_board_dict' not in st.session_state:
         st.session_state.nsvg_board_dict = {col: [] for col in board_columns}
 
-    # --- ADD DATA TO SPECIFIC SECTIONS ---
     with st.expander("➕ Administrer Data (Legg til / Rediger i Seksjoner)", expanded=False):
         col_select, col_input = st.columns([1, 2])
         with col_select:
@@ -1667,24 +1670,19 @@ elif valg == "📋 Oversiktstavle":
                 st.session_state.nsvg_board_dict[selected_section].append(new_value.strip())
                 st.rerun()
 
-    # --- DYNAMIC GRID LAYOUT MATCHING THE IMAGE ---
     st.markdown("---")
     ui_cols = st.columns(len(board_columns))
 
     for idx, col_name in enumerate(board_columns):
         with ui_cols[idx]:
-            # Section Header Button/Style Block
             st.markdown(f"<div style='background-color:#F0F2F6; padding:8px; border-radius:4px; text-align:center; font-weight:bold; border:1px solid #D1D8E0;'>{col_name}</div>", unsafe_allow_html=True)
             st.write("")
             
             items = st.session_state.nsvg_board_dict[col_name]
             
-            # Display entries as editable components
             for item_idx, current_item_val in enumerate(items):
-                # Unique key generation per element
                 unique_key = f"edit_{col_name}_{item_idx}"
                 
-                # Text Input for inline modifications
                 updated_val = st.text_input(
                     label=f"ID: {item_idx+1}",
                     value=current_item_val,
@@ -1692,21 +1690,20 @@ elif valg == "📋 Oversiktstavle":
                     label_visibility="collapsed"
                 )
                 
-                # Update item if text changes
                 if updated_val != current_item_val:
                     st.session_state.nsvg_board_dict[col_name][item_idx] = updated_val
                 
-                # Action layout container
                 action_col1, action_col2 = st.columns([1, 1])
                 with action_col1:
-                    if st.button("💾", key=f"save_{col_name}_{item_idx}", help="Lagre endring"):
+                    if st.button("💾", key=f"save_{col_name}_{item_idx}"):
                         st.rerun()
                 with action_col2:
-                    if st.button("🗑️", key=f"del_{col_name}_{item_idx}", help="Slett"):
+                    if st.button("🗑️", key=f"del_{col_name}_{item_idx}"):
                         st.session_state.nsvg_board_dict[col_name].pop(item_idx)
                         st.rerun()
                 st.markdown("---")
 
-    # --- FOOTER ---
-    st.sidebar.markdown("---")
-    st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")
+# --- FOOTER ---
+st.sidebar.markdown("---")
+st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")
+

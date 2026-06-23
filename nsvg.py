@@ -1611,7 +1611,7 @@ elif valg == "💼 Saksbehandler Panel":
 
 
 # =================================================================
-# --- 12. OVERSIKTSTAVLE & KALENDER (GOOGLE SHEETS SECURED V4) ---
+# --- 12. OVERSIKTSTAVLE & KALENDER (AUTO-SYNC SECURED V6) ---
 # =================================================================
 elif valg == "📋 Oversiktstavle":
     st.header("📋 Digital Styringstavle & CRM Workspace")
@@ -1644,6 +1644,7 @@ elif valg == "📋 Oversiktstavle":
 
     def load_board_from_sheets():
         try:
+            # FORCE FETCH FROM GOOGLE SHEETS
             sheet_df = get_data("Oversiktstavle")
             if sheet_df is None or sheet_df.empty:
                 return None
@@ -1666,6 +1667,7 @@ elif valg == "📋 Oversiktstavle":
                     })
             return loaded_data
         except Exception as e:
+            st.error(f"Kunne ikke hente data fra Google Sheets: {e}")
             return None
 
     def save_board_to_sheets(all_data):
@@ -1674,7 +1676,6 @@ elif valg == "📋 Oversiktstavle":
             for item in items:
                 name_val = item.get("navn") or item.get("fra") or item.get("til") or ""
                 belop_val = item.get("deal") or item.get("belop") or "0"
-                # Generate stable ID if missing
                 if "id" not in item:
                     item["id"] = uuid.uuid4().hex
                 rows_to_save.append({
@@ -1688,28 +1689,27 @@ elif valg == "📋 Oversiktstavle":
                     "Status": item.get("status", "")
                 })
         df_save = pd.DataFrame(rows_to_save)
-        return update_sheet_data_internal("Oversiktstavle", df_save)
+        success = update_sheet_data_internal("Oversiktstavle", df_save)
+        if not success:
+            st.error("Kunne ikke lagre til Google Sheets. Sjekk tilkoblingen.")
+        return success
 
-    # DATA PROTECTION CHECK: If sheet is empty but user has local unsaved data, upload local data first!
-    if 'nsvg_sheets_loaded' not in st.session_state:
+    # AUTOMATIC INITIAL LOAD (Runs once when workspace is opened)
+    if 'nsvg_sheets_loaded' not in st.session_state or not st.session_state.nsvg_sheets_loaded:
         sheets_data = load_board_from_sheets()
         if sheets_data is not None:
-            # Sheet has data, safe to load it
             st.session_state.nsvg_workspace_data = sheets_data
-        else:
-            # Sheet is empty, if user has existing local data, save it to sheet right now!
-            has_local_data = any(st.session_state.nsvg_workspace_data.values())
-            if has_local_data:
-                save_board_to_sheets(st.session_state.nsvg_workspace_data)
         st.session_state.nsvg_sheets_loaded = True
 
-    # Manual Sync Button in Sidebar to safely pull/push
-    if st.sidebar.button("🔄 Synkroniser med Google Sheet"):
-        sheets_data = load_board_from_sheets()
-        if sheets_data is not None:
-            st.session_state.nsvg_workspace_data = sheets_data
-            st.sidebar.success("Data synkronisert!")
-            st.rerun()
+    # TOP SCREEN SYNC CONTROLLER
+    c_sync1, c_sync2 = st.columns([4, 1])
+    with c_sync2:
+        if st.button("🔄 Tving Synk", use_container_width=True):
+            sheets_data = load_board_from_sheets()
+            if sheets_data is not None:
+                st.session_state.nsvg_workspace_data = sheets_data
+                st.success("Synkronisert!")
+                st.rerun()
 
     agent_options = ["Bedi", "Umer", "Direkte"]
     bank_options = ["Ingen / Ikke sendt", "Sparebank Øst", "BN Bank", "Storebrand", "Nordea"]
@@ -1721,7 +1721,7 @@ elif valg == "📋 Oversiktstavle":
         except:
             return 0.0
 
-    # --- 3. LIVE ECONOMY FINANCIAL OVERVIEW (TOP BANNER) ---
+    # --- 3. LIVE ECONOMY FINANCIAL OVERVIEW ---
     st.markdown("### 📊 Økonomisk Oversikt for " + valgt_maaned)
     
     total_inn_forventet = sum([rens_belop(i.get("belop", 0)) for i in st.session_state.nsvg_workspace_data.get("Innbetaling", []) if i.get("dato") == valgt_maaned])
@@ -1743,15 +1743,27 @@ elif valg == "📋 Oversiktstavle":
             col1, col2 = st.columns(2)
             sak_navn = col1.text_input("Kunde / Sak Navn:", placeholder="F.eks. Tousif sak")
             sak_agent = col1.selectbox("Hvilken Agent?", agent_options)
-            sak_deal = col2.text_input("Deal Størrelse (Bare tall for summering):", placeholder="F.eks. 50000")
-            sak_bank = col2.selectbox("Sendt til hvilken Bank?", bank_options)
-            sak_status = st.text_area("Status og Mangler (Hvor står saken i dag? Hva mangler?)", placeholder="F.eks. Sendt til Storebrand. Mangler lønnslipp fra kunde.")
+            sak_deal = col2.text_input("Deal Størrelse (Bare tall):", placeholder="F.eks. 50000")
+            sak_bank = col2.selectbox("Aktiv Bank (Hvor jobbes det nå?):", bank_options)
+            
+            st.markdown("**Avslag fra hvilke banker? (Kryss av hvis aktuelt):**")
+            avslag_valg = []
+            c_av1, c_av2, c_av3, c_av4 = st.columns(4)
+            if c_av1.checkbox("Sparebank Øst", key="reg_av_sp"): avslag_valg.append("Sparebank Øst")
+            if c_av2.checkbox("BN Bank", key="reg_av_bn"): avslag_valg.append("BN Bank")
+            if c_av3.checkbox("Storebrand", key="reg_av_sb"): avslag_valg.append("Storebrand")
+            if c_av4.checkbox("Nordea", key="reg_av_nd"): avslag_valg.append("Nordea")
+            
+            sak_status_base = st.text_area("Status og Mangler (Hva mangler / Oppdatering?):", placeholder="F.eks. Venter på lønnslipp.")
             
             if st.form_submit_button("🚀 Registrer Aktiv Sak"):
                 if sak_navn.strip():
+                    avslag_tekst = f"[AVSLAG: {', '.join(avslag_valg)}] " if avslag_valg else ""
+                    full_status = f"{avslag_tekst}{sak_status_base}".strip()
+                    
                     st.session_state.nsvg_workspace_data["Aktiv Saker"].append({
                         "id": uuid.uuid4().hex, "navn": sak_navn, "agent": sak_agent, "deal": sak_deal, 
-                        "bank": sak_bank, "status": sak_status, "dato": valgt_maaned
+                        "bank": sak_bank, "status": full_status, "dato": valgt_maaned
                     })
                     save_board_to_sheets(st.session_state.nsvg_workspace_data)
                     st.rerun()
@@ -1762,7 +1774,7 @@ elif valg == "📋 Oversiktstavle":
             f_navn = col1.text_input("Kunde / Fremtidig Sak Navn:", placeholder="F.eks. Salauddin")
             f_agent = col1.selectbox("Hvilken Agent?", agent_options, key="f_ag")
             f_deal = col2.text_input("Forventet Deal Størrelse:", placeholder="F.eks. 30000")
-            f_status = st.text_area("Hva har dere snakket om? (Detaljer)", placeholder="F.eks. Snakket på telefon, venter på dokumenter.")
+            f_status = st.text_area("Hva har dere snakket om? (Detaljer)", placeholder="F.eks. Snakket på telephone, venter på dokumenter.")
             
             if st.form_submit_button("🚀 Registrer Fremtidig Sak"):
                 if f_navn.strip():
@@ -1821,15 +1833,39 @@ elif valg == "📋 Oversiktstavle":
             for idx in filter_aktiv:
                 item = aktiv_liste[idx]
                 item_id = item.get("id", f"act_{idx}")
+                
+                current_status_str = item.get("status", "")
+                
                 with st.expander(f"📁 {item.get('navn')} ({item.get('deal')} kr)", expanded=False):
                     item["navn"] = st.text_input("Navn:", value=item.get("navn", ""), key=f"n_{item_id}")
                     item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item.get("agent") in agent_options else 0, key=f"a_{item_id}")
                     item["deal"] = st.text_input("Deal/Penger:", value=item.get("deal", ""), key=f"d_{item_id}")
-                    item["bank"] = st.selectbox("Bank:", bank_options, index=bank_options.index(item["bank"]) if item.get("bank") in bank_options else 0, key=f"b_{item_id}")
-                    item["status"] = st.text_area("Daglige oppdateringer / Mangler:", value=item.get("status", ""), key=f"s_{item_id}", height=100)
+                    item["bank"] = st.selectbox("Aktiv Bank (Kjører nå):", bank_options, index=bank_options.index(item["bank"]) if item.get("bank") in bank_options else 0, key=f"b_{item_id}")
+                    
+                    st.markdown("⚠️ **Avslag registrert:**")
+                    c_ed_av1, c_ed_av2, c_ed_av3, c_ed_av4 = st.columns(4)
+                    av1 = c_ed_av1.checkbox("Øst", value="Sparebank Øst" in current_status_str, key=f"av_sp_{item_id}")
+                    av2 = c_ed_av2.checkbox("BN", value="BN Bank" in current_status_str, key=f"av_bn_{item_id}")
+                    av3 = c_ed_av3.checkbox("Storeb", value="Storebrand" in current_status_str, key=f"av_sb_{item_id}")
+                    av4 = c_ed_av4.checkbox("Nordea", value="Nordea" in current_status_str, key=f"av_nd_{item_id}")
+                    
+                    import re
+                    clean_status = re.sub(r"\[AVSLAG:.*?\]\s*", "", current_status_str).strip()
+                    
+                    updated_avslag_list = []
+                    if av1: updated_avslag_list.append("Sparebank Øst")
+                    if av2: updated_avslag_list.append("BN Bank")
+                    if av3: updated_avslag_list.append("Storebrand")
+                    if av4: updated_avslag_list.append("Nordea")
+                    
+                    item["status"] = st.text_area("Oppdateringer / Mangler:", value=clean_status, key=f"s_{item_id}", height=80)
+                    
+                    new_avslag_tekst = f"[AVSLAG: {', '.join(updated_avslag_list)}] " if updated_avslag_list else ""
+                    final_combined_status = f"{new_avslag_tekst}{item['status']}".strip()
                     
                     c_save, c_del = st.columns(2)
                     if c_save.button("💾 Lagre", key=f"sv_{item_id}"):
+                        item["status"] = final_combined_status
                         save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
                     if c_del.button("🗑️ Slett", key=f"dl_{item_id}"):
@@ -1923,3 +1959,11 @@ elif valg == "📋 Oversiktstavle":
                         st.rerun()
         else:
             st.caption("Ingen registrerte utbetalinger.")
+
+
+# ==========================================
+# --- APP FOOTER (FILE KE BILKUL END MEIN) ---
+# ==========================================
+st.write("")
+st.divider()
+st.caption("© 2026 Nordic Secure Vault Group | Utviklet for intern styring og CRM")

@@ -1611,7 +1611,7 @@ elif valg == "💼 Saksbehandler Panel":
 
 
 # =================================================================
-# --- 12. OVERSIKTSTAVLE & KALENDER (PRO WORKSPACE VERSION V3) ---
+# --- 12. OVERSIKTSTAVLE & KALENDER (GOOGLE SHEETS SECURED V4) ---
 # =================================================================
 elif valg == "📋 Oversiktstavle":
     st.header("📋 Digital Styringstavle & CRM Workspace")
@@ -1629,7 +1629,11 @@ elif valg == "📋 Oversiktstavle":
     with col_cal2:
         valgt_dato = st.date_input("Dagens Dato:", value=None)
 
-    # --- 2. CORE DATABASE INITIALIZATION ---
+    # --- 2. GOOGLE SHEETS LIVE LOAD/SAVE SYNC SYSTEM ---
+    import uuid
+    import pandas as pd
+
+    # Core Initialization
     if 'nsvg_workspace_data' not in st.session_state:
         st.session_state.nsvg_workspace_data = {
             "Aktiv Saker": [],
@@ -1638,10 +1642,78 @@ elif valg == "📋 Oversiktstavle":
             "Utbetaling": []
         }
 
+    def load_board_from_sheets():
+        try:
+            sheet_df = get_data("Oversiktstavle")
+            if sheet_df is None or sheet_df.empty:
+                return None
+            
+            loaded_data = {"Aktiv Saker": [], "Fremkommer Saker": [], "Innbetaling": [], "Utbetaling": []}
+            for _, row in sheet_df.iterrows():
+                sec = str(row.get("Seksjon", "")).strip()
+                if sec in loaded_data:
+                    loaded_data[sec].append({
+                        "id": str(row.get("ID", uuid.uuid4().hex)),
+                        "navn": str(row.get("Navn_Fra_Til", "")),
+                        "fra": str(row.get("Navn_Fra_Til", "")),
+                        "til": str(row.get("Navn_Fra_Til", "")),
+                        "agent": str(row.get("Agent", "Direkte")),
+                        "deal": str(row.get("Belop", "0")),
+                        "belop": str(row.get("Belop", "0")),
+                        "bank": str(row.get("Bank", "Ingen / Ikke sendt")),
+                        "status": str(row.get("Status", "")),
+                        "dato": str(row.get("Maaned", valgt_maaned))
+                    })
+            return loaded_data
+        except Exception as e:
+            return None
+
+    def save_board_to_sheets(all_data):
+        rows_to_save = []
+        for sec_name, items in all_data.items():
+            for item in items:
+                name_val = item.get("navn") or item.get("fra") or item.get("til") or ""
+                belop_val = item.get("deal") or item.get("belop") or "0"
+                # Generate stable ID if missing
+                if "id" not in item:
+                    item["id"] = uuid.uuid4().hex
+                rows_to_save.append({
+                    "ID": item.get("id"),
+                    "Seksjon": sec_name,
+                    "Maaned": item.get("dato", valgt_maaned),
+                    "Navn_Fra_Til": name_val,
+                    "Agent": item.get("agent", "Direkte"),
+                    "Belop": belop_val,
+                    "Bank": item.get("bank", "Ingen / Ikke sendt"),
+                    "Status": item.get("status", "")
+                })
+        df_save = pd.DataFrame(rows_to_save)
+        return update_sheet_data_internal("Oversiktstavle", df_save)
+
+    # DATA PROTECTION CHECK: If sheet is empty but user has local unsaved data, upload local data first!
+    if 'nsvg_sheets_loaded' not in st.session_state:
+        sheets_data = load_board_from_sheets()
+        if sheets_data is not None:
+            # Sheet has data, safe to load it
+            st.session_state.nsvg_workspace_data = sheets_data
+        else:
+            # Sheet is empty, if user has existing local data, save it to sheet right now!
+            has_local_data = any(st.session_state.nsvg_workspace_data.values())
+            if has_local_data:
+                save_board_to_sheets(st.session_state.nsvg_workspace_data)
+        st.session_state.nsvg_sheets_loaded = True
+
+    # Manual Sync Button in Sidebar to safely pull/push
+    if st.sidebar.button("🔄 Synkroniser med Google Sheet"):
+        sheets_data = load_board_from_sheets()
+        if sheets_data is not None:
+            st.session_state.nsvg_workspace_data = sheets_data
+            st.sidebar.success("Data synkronisert!")
+            st.rerun()
+
     agent_options = ["Bedi", "Umer", "Direkte"]
     bank_options = ["Ingen / Ikke sendt", "Sparebank Øst", "BN Bank", "Storebrand", "Nordea"]
 
-    # Helper function to extract numeric values from text input strings (e.g. "10 000 kr" -> 10000)
     def rens_belop(tekst):
         try:
             tall = "".join([c for c in str(tekst) if c.isdigit() or c == "."])
@@ -1652,8 +1724,8 @@ elif valg == "📋 Oversiktstavle":
     # --- 3. LIVE ECONOMY FINANCIAL OVERVIEW (TOP BANNER) ---
     st.markdown("### 📊 Økonomisk Oversikt for " + valgt_maaned)
     
-    total_inn_forventet = sum([rens_belop(i["belop"]) for i in st.session_state.nsvg_workspace_data["Innbetaling"] if i["dato"] == valgt_maaned])
-    total_ut_forventet = sum([rens_belop(u["belop"]) for u in st.session_state.nsvg_workspace_data["Utbetaling"] if u["dato"] == valgt_maaned])
+    total_inn_forventet = sum([rens_belop(i.get("belop", 0)) for i in st.session_state.nsvg_workspace_data.get("Innbetaling", []) if i.get("dato") == valgt_maaned])
+    total_ut_forventet = sum([rens_belop(u.get("belop", 0)) for u in st.session_state.nsvg_workspace_data.get("Utbetaling", []) if u.get("dato") == valgt_maaned])
     netto_balanse = total_inn_forventet - total_ut_forventet
 
     fin_c1, fin_c2, fin_c3 = st.columns(3)
@@ -1678,9 +1750,10 @@ elif valg == "📋 Oversiktstavle":
             if st.form_submit_button("🚀 Registrer Aktiv Sak"):
                 if sak_navn.strip():
                     st.session_state.nsvg_workspace_data["Aktiv Saker"].append({
-                        "navn": sak_navn, "agent": sak_agent, "deal": sak_deal, 
+                        "id": uuid.uuid4().hex, "navn": sak_navn, "agent": sak_agent, "deal": sak_deal, 
                         "bank": sak_bank, "status": sak_status, "dato": valgt_maaned
                     })
+                    save_board_to_sheets(st.session_state.nsvg_workspace_data)
                     st.rerun()
 
     with tab2:
@@ -1694,9 +1767,10 @@ elif valg == "📋 Oversiktstavle":
             if st.form_submit_button("🚀 Registrer Fremtidig Sak"):
                 if f_navn.strip():
                     st.session_state.nsvg_workspace_data["Fremkommer Saker"].append({
-                        "navn": f_navn, "agent": f_agent, "deal": f_deal, 
+                        "id": uuid.uuid4().hex, "navn": f_navn, "agent": f_agent, "deal": f_deal, 
                         "status": f_status, "dato": valgt_maaned
                     })
+                    save_board_to_sheets(st.session_state.nsvg_workspace_data)
                     st.rerun()
 
     with tab3:
@@ -1709,8 +1783,9 @@ elif valg == "📋 Oversiktstavle":
             if st.form_submit_button("📥 Registrer Innbetaling"):
                 if inn_fra.strip():
                     st.session_state.nsvg_workspace_data["Innbetaling"].append({
-                        "fra": inn_fra, "belop": inn_belop, "status": inn_status, "dato": valgt_maaned
+                        "id": uuid.uuid4().hex, "fra": inn_fra, "belop": inn_belop, "status": inn_status, "dato": valgt_maaned
                     })
+                    save_board_to_sheets(st.session_state.nsvg_workspace_data)
                     st.rerun()
 
     with tab4:
@@ -1723,11 +1798,12 @@ elif valg == "📋 Oversiktstavle":
             if st.form_submit_button("📤 Registrer Utbetaling"):
                 if ut_til.strip():
                     st.session_state.nsvg_workspace_data["Utbetaling"].append({
-                        "til": ut_til, "belop": ut_belop, "status": ut_status, "dato": valgt_maaned
+                        "id": uuid.uuid4().hex, "til": ut_til, "belop": ut_belop, "status": ut_status, "dato": valgt_maaned
                     })
+                    save_board_to_sheets(st.session_state.nsvg_workspace_data)
                     st.rerun()
 
-    # --- 5. THE MODERN INTERACTIVE WORKSPACE GRID (LIST VIEW INSIDE WORKSPACE) ---
+    # --- 5. THE MODERN INTERACTIVE WORKSPACE GRID ---
     st.markdown("---")
     st.markdown(f"## **{valgt_maaned} ::::**\n### **/ Gjeldende Seksjonslister /**")
     
@@ -1738,24 +1814,27 @@ elif valg == "📋 Oversiktstavle":
         st.markdown("<div style='background-color:#E3F2FD; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #2196F3; color:#0D47A1;'>🔹 AKTIV SAKER</div>", unsafe_allow_html=True)
         st.write("")
         
-        aktiv_liste = st.session_state.nsvg_workspace_data["Aktiv Saker"]
-        filter_aktiv = [idx for idx, item in enumerate(aktiv_liste) if item["dato"] == valgt_maaned]
+        aktiv_liste = st.session_state.nsvg_workspace_data.get("Aktiv Saker", [])
+        filter_aktiv = [idx for idx, item in enumerate(aktiv_liste) if item.get("dato") == valgt_maaned]
         
         if filter_aktiv:
             for idx in filter_aktiv:
                 item = aktiv_liste[idx]
-                with st.expander(f"📁 {item['navn']} ({item['deal']} kr)", expanded=False):
-                    item["navn"] = st.text_input("Navn:", value=item["navn"], key=f"act_n_{idx}")
-                    item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item["agent"] in agent_options else 0, key=f"act_a_{idx}")
-                    item["deal"] = st.text_input("Deal/Penger:", value=item["deal"], key=f"act_d_{idx}")
-                    item["bank"] = st.selectbox("Bank:", bank_options, index=bank_options.index(item["bank"]) if item["bank"] in bank_options else 0, key=f"act_b_{idx}")
-                    item["status"] = st.text_area("Daglige oppdateringer / Mangler:", value=item["status"], key=f"act_s_{idx}", height=100)
+                item_id = item.get("id", f"act_{idx}")
+                with st.expander(f"📁 {item.get('navn')} ({item.get('deal')} kr)", expanded=False):
+                    item["navn"] = st.text_input("Navn:", value=item.get("navn", ""), key=f"n_{item_id}")
+                    item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item.get("agent") in agent_options else 0, key=f"a_{item_id}")
+                    item["deal"] = st.text_input("Deal/Penger:", value=item.get("deal", ""), key=f"d_{item_id}")
+                    item["bank"] = st.selectbox("Bank:", bank_options, index=bank_options.index(item["bank"]) if item.get("bank") in bank_options else 0, key=f"b_{item_id}")
+                    item["status"] = st.text_area("Daglige oppdateringer / Mangler:", value=item.get("status", ""), key=f"s_{item_id}", height=100)
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾 Lagre", key=f"act_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"sv_{item_id}"):
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
-                    if c_del.button("🗑️ Slett", key=f"act_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"dl_{item_id}"):
                         st.session_state.nsvg_workspace_data["Aktiv Saker"].pop(idx)
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
         else:
             st.caption("Ingen aktive saker registrert for denne måneden.")
@@ -1765,23 +1844,26 @@ elif valg == "📋 Oversiktstavle":
         st.markdown("<div style='background-color:#FFF3E0; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #FF9800; color:#E65100;'>🔸 FREMTIDIGE SAKER</div>", unsafe_allow_html=True)
         st.write("")
         
-        frem_liste = st.session_state.nsvg_workspace_data["Fremkommer Saker"]
-        filter_frem = [idx for idx, item in enumerate(frem_liste) if item["dato"] == valgt_maaned]
+        frem_liste = st.session_state.nsvg_workspace_data.get("Fremkommer Saker", [])
+        filter_frem = [idx for idx, item in enumerate(frem_liste) if item.get("dato") == valgt_maaned]
         
         if filter_frem:
             for idx in filter_frem:
                 item = frem_liste[idx]
-                with st.expander(f"⏳ {item['navn']} ({item['deal']} kr)", expanded=False):
-                    item["navn"] = st.text_input("Navn:", value=item["navn"], key=f"frm_n_{idx}")
-                    item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item["agent"] in agent_options else 0, key=f"frm_a_{idx}")
-                    item["deal"] = st.text_input("Forventet Deal:", value=item["deal"], key=f"frm_d_{idx}")
-                    item["status"] = st.text_area("Samtale Detaljer:", value=item["status"], key=f"frm_s_{idx}", height=80)
+                item_id = item.get("id", f"frm_{idx}")
+                with st.expander(f"⏳ {item.get('navn')} ({item.get('deal')} kr)", expanded=False):
+                    item["navn"] = st.text_input("Navn:", value=item.get("navn", ""), key=f"n_{item_id}")
+                    item["agent"] = st.selectbox("Agent:", agent_options, index=agent_options.index(item["agent"]) if item.get("agent") in agent_options else 0, key=f"a_{item_id}")
+                    item["deal"] = st.text_input("Forventet Deal:", value=item.get("deal", ""), key=f"d_{item_id}")
+                    item["status"] = st.text_area("Samtale Detaljer:", value=item.get("status", ""), key=f"s_{item_id}", height=80)
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾 Lagre", key=f"frm_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"sv_{item_id}"):
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
-                    if c_del.button("🗑️ Slett", key=f"frm_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"dl_{item_id}"):
                         st.session_state.nsvg_workspace_data["Fremkommer Saker"].pop(idx)
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
         else:
             st.caption("Ingen fremtidige saker registrert.")
@@ -1791,22 +1873,25 @@ elif valg == "📋 Oversiktstavle":
         st.markdown("<div style='background-color:#E8F5E9; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #4CAF50; color:#1B5E20;'>📥 INNBETALINGER</div>", unsafe_allow_html=True)
         st.write("")
         
-        inn_liste = st.session_state.nsvg_workspace_data["Innbetaling"]
-        filter_inn = [idx for idx, item in enumerate(inn_liste) if item["dato"] == valgt_maaned]
+        inn_liste = st.session_state.nsvg_workspace_data.get("Innbetaling", [])
+        filter_inn = [idx for idx, item in enumerate(inn_liste) if item.get("dato") == valgt_maaned]
         
         if filter_inn:
             for idx in filter_inn:
                 item = inn_liste[idx]
-                with st.expander(f"💰 {item['fra']} ({item['belop']} kr)", expanded=False):
-                    item["fra"] = st.text_input("Fra hvem:", value=item["fra"], key=f"inn_f_{idx}")
-                    item["belop"] = st.text_input("Beløp:", value=item["belop"], key=f"inn_b_{idx}")
-                    item["status"] = st.text_input("Status:", value=item["status"], key=f"inn_s_{idx}")
+                item_id = item.get("id", f"inn_{idx}")
+                with st.expander(f"💰 {item.get('fra')} ({item.get('belop')} kr)", expanded=False):
+                    item["fra"] = st.text_input("Fra hvem:", value=item.get("fra", ""), key=f"f_{item_id}")
+                    item["belop"] = st.text_input("Beløp:", value=item.get("belop", ""), key=f"b_{item_id}")
+                    item["status"] = st.text_input("Status:", value=item.get("status", ""), key=f"s_{item_id}")
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾 Lagre", key=f"inn_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"sv_{item_id}"):
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
-                    if c_del.button("🗑️ Slett", key=f"inn_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"dl_{item_id}"):
                         st.session_state.nsvg_workspace_data["Innbetaling"].pop(idx)
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
         else:
             st.caption("Ingen registrerte innbetalinger.")
@@ -1816,26 +1901,25 @@ elif valg == "📋 Oversiktstavle":
         st.markdown("<div style='background-color:#FFEBEE; padding:10px; border-radius:8px; text-align:center; font-weight:bold; border:2px solid #F44336; color:#B71C1C;'>💸 UTBETALINGER</div>", unsafe_allow_html=True)
         st.write("")
         
-        ut_liste = st.session_state.nsvg_workspace_data["Utbetaling"]
-        filter_ut = [idx for idx, item in enumerate(ut_liste) if item["dato"] == valgt_maaned]
+        ut_liste = st.session_state.nsvg_workspace_data.get("Utbetaling", [])
+        filter_ut = [idx for idx, item in enumerate(ut_liste) if item.get("dato") == valgt_maaned]
         
         if filter_ut:
             for idx in filter_ut:
                 item = ut_liste[idx]
-                with st.expander(f"💸 {item['til']} ({item['belop']} kr)", expanded=False):
-                    item["til"] = st.text_input("Til hvem:", value=item["til"], key=f"ut_t_{idx}")
-                    item["belop"] = st.text_input("Beløp:", value=item["belop"], key=f"ut_b_{idx}")
-                    item["status"] = st.text_input("Status:", value=item["status"], key=f"ut_s_{idx}")
+                item_id = item.get("id", f"ut_{idx}")
+                with st.expander(f"💸 {item.get('til')} ({item.get('belop')} kr)", expanded=False):
+                    item["til"] = st.text_input("Til hvem:", value=item.get("til", ""), key=f"t_{item_id}")
+                    item["belop"] = st.text_input("Beløp:", value=item.get("belop", ""), key=f"b_{item_id}")
+                    item["status"] = st.text_input("Status:", value=item.get("status", ""), key=f"s_{item_id}")
                     
                     c_save, c_del = st.columns(2)
-                    if c_save.button("💾 Lagre", key=f"ut_sv_{idx}"):
+                    if c_save.button("💾 Lagre", key=f"sv_{item_id}"):
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
-                    if c_del.button("🗑️ Slett", key=f"ut_dl_{idx}"):
+                    if c_del.button("🗑️ Slett", key=f"dl_{item_id}"):
                         st.session_state.nsvg_workspace_data["Utbetaling"].pop(idx)
+                        save_board_to_sheets(st.session_state.nsvg_workspace_data)
                         st.rerun()
         else:
             st.caption("Ingen registrerte utbetalinger.")
-
-# --- FOOTER ---
-st.sidebar.markdown("---")
-st.sidebar.caption("NSVG CRM v2.0 | © NORDIC SECURE VAULT GROUP")

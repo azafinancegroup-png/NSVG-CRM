@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -220,14 +219,12 @@ elif "7. Saksbehandler Panel" in valg:
     st.caption(f"Innlogget som: {st.session_state.active_user}")
     st.divider()
     
-    # CRITICAL FIX: Robust filtering using lower-case matches and handle empty names gracefully
     current_username = str(st.session_state.username_raw).strip().lower()
     current_display_name = str(st.session_state.active_user).strip().lower()
     
     all_cases_df = get_data("Oversiktstavle")
     
     if not all_cases_df.empty:
-        # Match either by username or by full display name case-insensitively
         all_cases_df["Agent_Lower"] = all_cases_df["Agent"].fillna("").astype(str).str.strip().str.lower()
         my_cases = all_cases_df[(all_cases_df["Agent_Lower"] == current_username) | (all_cases_df["Agent_Lower"] == current_display_name)]
         
@@ -591,5 +588,3 @@ elif "10. Oversiktstavle" in valg:
 st.write("")
 st.divider()
 st.caption("© 2026 Nordic Secure Vault Group | Persistent Workspace Secured Run")
-
-```

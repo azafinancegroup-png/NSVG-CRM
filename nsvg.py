@@ -1961,6 +1961,138 @@ elif valg == "📋 Oversiktstavle":
             st.caption("Ingen registrerte utbetalinger.")
 
 
+
+
+
+
+# ==============================================================================
+# --- 13. FULL PRO BANKS MANAGEMENT & ANALYTICS (AUTO-SYNC V6) ---
+# ==============================================================================
+st.markdown("---")
+st.markdown("## 🏦 **13. FULL PRO BANKS & ANALYTICS**")
+st.markdown("### */ Avansert Bankstyring, Portaler og Loggføring /*")
+
+# Make sure the session state key exists so it doesn't crash the CRM data structure
+if "bank_logs" not in st.session_state.nsvg_workspace_data:
+    st.session_state.nsvg_workspace_data["bank_logs"] = []
+
+# --- 13.1 QUICK PORTAL ACCESS & METRICS ---
+st.markdown("#### 🔗 Hurtiglenker til Bankportaler")
+col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+
+with col_b1:
+    st.link_button("🏦 Sparebank Øst Portal", "https://www.sbost.no", use_container_width=True)
+with col_b2:
+    st.link_button("🏦 BN Bank Partner", "https://www.bnbank.no", use_container_width=True)
+with col_b3:
+    st.link_button("🏦 Storebrand Partnerlink", "https://www.storebrand.no", use_container_width=True)
+with col_b4:
+    st.link_button("🏦 Nordea Connect", "https://www.nordea.no", use_container_width=True)
+
+st.write("")
+
+# --- 13.2 LIVE ANALYTICS (Calculated from Section 4 & 5 Dynamic Data) ---
+st.markdown("#### 📊 Sanntid Bank-Ytelse & Avslagsrate")
+
+# Fetch current live data from your CRM sheets workspace
+all_cases = st.session_state.nsvg_workspace_data.get("Aktiv Saker", [])
+total_cases_count = len(all_cases)
+
+# Calculate bank occurrences and rejections dynamically
+bank_counts = {"Sparebank Øst": 0, "BN Bank": 0, "Storebrand": 0, "Nordea": 0}
+bank_rejections = {"Sparebank Øst": 0, "BN Bank": 0, "Storebrand": 0, "Nordea": 0}
+
+for c in all_cases:
+    # Active bank tracking
+    c_bank = c.get("bank")
+    if c_bank in bank_counts:
+        bank_counts[c_bank] += 1
+    
+    # Rejection status checking from the dynamic checkboxes text formula
+    c_status = c.get("status", "")
+    if "Sparebank Øst" in c_status: bank_rejections["Sparebank Øst"] += 1
+    if "BN Bank" in c_status: bank_rejections["BN Bank"] += 1
+    if "Storebrand" in c_status: bank_rejections["Storebrand"] += 1
+    if "Nordea" in c_status: bank_rejections["Nordea"] += 1
+
+# Display metrics inside visual metric boxes
+m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+with m_col1:
+    st.metric(label="Øst (Aktive / Avslag)", value=f"{bank_counts['Sparebank Øst']} sak", delta=f"-{bank_rejections['Sparebank Øst']} Avslag", delta_color="inverse")
+with m_col2:
+    st.metric(label="BN Bank (Aktive / Avslag)", value=f"{bank_counts['BN Bank']} sak", delta=f"-{bank_rejections['BN Bank']} Avslag", delta_color="inverse")
+with m_col3:
+    st.metric(label="Storebrand (Aktive / Avslag)", value=f"{bank_counts['Storebrand']} sak", delta=f"-{bank_rejections['Storebrand']} Avslag", delta_color="inverse")
+with m_col4:
+    st.metric(label="Nordea (Aktive / Avslag)", value=f"{bank_counts['Nordea']} sak", delta=f"-{bank_rejections['Nordea']} Avslag", delta_color="inverse")
+
+st.write("")
+
+# --- 13.3 DYNAMIC BANK LOG REGISTRATION FORM ---
+st.markdown("#### 📝 Loggfør Ny Bank-Hendelse / Avvik")
+with st.form("form_bank_pro_logs"):
+    col_l1, col_l2, col_l3 = st.columns(3)
+    log_bank = col_l1.selectbox("Velg Bank:", bank_options, key="pro_log_bank")
+    log_type = col_l2.selectbox("Type Hendelse:", ["Søknad Sendt", "Venter på Svar", "Tilleggsdokumentasjon", "Avslag Analyse", "Godkjent / Utbetalt"], key="pro_log_type")
+    log_ref = col_l3.text_input("Sak Referanse / Kunde:", placeholder="F.eks. Tousif / Ref: 9982", key="pro_log_ref")
+    
+    log_details = st.text_area("Detaljert loggnotat (Hva sa banken?):", placeholder="F.eks. Kunde har for lav egenkapital ifølge Storebrand, prøver BN Bank isteden.", key="pro_log_details")
+    
+    if st.form_submit_button("💾 Lagre i Bank Pro Logg"):
+        if log_ref.strip() and log_details.strip():
+            # Append new log with unique ID and timestamp metadata
+            st.session_state.nsvg_workspace_data["bank_logs"].append({
+                "id": uuid.uuid4().hex,
+                "bank": log_bank,
+                "type": log_type,
+                "referanse": log_ref,
+                "detaljer": log_details,
+                "maaned": valgt_maaned
+            })
+            # Auto-sync saved data to Google Sheets via your core function
+            save_board_to_sheets(st.session_state.nsvg_workspace_data)
+            st.success("Bank-logg ble lagret og synkronisert suksessfullt!")
+            st.rerun()
+        else:
+            st.error("Vennligst fyll ut både Sak Referanse og Detaljer før du lagrer.")
+
+# --- 13.4 LIVE DATA LOGS GRID & VISUALIZATION ---
+st.markdown("#### 🗂️ Historisk Bank-Logg for denne måneden")
+
+current_logs = st.session_state.nsvg_workspace_data.get("bank_logs", [])
+filtered_logs = [idx for idx, log in enumerate(current_logs) if log.get("maaned") == valgt_maaned]
+
+if filtered_logs:
+    for idx in reversed(filtered_logs):  # Show latest logs on top
+        log_item = current_logs[idx]
+        log_id = log_item.get("id", f"log_{idx}")
+        
+        # Color coding badges based on event type
+        l_type = log_item.get("type", "")
+        badge_color = "#4CAF50" if "Godkjent" in l_type else ("#F44336" if "Avslag" in l_type else "#FF9800")
+        
+        with st.container():
+            st.markdown(
+                f"""
+                <div style='background-color:#F8F9FA; padding:12px; border-left:5px solid {badge_color}; border-radius:4px; margin-bottom:10px;'>
+                    <span style='font-weight:bold; color:#212529;'>{log_item.get('bank')}</span> | 
+                    <span style='background-color:{badge_color}; color:white; padding:2px 6px; border-radius:3px; font-size:12px;'>{l_type}</span> | 
+                    <span style='color:#6C757D;'>Ref: {log_item.get('referanse')}</span>
+                    <p style='margin-top:5px; margin-bottom:5px; font-size:14px; color:#495057;'>{log_item.get('detaljer')}</p>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+            
+            # Sub-buttons for deleting logs inline securely without index corruption
+            c_log_space, c_log_del = st.columns([6, 1])
+            if c_log_del.button("🗑️ Fjern", key=f"del_log_{log_id}", size="small"):
+                st.session_state.nsvg_workspace_data["bank_logs"].pop(idx)
+                save_board_to_sheets(st.session_state.nsvg_workspace_data)
+                st.rerun()
+else:
+    st.caption("Ingen spesifikke bank-logger registrert for denne måneden enda.")
+
 # ==========================================
 # --- APP FOOTER (FILE KE BILKUL END MEIN) ---
 # ==========================================

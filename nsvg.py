@@ -1966,121 +1966,102 @@ elif valg == "📋 Oversiktstavle":
 
 
 # ==============================================================================
-# --- 13. FULL PRO BANKS MANAGEMENT & ANALYTICS (AUTO-SYNC V6) ---
+# --- 13. FULL PRO BANKS & DECISION ENGINE (AUTO-SYNC V6) ---
 # ==============================================================================
 st.markdown("---")
-st.markdown("## 🏦 **13. FULL PRO BANKS & ANALYTICS**")
-st.markdown("### */ Avansert Bankstyring, Portaler og Loggføring /*")
+st.markdown("## 🏦 **13. FULL PRO BANKS & DECISION ENGINE**")
+st.markdown("### */ Automatisert Saksanalyse & Smart Bank-Ruting /*")
 
-# Sigur at datastrukturen eksisterer i session state
-if "bank_logs" not in st.session_state.nsvg_workspace_data:
-    st.session_state.nsvg_workspace_data["bank_logs"] = []
+# 1. HENT UT LIVE DATA FRA CRM
+all_cases_live = st.session_state.nsvg_workspace_data.get("Aktiv Saker", [])
+current_month_cases = [c for c in all_cases_live if c.get("dato") == valgt_maaned]
 
-# --- 13.1 QUICK PORTAL ACCESS ---
-st.markdown("#### 🔗 Hurtiglenker til Bankportaler")
-col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+# Global statistikk for smarte råd
+total_avslag_øst = 0
+total_avslag_bn = 0
+total_avslag_sb = 0
+total_avslag_nd = 0
 
-with col_b1:
-    st.link_button("🏦 Sparebank Øst Portal", "https://www.sbost.no", use_container_width=True)
-with col_b2:
-    st.link_button("🏦 BN Bank Partner", "https://www.bnbank.no", use_container_width=True)
-with col_b3:
-    st.link_button("🏦 Storebrand Partnerlink", "https://www.storebrand.no", use_container_width=True)
-with col_b4:
-    st.link_button("🏦 Nordea Connect", "https://www.nordea.no", use_container_width=True)
+for c in current_month_cases:
+    status_txt = c.get("status", "")
+    if "Sparebank Øst" in status_txt: total_avslag_øst += 1
+    if "BN Bank" in status_txt: total_avslag_bn += 1
+    if "Storebrand" in status_txt: total_avslag_sb += 1
+    if "Nordea" in status_txt: total_avslag_nd += 1
 
-st.write("")
-
-# --- 13.2 LIVE ANALYTICS ---
-st.markdown("#### 📊 Sanntid Bank-Ytelse & Avslagsrate")
-
-all_cases = st.session_state.nsvg_workspace_data.get("Aktiv Saker", [])
-bank_counts = {"Sparebank Øst": 0, "BN Bank": 0, "Storebrand": 0, "Nordea": 0}
-bank_rejections = {"Sparebank Øst": 0, "BN Bank": 0, "Storebrand": 0, "Nordea": 0}
-
-for c in all_cases:
-    c_bank = c.get("bank")
-    if c_bank in bank_counts:
-        bank_counts[c_bank] += 1
-    
-    c_status = c.get("status", "")
-    if "Sparebank Øst" in c_status: bank_rejections["Sparebank Øst"] += 1
-    if "BN Bank" in c_status: bank_rejections["BN Bank"] += 1
-    if "Storebrand" in c_status: bank_rejections["Storebrand"] += 1
-    if "Nordea" in c_status: bank_rejections["Nordea"] += 1
-
-m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-with m_col1:
-    st.metric(label="Øst (Aktive / Avslag)", value=f"{bank_counts['Sparebank Øst']} sak", delta=f"-{bank_rejections['Sparebank Øst']} Avslag", delta_color="inverse")
-with m_col2:
-    st.metric(label="BN Bank (Aktive / Avslag)", value=f"{bank_counts['BN Bank']} sak", delta=f"-{bank_rejections['BN Bank']} Avslag", delta_color="inverse")
-with m_col3:
-    st.metric(label="Storebrand (Aktive / Avslag)", value=f"{bank_counts['Storebrand']} sak", delta=f"-{bank_rejections['Storebrand']} Avslag", delta_color="inverse")
-with m_col4:
-    st.metric(label="Nordea (Aktive / Avslag)", value=f"{bank_counts['Nordea']} sak", delta=f"-{bank_rejections['Nordea']} Avslag", delta_color="inverse")
+# 2. VISUELL OVERSIKT OVER BESTE BANK NETTOPP NÅ
+st.markdown("#### 🎯 Smart Bank-Ruting (Basert på månedens avslag)")
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+with col_m1:
+    st.metric("Sparebank Øst", f"{total_avslag_øst} Avslag", delta="Normal Risiko" if total_avslag_øst < 3 else "Høy Avslagsrate", delta_color="normal" if total_avslag_øst < 3 else "inverse")
+with col_m2:
+    st.metric("BN Bank", f"{total_avslag_bn} Avslag", delta="Stabil" if total_avslag_bn < 3 else "Streng nå", delta_color="normal" if total_avslag_bn < 3 else "inverse")
+with col_m3:
+    st.metric("Storebrand", f"{total_avslag_sb} Avslag", delta="Beste valg" if total_avslag_sb == 0 else "Sjekk krav", delta_color="off" if total_avslag_sb > 0 else "normal")
+with col_m4:
+    st.metric("Nordea", f"{total_avslag_nd} Avslag", delta="Faste rammer", delta_color="off")
 
 st.write("")
 
-# --- 13.3 DYNAMIC BANK LOG REGISTRATION FORM ---
-st.markdown("#### 📝 Loggfør Ny Bank-Hendelse / Avvik")
-with st.form("form_bank_pro_logs"):
-    col_l1, col_l2, col_l3 = st.columns(3)
-    # Direkte liste istedenfor bank_options variabel for å unngå NameError
-    log_bank = col_l1.selectbox("Velg Bank:", ["Sparebank Øst", "BN Bank", "Storebrand", "Nordea"], key="pro_log_bank")
-    log_type = col_l2.selectbox("Type Hendelse:", ["Søknad Sendt", "Venter på Svar", "Tilleggsdokumentasjon", "Avslag Analyse", "Godkjent / Utbetalt"], key="pro_log_type")
-    log_ref = col_l3.text_input("Sak Referanse / Kunde:", placeholder="F.eks. Tousif / Ref: 9982", key="pro_log_ref")
-    
-    log_details = st.text_area("Detaljert loggnotat (Hva sa banken?):", placeholder="F.eks. Mangel på dokumenter.", key="pro_log_details")
-    
-    if st.form_submit_button("💾 Lagre i Bank Pro Logg"):
-        if log_ref.strip() and log_details.strip():
-            st.session_state.nsvg_workspace_data["bank_logs"].append({
-                "id": uuid.uuid4().hex,
-                "bank": log_bank,
-                "type": log_type,
-                "referanse": log_ref,
-                "detaljer": log_details,
-                "maaned": valgt_maaned
-            })
-            save_board_to_sheets(st.session_state.nsvg_workspace_data)
-            st.success("Bank-logg ble lagret!")
-            st.rerun()
-        else:
-            st.error("Vennligst fyll ut både Sak Referanse og Detaljer.")
+# 3. AUTOMATISK HANDLINGSLISTE (DIREKTE ACTION STEPS FOR HVER KUNDE)
+st.markdown("#### ⚡ Automatiske Action Steps (Hva må gjøres nå?)")
 
-# --- 13.4 LIVE DATA LOGS GRID ---
-st.markdown("#### 🗂️ Historisk Bank-Logg for denne måneden")
-
-current_logs = st.session_state.nsvg_workspace_data.get("bank_logs", [])
-filtered_logs = [idx for idx, log in enumerate(current_logs) if log.get("maaned") == valgt_maaned]
-
-if filtered_logs:
-    for idx in reversed(filtered_logs):
-        log_item = current_logs[idx]
-        log_id = log_item.get("id", f"log_{idx}")
+if current_month_cases:
+    for idx, case in enumerate(current_month_cases):
+        c_name = case.get("navn", "Ukjent Kunde")
+        c_bank = case.get("bank", "Ingen bank valgt")
+        c_deal = case.get("deal", "0")
+        c_status = case.get("status", "")
         
-        l_type = log_item.get("type", "")
-        badge_color = "#4CAF50" if "Godkjent" in l_type else ("#F44336" if "Avslag" in l_type else "#FF9800")
+        # Sjekk hvilke avslag kunden har fått basert på koden i seksjon 5
+        avslag_funnet = []
+        if "Sparebank Øst" in c_status: avslag_funnet.append("Sparebank Øst")
+        if "BN Bank" in c_status: avslag_funnet.append("BN Bank")
+        if "Storebrand" in c_status: avslag_funnet.append("Storebrand")
+        if "Nordea" in c_status: avslag_funnet.append("Nordea")
         
+        # SMART LOGIC: Regn ut neste beste bank automatisk
+        neste_bank_anbefaling = "Ingen ledige banker (Alle har gitt avslag!)"
+        anbefaling_farge = "#F44336" # Rød
+        
+        mulige_banker = ["Sparebank Øst", "BN Bank", "Storebrand", "Nordea"]
+        ledige_banker = [b for b in mulige_banker if b not in avslag_funnet and b != c_bank]
+        
+        if ledige_banker:
+            neste_bank_anbefaling = f"👉 Send saken videre til **{ledige_banker[0]}**"
+            anbefaling_farge = "#2196F3" # Blå
+            
+        # Sjekk om det er kritiske mangler i teksten
+        status_lavere = c_status.lower()
+        if "mangler" in status_lavere or "venter" in status_lavere or "lønn" in status_lavere:
+            neste_bank_anbefaling = "⚠️ **KRITISK:** Purr på kunde for dokumenter / lønnslipp før ny innsending!"
+            anbefaling_farge = "#FF9800" # Oransje
+
+        if not avslag_funnet:
+            neste_bank_anbefaling = f"🟢 Sak kjører fint i **{c_bank}**. Venter på første tilbakemelding."
+            anbefaling_farge = "#4CAF50" # Grønn
+
+        # HTML Boks som spytter ut nøyaktig hva du skal gjøre med kunden
         st.markdown(
             f"""
-            <div style='background-color:#F8F9FA; padding:12px; border-left:5px solid {badge_color}; border-radius:4px; margin-bottom:10px;'>
-                <span style='font-weight:bold; color:#212529;'>{log_item.get('bank')}</span> | 
-                <span style='background-color:{badge_color}; color:white; padding:2px 6px; border-radius:3px; font-size:12px;'>{l_type}</span> | 
-                <span style='color:#6C757D;'>Ref: {log_item.get('referanse')}</span>
-                <p style='margin-top:5px; margin-bottom:5px; font-size:14px; color:#495057;'>{log_item.get('detaljer')}</p>
+            <div style='background-color:#F8F9FA; padding:15px; border-left:6px solid {anbefaling_farge}; border-radius:6px; margin-bottom:12px;'>
+                <div style='display:flex; justify-content:between; align-items:center;'>
+                    <span style='font-weight:bold; font-size:16px; color:#1E1E1E;'>💼 {c_name} ({c_deal} kr)</span>
+                    <span style='margin-left:15px; background-color:#ECEFF1; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;'>Nåværende Bank: {c_bank}</span>
+                </div>
+                <div style='margin-top:8px; font-size:14px; color:#555;'>
+                    <strong>Registrerte Avslag:</strong> {', '.join(avslag_funnet) if avslag_funnet else 'Ingen avslag registrert ennå'}
+                </div>
+                <div style='margin-top:8px; padding:8px; background-color:white; border-radius:4px; font-size:14px; border:1px solid #E0E0E0;'>
+                    <strong>Neste Steg / System-Råd:</strong> {neste_bank_anbefaling}
+                </div>
             </div>
-            """, 
+            """,
             unsafe_allow_html=True
         )
-        
-        c_space, c_del = st.columns([6, 1])
-        if c_del.button("🗑️ Fjern", key=f"del_log_{log_id}"):
-            st.session_state.nsvg_workspace_data["bank_logs"].pop(idx)
-            save_board_to_sheets(st.session_state.nsvg_workspace_data)
-            st.rerun()
 else:
-    st.caption("Ingen spesifikke bank-logger registrert for denne måneden enda.")
+    st.info("Ingen aktive saker i denne måneden å analysere. Data dukker opp her automatisk når du legger inn en sak i Seksjon 4/5.")
+
 
 
 # ==========================================

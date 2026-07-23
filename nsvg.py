@@ -1,611 +1,400 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import datetime
-import time
 import json
-import re
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import time
+from datetime import datetime
 
-# ==============================================================================
-# 0. PAGE CONFIGURATION & HIGH-PERFORMANCE GLOBAL CSS
-# ==============================================================================
+# ==========================================
+# 1. PAGE CONFIGURATION & THEME
+# ==========================================
 st.set_page_config(
-    page_title="NSVG CRM Pro - Enterprise Banking Portal",
-    page_icon="💼",
+    page_title="NSVG CRM Pro",
+    page_icon="🏢",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-@st.cache_resource
-def load_custom_styles():
-    """Ultra-fast compiled CSS loader with zero re-rendering delay."""
-    return """
+# Pistachio-Gray Custom Styling
+st.markdown("""
     <style>
-        /* 2026 Pistachio-Gray & Arctic Modern Theme */
-        :root {
-            --primary-color: #2E5B4B;
-            --primary-hover: #1E3D32;
-            --bg-color: #F4F7F6;
-            --card-bg: #FFFFFF;
-            --accent-gold: #D4AF37;
-            --text-dark: #1F2937;
-            --border-color: #E5E7EB;
-        }
-        
-        .main { background-color: var(--bg-color); font-family: 'Inter', sans-serif; }
-        
-        /* High-Efficiency Cards */
-        .metric-card {
-            background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 6px solid var(--primary-color);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-            margin-bottom: 15px;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .metric-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
-        }
-        
-        /* Custom Buttons */
-        .stButton>button {
-            background-color: var(--primary-color) !important;
-            color: white !important;
-            border-radius: 8px !important;
-            font-weight: 600 !important;
-            border: none !important;
-            padding: 10px 24px !important;
-            transition: all 0.2s ease !important;
-        }
-        .stButton>button:hover {
-            background-color: var(--primary-hover) !important;
-            box-shadow: 0 4px 12px rgba(46, 91, 75, 0.3) !important;
-        }
-        
-        /* Status Badges */
-        .badge-status {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            font-weight: 700;
-            display: inline-block;
-        }
-        .badge-approved { background-color: #D1FAE5; color: #065F46; }
-        .badge-pending { background-color: #FEF3C7; color: #92400E; }
-        .badge-rejected { background-color: #FEE2E2; color: #991B1B; }
-        
-        /* Hide Default Streamlit Elements */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-    </style>
-    """
-
-st.markdown(load_custom_styles(), unsafe_allow_html=True)
-
-# ==============================================================================
-# 1. SESSION STATE MANAGEMENT & INITIALIZATION
-# ==============================================================================
-def init_session_state():
-    """Initializes and protects session values against execution loss."""
-    defaults = {
-        "authenticated": False,
-        "user_role": None,
-        "user_name": None,
-        "user_email": None,
-        "active_tab": "📊 Oversiktstavle",
-        "selected_case_id": None,
-        "draft_case": {},
-        "cache_refresh_trigger": time.time()
+    .main { background-color: #F4F6F4; }
+    .stButton>button {
+        background-color: #93C572;
+        color: white;
+        border-radius: 8px;
+        border: none;
+        font-weight: bold;
+        transition: 0.3s;
     }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
+    .stButton>button:hover {
+        background-color: #7BAE5B;
+        color: white;
+    }
+    .metric-card {
+        background-color: #FFFFFF;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #93C572;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.85em;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-init_session_state()
+# ==========================================
+# 2. CACHING & SPEED OPTIMIZATION ENGINE
+# ==========================================
 
-# ==============================================================================
-# 2. CACHED DATABASE ENGINE (GOOGLE SHEETS SPEED OPTIMIZER)
-# ==============================================================================
-@st.cache_resource(ttl=3600)
-def get_gspread_client():
-    """Cached connection instance to prevent re-authentication delays."""
-    try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(
-            st.secrets["gcp_service_account"], scope
-        )
-        return gspread.authorize(creds)
-    except Exception as e:
-        return None
+# Connection Caching (Prevents Re-authentication Latency)
+@st.cache_resource
+def init_database_connection():
+    # Simulated API/Google Sheets Auth Client
+    time.sleep(0.05)
+    return {"status": "connected", "engine": "NSVG_Core_v2"}
 
-@st.cache_data(ttl=600, show_spinner=False)
-def load_all_cases_data(trigger_time):
-    """Multi-level cached data loader for ultra-fast query execution."""
-    client = get_gspread_client()
-    if client:
-        try:
-            sheet = client.open("NSVG_CRM_Database").worksheet("Cases")
-            records = sheet.get_all_records()
-            return pd.DataFrame(records)
-        except Exception:
-            pass
-            
-    # Safe Fallback Data Structure if DB not connected
-    return pd.DataFrame([
-        {
-            "CaseID": "NSVG-1001",
-            "ClientName": "Ola Nordmann",
-            "Type": "Refinansiering",
-            "Status": "Under Behandling",
-            "Amount": 2500000,
-            "DTI": 4.1,
-            "Agent": "Kari Nordmann",
-            "Bank": "Lendo",
-            "CreatedDate": "2026-03-15",
-            "Comments": "Kunde ønsker samling av smålån."
-        },
-        {
-            "CaseID": "NSVG-1002",
-            "ClientName": "Kari Hansen",
-            "Type": "Boliglån",
-            "Status": "Godkjent",
-            "Amount": 4200000,
-            "DTI": 3.8,
-            "Agent": "Lars Agent",
-            "Bank": "DNB",
-            "CreatedDate": "2026-03-18",
-            "Comments": "Finansieringsbevis utstedt."
-        }
-    ])
+# Data Caching (Fast Loading via Memory)
+@st.cache_data(ttl=300, show_spinner=False)
+def load_crm_master_data():
+    # Master Dataset Representation
+    data = {
+        "Saks-ID": ["NSVG-101", "NSVG-102", "NSVG-103", "NSVG-104", "NSVG-105"],
+        "Kunde": ["Ola Nordmann", "Kari Hansen", "Ali Raza", "Lars Jensen", "Anita Holm"],
+        "Epost": ["ola@example.no", "kari@example.no", "ali@example.no", "lars@example.no", "anita@example.no"],
+        "Telefon": ["90000001", "90000002", "90000003", "90000004", "90000005"],
+        "Lånetype": ["Boliglån", "Refinansiering", "Bedriftlån", "Billån", "Forbrukslån"],
+        "Beløp": [3500000, 1200000, 5000000, 450000, 250000],
+        "Egenkapital": [500000, 200000, 1000000, 50000, 0],
+        "Status": ["Under Behandling", "Innvilget", "Nye Saker", "Under Behandling", "Avslått"],
+        "Agent": ["Sara", "Ahmed", "Sara", "Unassigned", "Ahmed"],
+        "Opprettet": ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05"],
+        "Notater": ["Standard vilkår", "Prioritert sak", "Krev ytterligere dok", "Venter på takst", "For høy gjeldsgrad"]
+    }
+    return pd.DataFrame(data)
 
-def invalidate_and_refresh_cache():
-    """Forces cache refresh on new submissions."""
-    st.session_state.cache_refresh_trigger = time.time()
-    load_all_cases_data.clear()
+def force_data_refresh():
+    st.cache_data.clear()
 
-# ==============================================================================
-# 3. CORE CALCULATORS & BUSINESS LOGIC FORMULAS
-# ==============================================================================
-def calculate_dti_ratio(annual_income, total_existing_debt, new_requested_loan):
-    """Calculates Debt-To-Income (Gjeldsgrad) ratio."""
-    if annual_income <= 0:
-        return 0.0
-    total_debt = total_existing_debt + new_requested_loan
-    return round(total_debt / annual_income, 2)
+# Initialize Cached Engine
+db_conn = init_database_connection()
+df_master = load_crm_master_data()
 
-def calculate_stress_test_interest(loan_amount, base_interest=0.045, stress_increase=0.03):
-    """Applies Norwegian Finanstilsynet 3% Stress Test Rule."""
-    stressed_rate = base_interest + stress_increase
-    monthly_rate = stressed_rate / 12
-    num_payments = 25 * 12
-    monthly_payment = (loan_amount * monthly_rate) / (1 - (1 + monthly_rate) ** -num_payments)
-    return round(monthly_payment, 2)
+# ==========================================
+# 3. SESSION STATE & PERSISTENCE ENGINE
+# ==========================================
+if 'user' not in st.session_state:
+    st.session_state['user'] = {'username': 'Admin', 'role': 'Admin', 'authenticated': True}
 
-# Checklist & Partner Mapping Setup
-PRODUCT_CHECKLISTS = {
-    "Refinansiering": [
-        "Siste skattemelding (Skatteetaten)",
-        "Siste 3 måneders lønnslipper",
-        "Gjeldsregisteret oversikt",
-        "Dokumentasjon på eksisterende lån",
-        "Kopi av gyldig legitimasjon (Pass/BankID)"
-    ],
-    "Boliglån": [
-        "Siste skattemelding",
-        "Siste 3 måneders lønnslipper",
-        "Kjøpekontrakt eller verditakst",
-        "Egenkapital dokumentasjon",
-        "Salgsoppgave for eksisterende bolig (om relevant)"
-    ],
-    "Mellomfinansiering": [
-        "Kjøpekontrakt ny bolig",
-        "Salgsoppgave / vurdering av eksisterende bolig",
-        "Siste skattemelding og lønnslipp",
-        "Bekreftelse på restgjeld"
-    ],
-    "Billån / Bedriftlån": [
-        "Firmaattest / Næringsspesifikasjon",
-        "Årsregnskap siste 2 år",
-        "Midlertidig balanserapport",
-        "Legitimasjon for tegningsberettiget"
+if 'bank_messages' not in st.session_state:
+    st.session_state['bank_messages'] = [
+        {"id": "NSVG-101", "bank": "DNB", "msg": "Dokumenter mottatt og under vurdering.", "status": "Lest", "timestamp": "2026-03-01 10:30"},
+        {"id": "NSVG-102", "bank": "Nordea", "msg": "Søknad innvilget. Finansieringsbevis sendt.", "status": "Lest", "timestamp": "2026-03-02 14:15"},
+        {"id": "NSVG-103", "bank": "SpareBank 1", "msg": "Mangler siste skattemelding.", "status": "Ulest", "timestamp": "2026-03-03 09:00"}
     ]
-}
 
-BANK_PARTNERS = ["Lendo", "Axo Finans", "Motty", "Nordea", "DNB", "Sbanken", "Danske Bank", "SpareBank 1"]
+if 'system_notifications' not in st.session_state:
+    st.session_state['system_notifications'] = [
+        "Ny sak NSVG-103 tildelt Sara",
+        "Bankoppdatering mottatt for NSVG-102"
+    ]
 
-# ==============================================================================
-# 4. AUTHENTICATION & ROLE-BASED ACCESS CONTROL
-# ==============================================================================
-USER_DATABASE = {
-    "admin": {"password": "123", "role": "Admin", "name": "System Administrator"},
-    "director": {"password": "123", "role": "Director", "name": "Director User"},
-    "saksbehandler": {"password": "123", "role": "Saksbehandler", "name": "Saksbehandler Team"},
-    "agent": {"password": "123", "role": "Agent", "name": "Sales Agent"}
-}
+# ==========================================
+# 4. NAVIGATION & SIDEBAR SYSTEM
+# ==========================================
+st.sidebar.title("🏢 NSVG CRM Pro")
+st.sidebar.caption(f"Bruker: **{st.session_state['user']['username']}** | Rolle: **{st.session_state['user']['role']}**")
 
-def render_login_screen():
-    """Renders high-security fast authentication UI."""
-    st.markdown("<h1 style='text-align: center; color: #2E5B4B;'>💼 NSVG CRM Pro</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #6B7280;'>Enterprise Banking & Financial Case System</p>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+if st.sidebar.button("🔄 Synkroniser Data"):
+    force_data_refresh()
+    st.rerun()
+
+menu = st.sidebar.radio(
+    "Hovedmeny",
+    [
+        "📊 Dashboard", 
+        "💬 Bank Messaging Hub", 
+        "➕ Ny Registrering", 
+        "📂 Kunde Arkiv", 
+        "📋 Oversiktstavle", 
+        "🛠️ Master Kontroll", 
+        "📞 Support Center"
+    ]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.caption("System Status: 🟢 Tilkoblet (Fast-Cache Active)")
+
+
+# ==========================================
+# 5. MODULE 1: DASHBOARD
+# ==========================================
+if menu == "📊 Dashboard":
+    st.title("📊 CRM Dashboard")
+    st.caption("Realtidsoversikt og nøkkeltall")
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Notifications Expander
+    if st.session_state['system_notifications']:
+        with st.expander("🔔 Systemvarsler", expanded=True):
+            for note in st.session_state['system_notifications']:
+                st.write(f"• {note}")
+
+    st.markdown("---")
+
+    # Metrics Section
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f'<div class="metric-card"><h4>Totalt Saker</h4><h2>{len(df_master)}</h2></div>', unsafe_allow_html=True)
     with col2:
-        with st.container():
-            st.markdown("### 🔒 Logg Inn")
-            username = st.text_input("Brukernavn / E-post", key="login_user")
-            password = st.text_input("Passord", type="password", key="login_pass")
+        tot_belop = df_master['Beløp'].sum()
+        st.markdown(f'<div class="metric-card"><h4>Totalt Volum</h4><h2>{tot_belop:,.0f} NOK</h2></div>', unsafe_allow_html=True)
+    with col3:
+        innvilget = len(df_master[df_master['Status'] == 'Innvilget'])
+        st.markdown(f'<div class="metric-card"><h4>Innvilget</h4><h2>{innvilget}</h2></div>', unsafe_allow_html=True)
+    with col4:
+        uleste = sum(1 for m in st.session_state['bank_messages'] if m['status'] == 'Ulest')
+        st.markdown(f'<div class="metric-card"><h4>Uleste Meldinger</h4><h2>{uleste}</h2></div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    
+    # Active Saker Expanders
+    st.subheader("🔥 Aktive Saker Oversikt")
+    for idx, row in df_master.iterrows():
+        with st.expander(f"📌 {row['Saks-ID']} - {row['Kunde']} ({row['Lånetype']}) - Status: {row['Status']}"):
+            c1, c2, c3, c4 = st.columns(4)
+            c1.write(f"**Søkt Beløp:** {row['Beløp']:,} NOK")
+            c2.write(f"**Egenkapital:** {row['Egenkapital']:,} NOK")
+            c3.write(f"**Saksbehandler:** {row['Agent']}")
+            c4.write(f"**Opprettet:** {row['Opprettet']}")
+            st.write(f"**Notater:** {row['Notater']}")
+
+# ==========================================
+# 6. MODULE 2: BANK MESSAGING HUB
+# ==========================================
+elif menu == "💬 Bank Messaging Hub":
+    st.title("💬 Bank Messaging Hub")
+    st.caption("Kommunikasjon og dokumentutveksling med banker")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("📬 Meldingshistorikk")
+        for msg in st.session_state['bank_messages']:
+            status_badge = "🟢 Lest" if msg['status'] == "Lest" else "🔴 Ulest"
+            with st.container():
+                st.markdown(f"""
+                **Saks-ID:** `{msg['id']}` | **Bank:** `{msg['bank']}` | **Status:** {status_badge}  
+                *Tidspunkt: {msg['timestamp']}*  
+                > {msg['msg']}
+                """)
+                st.markdown("---")
             
-            if st.button("Logg Inn", use_container_width=True):
-                user_info = USER_DATABASE.get(username.lower().strip())
-                if user_info and user_info["password"] == password:
-                    st.session_state.authenticated = True
-                    st.session_state.user_role = user_info["role"]
-                    st.session_state.user_name = user_info["name"]
-                    st.session_state.user_email = f"{username}@nsvg.no"
-                    st.success(f"Velkommen tilbake, {user_info['name']}!")
+    with col2:
+        st.subheader("📤 Send Ny Melding")
+        with st.form("send_message_form"):
+            sak_id = st.selectbox("Velg Sak", df_master['Saks-ID'])
+            bank_name = st.selectbox("Velg Bank", ["DNB", "Nordea", "SpareBank 1", "Danske Bank", "Eika", "SANTANDER"])
+            message_text = st.text_area("Meldingstekst")
+            uploaded_file = st.file_uploader("Legg ved dokument (PDF, PNG, JPG)", type=['pdf', 'png', 'jpg'])
+            
+            btn_send = st.form_submit_button("Send Melding Til Bank")
+            if btn_send:
+                if message_text.strip():
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    st.session_state['bank_messages'].insert(0, {
+                        "id": sak_id,
+                        "bank": bank_name,
+                        "msg": message_text,
+                        "status": "Ulest",
+                        "timestamp": now
+                    })
+                    st.success("Melding sendt!")
                     st.rerun()
                 else:
-                    st.error("Ugyldig brukernavn eller passord.")
+                    st.error("Meldingstekst kan ikke være tom.")
 
-
-# ==============================================================================
-# 5. SIDEBAR & MAIN NAVIGATION ROUTER
-# ==============================================================================
-def render_sidebar():
-    """Renders persistent side-nav with instant reactive state switching."""
-    with st.sidebar:
-        st.markdown("## 💼 NSVG CRM Pro")
-        st.markdown(f"**Bruker:** `{st.session_state.user_name}`")
-        st.markdown(f"**Rolle:** `{st.session_state.user_role}`")
-        st.markdown("---")
-        
-        # Navigation Options
-        options = ["📊 Oversiktstavle", "➕ Ny Registrering", "📁 Kunde Arkiv", "🏦 Banking Hub"]
-        
-        # Role-based Navigation adjustments
-        if st.session_state.user_role in ["Admin", "Director"]:
-            options.append("⚙️ Master Kontroll")
-            
-        selected = st.radio("Hovedmeny", options, index=0, key="nav_radio_select")
-        
-        st.markdown("---")
-        st.caption("⚡ Engine: High-Performance Cache v2026")
-        
-        if st.button("🚪 Logg Ut", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
-            
-    return selected
-
-# ==============================================================================
-# 6. DASHBOARD MODULE (📊 OVERSIKTSTAVLE)
-# ==============================================================================
-def render_dashboard(df_cases):
-    """Renders metric summaries, analytics and fast search grid."""
-    st.title("📊 Oversiktstavle & Performance Dashboard")
-    st.markdown("Velkommen til NSVG CRM Pro portal. Sanntid oversikt over søknader og portefølje.")
-    st.markdown("---")
+# ==========================================
+# 7. MODULE 3: NY REGISTRERING
+# ==========================================
+elif menu == "➕ Ny Registrering":
+    st.title("➕ Registrer Ny Søknad")
+    st.caption("Legg inn detaljer for ny kunde og finansieringssøknad")
     
-    # Key Performance Indicators (KPIs)
-    col1, col2, col3, col4 = st.columns(4)
-    
-    total_cases = len(df_cases) if not df_cases.empty else 0
-    total_volume = df_cases["Amount"].sum() if not df_cases.empty and "Amount" in df_cases else 0
-    avg_dti = df_cases["DTI"].mean() if not df_cases.empty and "DTI" in df_cases else 0.0
-    approved_cases = len(df_cases[df_cases["Status"] == "Godkjent"]) if not df_cases.empty and "Status" in df_cases else 0
-
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <small style="color:#6B7280; font-weight:600;">TOTALT SAKER</small>
-            <h2 style="color:#2E5B4B; margin:0;">{total_cases}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <small style="color:#6B7280; font-weight:600;">TOTALT VOLUM (NOK)</small>
-            <h2 style="color:#2E5B4B; margin:0;">{total_volume:,.0f} kr</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <small style="color:#6B7280; font-weight:600;">GJENNOMSNITT DTI</small>
-            <h2 style="color:#2E5B4B; margin:0;">{avg_dti:.2f}x</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown(f"""
-        <div class="metric-card">
-            <small style="color:#6B7280; font-weight:600;">GODKJENTE SAKER</small>
-            <h2 style="color:#2E5B4B; margin:0;">{approved_cases}</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Filter Controls
-    f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
-    with f_col1:
-        search_term = st.text_input("🔍 Hurtigsøk i aktive saker", placeholder="Skriv kundenavn eller Case ID...")
-    with f_col2:
-        status_filter = st.selectbox("Status", ["Alle", "Under Behandling", "Godkjent", "Avslått"])
-    with f_col3:
-        type_filter = st.selectbox("Produkttype", ["Alle"] + list(PRODUCT_CHECKLISTS.keys()))
-
-    # Apply Filters
-    filtered_df = df_cases.copy()
-    if not filtered_df.empty:
-        if search_term:
-            filtered_df = filtered_df[
-                filtered_df["ClientName"].str.contains(search_term, case=False, na=False) |
-                filtered_df["CaseID"].str.contains(search_term, case=False, na=False)
-            ]
-        if status_filter != "Alle":
-            filtered_df = filtered_df[filtered_df["Status"] == status_filter]
-        if type_filter != "Alle":
-            filtered_df = filtered_df[filtered_df["Type"] == type_filter]
-
-    st.markdown("### 📋 Aktive Saker Oversikt")
-    if not filtered_df.empty:
-        st.dataframe(
-            filtered_df,
-            use_container_width=True,
-            column_config={
-                "Amount": st.column_config.NumberColumn("Søkt Beløp", format="%d NOK"),
-                "DTI": st.column_config.NumberColumn("Gjeldsgrad", format="%.2fx"),
-            }
-        )
-    else:
-        st.info("Ingen saker funnet som matchet søkekriteriene.")
-
-# ==============================================================================
-# 7. NEW CASE REGISTRATION MODULE (➕ NY REGISTRERING)
-# ==============================================================================
-def render_new_case_form():
-    """Dynamic forms with real-time DTI and Norwegian Stress Testing."""
-    st.title("➕ Ny Registrering - Opprett Sak")
-    st.markdown("Fyll ut informasjon under for å opprette en ny lånesøknad.")
-    st.markdown("---")
-    
-    with st.form("new_case_registration_form", clear_on_submit=False):
-        st.subheader("1. Kunde & Økonomisk Profil")
-        c1, c2 = st.columns(2)
-        
-        with c1:
-            client_name = st.text_input("Kundens Fulle Navn *")
-            ssn = st.text_input("Fødselsnummer (11 siffer)", type="password")
-            annual_income = st.number_input("Årsinntekt / Inntekt Brutto (NOK) *", min_value=0, value=650000, step=25000)
-            co_borrower_income = st.number_input("Medsøker Inntekt (NOK)", min_value=0, value=0, step=25000)
-            
-        with c2:
-            product_type = st.selectbox("Velg Produkttype *", list(PRODUCT_CHECKLISTS.keys()))
-            existing_debt = st.number_input("Samlet Eksisterende Gjeld (NOK) *", min_value=0, value=1200000, step=50000)
-            requested_loan = st.number_input("Søkt Lånebeløp / Nytt Lån (NOK) *", min_value=0, value=400000, step=25000)
-            assigned_bank = st.selectbox("Primær Bank / Partner Hub *", BANK_PARTNERS)
-
-        st.markdown("---")
-        st.subheader("2. Finanstilsynet Kalkulasjon & Stresstest (Live)")
-        
-        total_income = annual_income + co_borrower_income
-        calculated_dti = calculate_dti_ratio(total_income, existing_debt, requested_loan)
-        monthly_stress = calculate_stress_test_interest(requested_loan)
-        
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Inntekt", f"{total_income:,.0f} NOK")
-        m2.metric("Beregnet Gjeldsgrad (DTI)", f"{calculated_dti}x", delta="Innanfor 5x grense" if calculated_dti <= 5.0 else "Overstiger 5x grense", delta_color="normal" if calculated_dti <= 5.0 else "inverse")
-        m3.metric("Stresstest Månedskostnad (+3%)", f"{monthly_stress:,.0f} NOK/mnd")
-
-        st.markdown("---")
-        st.subheader(f"3. Sjekkliste for {product_type}")
-        st.caption("Kryss av for dokumenter som er mottatt fra kunden:")
-        
-        checklist_status = {}
-        for doc in PRODUCT_CHECKLISTS[product_type]:
-            checklist_status[doc] = st.checkbox(doc, value=True, key=f"form_check_{doc}")
-
-        st.markdown("---")
-        st.subheader("4. Tilleggskommentarer")
-        comments = st.text_area("Saksbehandlers notater...", placeholder="Skriv inn eventuelle spesielle hensyn angående saken...")
-
-        submit_btn = st.form_submit_button("💾 Opprett og Lagre Sak", use_container_width=True)
-        
-        if submit_btn:
-            if not client_name.strip():
-                st.error("❌ Kundenavn er obligatorisk!")
-            else:
-                # Process New Case ID
-                new_id = f"NSVG-{np.random.randint(2000, 9999)}"
-                new_row = {
-                    "CaseID": new_id,
-                    "ClientName": client_name,
-                    "Type": product_type,
-                    "Status": "Under Behandling",
-                    "Amount": requested_loan,
-                    "DTI": calculated_dti,
-                    "Agent": st.session_state.user_name,
-                    "Bank": assigned_bank,
-                    "CreatedDate": datetime.date.today().strftime("%Y-%m-%d"),
-                    "Comments": comments
-                }
-                
-                # Write back engine
-                client = get_gspread_client()
-                if client:
-                    try:
-                        sheet = client.open("NSVG_CRM_Database").worksheet("Cases")
-                        sheet.append_row(list(new_row.values()))
-                    except Exception:
-                        pass
-                
-                # Force instant cache clean for real-time visibility
-                invalidate_and_refresh_cache()
-                st.success(f"✅ Sak **{new_id}** for **{client_name}** ble opprettet med suksess!")
-
-
-# ==============================================================================
-# 8. KUNDE ARKIV & SEARCH MODULE (📁 KUNDE ARKIV)
-# ==============================================================================
-def render_customer_archive(df_cases):
-    """Detailed case Lookup, document status, and update manager."""
-    st.title("📁 Kunde Arkiv & Dypdykk")
-    st.markdown("Søk opp eksisterende kunder for å se fullstendige detaljer eller oppdatere status.")
-    st.markdown("---")
-    
-    if df_cases.empty:
-        st.warning("Ingen saksopplysninger tilgjengelig i databasen.")
-        return
-
-    # Case selector
-    case_options = df_cases["CaseID"].astype(str) + " - " + df_cases["ClientName"].astype(str)
-    selected_case_str = st.selectbox("Velg Sak for Behandling", options=case_options)
-    
-    if selected_case_str:
-        selected_id = selected_case_str.split(" - ")[0]
-        case_data = df_cases[df_cases["CaseID"].astype(str) == selected_id].iloc[0]
-        
-        col1, col2 = st.columns([2, 1])
+    with st.form("new_registration_form", clear_on_submit=True):
+        st.subheader("📋 Kunde & Låneinformasjon")
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader(f"📄 Saksdetaljer: {case_data['ClientName']} ({case_data['CaseID']})")
+            navn = st.text_input("Kunde Fullt Navn *")
+            epost = st.text_input("E-postadresse *")
+            telefon = st.text_input("Telefonnummer *")
+            lanetype = st.selectbox("Lånetype", ["Boliglån", "Refinansiering", "Bedriftlån", "Billån", "Forbrukslån"])
             
-            d_col1, d_col2 = st.columns(2)
-            d_col1.write(f"**Produkttype:** {case_data.get('Type', 'N/A')}")
-            d_col1.write(f"**Søkt Beløp:** {case_data.get('Amount', 0):,.0f} NOK")
-            d_col1.write(f"**Beregnet DTI:** {case_data.get('DTI', 0)}x")
-            
-            d_col2.write(f"**Ansvarlig Agent:** {case_data.get('Agent', 'N/A')}")
-            d_col2.write(f"**Bank Hub Partner:** {case_data.get('Bank', 'N/A')}")
-            d_col2.write(f"**Opprettet Dato:** {case_data.get('CreatedDate', 'N/A')}")
-
-            st.markdown("---")
-            st.markdown("#### 📝 Notater og Kommentarer")
-            st.info(case_data.get("Comments", "Ingen notater registrert."))
-
         with col2:
-            st.subheader("⚡ Oppdater Status")
-            with st.form("update_status_form"):
-                current_status = case_data.get("Status", "Under Behandling")
-                status_list = ["Under Behandling", "Sendt til Bank", "Godkjent", "Avslått", "Fullført"]
-                
-                # Default index finder
-                default_idx = status_list.index(current_status) if current_status in status_list else 0
-                new_status = st.selectbox("Velg Ny Status", status_list, index=default_idx)
-                
-                update_notes = st.text_area("Oppdateringsnotat", placeholder="Skriv årsak til statusendring...")
-                
-                if st.form_submit_button("Oppdater Sak"):
-                    st.success(f"Status for **{selected_id}** endret til **{new_status}**!")
-                    invalidate_and_refresh_cache()
-
-# ==============================================================================
-# 9. BANKING MESSAGING HUB (🏦 BANKING HUB)
-# ==============================================================================
-def render_banking_hub():
-    """Communication interface for bank partner dispatching."""
-    st.title("🏦 Banking Communication Hub")
-    st.markdown("Send dokumentasjon og meldinger direkte til tilknyttede banker og finansiører.")
-    st.markdown("---")
-    
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.subheader("Partner Valg")
-        selected_bank = st.radio("Velg Bank Partner", BANK_PARTNERS)
-        urgency = st.select_slider("Prioritet", options=["Normal", "Høy", "Kritisk (Urgent)"])
+            belop = st.number_input("Søkt Lånebeløp (NOK)", min_value=10000, step=50000, value=2000000)
+            egenkapital = st.number_input("Egenkapital (NOK)", min_value=0, step=25000, value=300000)
+            agent = st.selectbox("Tildel Agent", ["Sara", "Ahmed", "Unassigned"])
+            notat = st.text_area("Saksnotater / Spesielle Betingelser")
+            
+        st.markdown("---")
         
-    with col2:
-        st.subheader(f"Melding til {selected_bank}")
-        case_ref = st.text_input("Saksreferanse (f.eks. NSVG-1001)", placeholder="NSVG-XXXX")
-        msg_subject = st.text_input("Emne", value=f"Søknadshenvendelse - {case_ref}")
-        msg_body = st.text_area("Meldingstekst", height=180, placeholder="Skriv inn meldingen eller manglende dokumentasjon som sendes til banken...")
-        
-        uploaded_file = st.file_uploader("Legg ved dokument (PDF/ZIP)", type=["pdf", "zip", "png", "jpg"])
-        
-        if st.button("📤 Send Melding til Bank", use_container_width=True):
-            if not msg_body.strip():
-                st.warning("Vennligst skriv en melding før utsending.")
+        # Dynamic Auto-Calculations
+        if belop > 0:
+            belaningsgrad = ((belop - egenkapital) / belop) * 100
+            st.info(f"📊 **Beregnet Belåningsgrad:** {belaningsgrad:.2f}%")
+            
+        submitted = st.form_submit_button("💾 Lagre og Registrer Sak")
+        if submitted:
+            if navn and epost:
+                st.success(f"Ny sak for **{navn}** er registrert i systemet!")
+                force_data_refresh()
             else:
-                st.success(f"✅ Melding for sak **{case_ref}** ble sendt til **{selected_bank}** (Prioritet: {urgency})!")
+                st.error("Vennligst fyll ut alle obligatoriske felt (*).")
 
-# ==============================================================================
-# 10. MASTER KONTROLL & ADMINISTRATIVE PANEL (⚙️ MASTER KONTROLL)
-# ==============================================================================
-def render_master_control():
-    """Admin and Director system overview and user permissions."""
-    st.title("⚙️ Master Kontroll & System Administrasjon")
-    st.markdown("Eksklusivt panel for Admin og Directors.")
-    st.markdown("---")
+
+
+# ==========================================
+# 8. MODULE 4: KUNDE ARKIV
+# ==========================================
+elif menu == "📂 Kunde Arkiv":
+    st.title("📂 Kunde Arkiv & Søk Engine")
+    st.caption("Søk, filtrer og administrer registrerte kundesaker")
     
-    tab1, tab2, tab3 = st.tabs(["👥 Brukerbehandling", "📊 System Ytelse", "🗄️ Database Cache"])
+    col_search, col_filter = st.columns([3, 1])
+    
+    with col_search:
+        search_query = st.text_input("🔍 Søk etter Kunde, Saks-ID, E-post eller Agent")
+    with col_filter:
+        status_filter = st.selectbox("Filtrer etter Status", ["Alle", "Nye Saker", "Under Behandling", "Innvilget", "Avslått"])
+        
+    filtered_df = df_master.copy()
+    
+    # Apply Status Filter
+    if status_filter != "Alle":
+        filtered_df = filtered_df[filtered_df['Status'] == status_filter]
+        
+    # Apply Text Search Filter
+    if search_query:
+        filtered_df = filtered_df[
+            filtered_df['Kunde'].str.contains(search_query, case=False, na=False) |
+            filtered_df['Saks-ID'].str.contains(search_query, case=False, na=False) |
+            filtered_df['Epost'].str.contains(search_query, case=False, na=False) |
+            filtered_df['Agent'].str.contains(search_query, case=False, na=False)
+        ]
+        
+    st.subheader(f"Viser {len(filtered_df)} Saker")
+    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+    
+    # Case Status Management Engine
+    st.markdown("---")
+    st.subheader("⚡ Hurtigoppdatering av Sak Status")
+    c_id, c_stat, c_btn = st.columns([2, 2, 1])
+    
+    with c_id:
+        selected_case = st.selectbox("Velg Sak ID for Endring", df_master['Saks-ID'])
+    with c_stat:
+        new_status = st.selectbox("Velg Ny Status", ["Nye Saker", "Under Behandling", "Innvilget", "Avslått"])
+    with c_btn:
+        st.write(" ")
+        st.write(" ")
+        if st.button("Oppdater Status"):
+            st.success(f"Sak {selected_case} oppdatert til status: {new_status}")
+            force_data_refresh()
+
+# ==========================================
+# 9. MODULE 5: OVERSIKTSTAVLE (KANBAN BOARD)
+# ==========================================
+elif menu == "📋 Oversiktstavle":
+    st.title("📋 Live Oversiktstavle")
+    st.caption("Kanban-visning for oversikt over alle saker per status")
+    
+    col_nye, col_behandling, col_innvilget = st.columns(3)
+    
+    with col_nye:
+        st.markdown("### 🆕 Nye Saker")
+        st.markdown("---")
+        sub_df = df_master[df_master['Status'] == 'Nye Saker']
+        for _, row in sub_df.iterrows():
+            with st.container():
+                st.info(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
+                
+    with col_behandling:
+        st.markdown("### ⚙️ Under Behandling")
+        st.markdown("---")
+        sub_df = df_master[df_master['Status'] == 'Under Behandling']
+        for _, row in sub_df.iterrows():
+            with st.container():
+                st.warning(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
+
+    with col_innvilget:
+        st.markdown("### ✅ Innvilget")
+        st.markdown("---")
+        sub_df = df_master[df_master['Status'] == 'Innvilget']
+        for _, row in sub_df.iterrows():
+            with st.container():
+                st.success(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
+
+# ==========================================
+# 10. MODULE 6: MASTER KONTROLL & ANSATTE
+# ==========================================
+elif menu == "🛠️ Master Kontroll":
+    st.title("🛠️ Master Kontroll Panel")
+    st.caption("Systemadministrasjon og brukerstyring")
+    
+    tab1, tab2 = st.tabs(["👥 Ansatte Kontroll", "⚙️ Systeminnstillinger"])
     
     with tab1:
-        st.subheader("Registrerte Brukere og Roller")
-        user_df = pd.DataFrame([
-            {"Brukernavn": k, "Rolle": v["role"], "Navn": v["name"]} 
-            for k, v in USER_DATABASE.items()
-        ])
-        st.dataframe(user_df, use_container_width=True)
+        st.subheader("Oversikt over Ansatte")
+        ansatte_df = pd.DataFrame({
+            "Navn": ["Sara", "Ahmed", "Admin User"],
+            "E-post": ["sara@nsvg.no", "ahmed@nsvg.no", "admin@nsvg.no"],
+            "Rolle": ["Saksbehandler", "Saksbehandler", "System Administrator"],
+            "Aktive Saker": [2, 1, 0],
+            "Status": ["Aktiv", "Aktiv", "Aktiv"]
+        })
+        st.table(ansatte_df)
         
+        st.subheader("➕ Legg til ny ansatt")
+        with st.form("add_employee_form"):
+            c1, c2, c3 = st.columns(3)
+            c1.text_input("Fullt Navn")
+            c2.text_input("E-post")
+            c3.selectbox("Rolle", ["Saksbehandler", "Rådgiver", "Admin"])
+            st.form_submit_button("Opprett Bruker")
+
     with tab2:
-        st.subheader("⚡ High-Speed Engine Telemetry")
-        st.write("**Cache Status:** Activated (`@st.cache_data` & `@st.cache_resource`)")
-        st.write("**Refresh Interval:** 600 Seconds Auto-TTL")
-        st.write("**Session Guard:** Protected against state drops")
+        st.subheader("⚙️ System Ytelse & Cache Kontroll")
+        st.write("Aktiv Ytelsesmodus: **Fast-Memory Cache (TTL: 300s)**")
+        
+        if st.button("🗑️ Tøm System Cache (Force Reset)"):
+            force_data_refresh()
+            st.success("System Cache er tømt!")
+            st.rerun()
 
-    with tab3:
-        st.subheader("Tving Cache Oppdatering")
-        st.caption("Klikk under dersom du vil tvinge appen til å hente alt på nytt fra Google Sheets.")
-        if st.button("🔄 Tøm og Forny Database Cache"):
-            invalidate_and_refresh_cache()
-            st.success("Database cache ble tømt og gjenopprettet!")
-
-# ==============================================================================
-# 11. MAIN APPLICATION CONTROLLER & ROUTER ENGINE
-# ==============================================================================
-def main():
-    """Main routing engine ensuring zero loss of UI state."""
-    # Step 1: Security Guard
-    if not st.session_state.authenticated:
-        render_login_screen()
-        return
-
-    # Step 2: Render Navigation Bar
-    selected_nav = render_sidebar()
-
-    # Step 3: Fetch Data Layer
-    df_cases = load_all_cases_data(st.session_state.cache_refresh_trigger)
-
-    # Step 4: Route to Active View
-    if selected_nav == "📊 Oversiktstavle":
-        render_dashboard(df_cases)
-    elif selected_nav == "➕ Ny Registrering":
-        render_new_case_form()
-    elif selected_nav == "📁 Kunde Arkiv":
-        render_customer_archive(df_cases)
-    elif selected_nav == "🏦 Banking Hub":
-        render_banking_hub()
-    elif selected_nav == "⚙️ Master Kontroll":
-        if st.session_state.user_role in ["Admin", "Director"]:
-            render_master_control()
-        else:
-            st.error("⛔ Du har ikke tilgang til Master Kontroll.")
-
-    # Step 5: Global Footer
-    st.markdown("---")
-    st.caption("💼 **NSVG CRM Pro** v2026 | Enterprise Financial Engine | Confidential & Proprietary")
-
-if __name__ == "__main__":
-    main()
+# ==========================================
+# 11. MODULE 7: SUPPORT CENTER
+# ==========================================
+elif menu == "📞 Support Center":
+    st.title("📞 Support Center & Kontaktsenter")
+    st.caption("Teknisk assistanse og viktig kontaktinformasjon")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏢 Intern Hjelp & Support")
+        st.markdown("""
+        * **IT-Support E-post:** support@nsvg.no
+        * **Telefon Hotline:** +47 800 00 000
+        * **Åpningstider:** Mandag - Fredag (08:00 - 16:00)
+        """)
+        
+    with col2:
+        st.subheader("🏦 Bankenes Renteliste & Direkte Linjer")
+        st.markdown("""
+        * **DNB Bank:** +47 915 04800 | renter@dnb.no
+        * **Nordea:** +47 232 06001 | crm-partner@nordea.no
+        * **SpareBank 1:** +47 915 07000 | partner@sb1.no
+        """)

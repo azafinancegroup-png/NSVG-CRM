@@ -1,400 +1,383 @@
 import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
-import json
+from datetime import datetime, date
 import time
-from datetime import datetime
+import uuid
 
-# ==========================================
-# 1. PAGE CONFIGURATION & THEME
-# ==========================================
+# ---------------------------------------------------------
+# 1. PAGE CONFIGURATION
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="NSVG CRM Pro",
-    page_icon="🏢",
+    page_title="Form Control System",
+    page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Pistachio-Gray Custom Styling
+# Custom CSS for UI Enhancement
 st.markdown("""
     <style>
-    .main { background-color: #F4F6F4; }
-    .stButton>button {
-        background-color: #93C572;
-        color: white;
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    .stMetric {
+        background-color: #f8f9fa;
+        padding: 10px;
         border-radius: 8px;
-        border: none;
-        font-weight: bold;
-        transition: 0.3s;
+        border: 1px solid #e9ecef;
     }
-    .stButton>button:hover {
-        background-color: #7BAE5B;
-        color: white;
+    .stAlert {
+        border-radius: 8px;
     }
-    .metric-card {
-        background-color: #FFFFFF;
-        padding: 15px;
+    div[data-testid="stForm"] {
         border-radius: 10px;
-        border-left: 5px solid #93C572;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .status-badge {
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: bold;
-        font-size: 0.85em;
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
     </style>
 """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. CACHING & SPEED OPTIMIZATION ENGINE
-# ==========================================
+# ---------------------------------------------------------
+# 2. GOOGLE SHEETS AUTHENTICATION & CACHING
+# ---------------------------------------------------------
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
 
-# Connection Caching (Prevents Re-authentication Latency)
-@st.cache_resource
-def init_database_connection():
-    # Simulated API/Google Sheets Auth Client
-    time.sleep(0.05)
-    return {"status": "connected", "engine": "NSVG_Core_v2"}
+@st.cache_resource(ttl=3600)
+def get_gspread_client():
+    """Authenticate with Google Sheets API using Streamlit Secrets."""
+    try:
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Authentication Error: Secrets setup check karein. Detail: {e}")
+        st.stop()
 
-# Data Caching (Fast Loading via Memory)
-@st.cache_data(ttl=300, show_spinner=False)
-def load_crm_master_data():
-    # Master Dataset Representation
-    data = {
-        "Saks-ID": ["NSVG-101", "NSVG-102", "NSVG-103", "NSVG-104", "NSVG-105"],
-        "Kunde": ["Ola Nordmann", "Kari Hansen", "Ali Raza", "Lars Jensen", "Anita Holm"],
-        "Epost": ["ola@example.no", "kari@example.no", "ali@example.no", "lars@example.no", "anita@example.no"],
-        "Telefon": ["90000001", "90000002", "90000003", "90000004", "90000005"],
-        "Lånetype": ["Boliglån", "Refinansiering", "Bedriftlån", "Billån", "Forbrukslån"],
-        "Beløp": [3500000, 1200000, 5000000, 450000, 250000],
-        "Egenkapital": [500000, 200000, 1000000, 50000, 0],
-        "Status": ["Under Behandling", "Innvilget", "Nye Saker", "Under Behandling", "Avslått"],
-        "Agent": ["Sara", "Ahmed", "Sara", "Unassigned", "Ahmed"],
-        "Opprettet": ["2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05"],
-        "Notater": ["Standard vilkår", "Prioritert sak", "Krev ytterligere dok", "Venter på takst", "For høy gjeldsgrad"]
-    }
-    return pd.DataFrame(data)
+@st.cache_resource(ttl=3600)
+def get_spreadsheet():
+    """Fetch Spreadsheet Instance."""
+    client = get_gspread_client()
+    try:
+        sheet_id = st.secrets["spreadsheet_id"]
+        return client.open_by_key(sheet_id)
+    except Exception as e:
+        st.error(f"Spreadsheet Open Error: Spreadsheet ID check karein. Detail: {e}")
+        st.stop()
 
-def force_data_refresh():
+# Cache data reading to make app fast
+@st.cache_data(ttl=60)
+def fetch_sheet_data(worksheet_name):
+    """Fetch all records from a specific worksheet as Dataframe."""
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet(worksheet_name)
+        data = ws.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error fetching data from {worksheet_name}: {e}")
+        return pd.DataFrame()
+
+def clear_cache():
+    """Clear cached data when updates are made."""
     st.cache_data.clear()
 
-# Initialize Cached Engine
-db_conn = init_database_connection()
-df_master = load_crm_master_data()
+# ---------------------------------------------------------
+# 3. DATA MANIPULATION & HELPER FUNCTIONS
+# ---------------------------------------------------------
 
-# ==========================================
-# 3. SESSION STATE & PERSISTENCE ENGINE
-# ==========================================
-if 'user' not in st.session_state:
-    st.session_state['user'] = {'username': 'Admin', 'role': 'Admin', 'authenticated': True}
+def append_to_sheet(worksheet_name, row_data):
+    """Append a single row to a sheet and clear cache."""
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet(worksheet_name)
+        ws.append_row(row_data)
+        clear_cache()
+        return True
+    except Exception as e:
+        st.error(f"Error appending data to {worksheet_name}: {e}")
+        return False
 
-if 'bank_messages' not in st.session_state:
-    st.session_state['bank_messages'] = [
-        {"id": "NSVG-101", "bank": "DNB", "msg": "Dokumenter mottatt og under vurdering.", "status": "Lest", "timestamp": "2026-03-01 10:30"},
-        {"id": "NSVG-102", "bank": "Nordea", "msg": "Søknad innvilget. Finansieringsbevis sendt.", "status": "Lest", "timestamp": "2026-03-02 14:15"},
-        {"id": "NSVG-103", "bank": "SpareBank 1", "msg": "Mangler siste skattemelding.", "status": "Ulest", "timestamp": "2026-03-03 09:00"}
-    ]
+def update_sheet_row(worksheet_name, match_col_idx, match_val, new_row_data):
+    """Find a row by unique value and update it completely."""
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet(worksheet_name)
+        cell = ws.find(str(match_val))
+        if cell:
+            row_num = cell.row
+            # Update entire row range
+            cell_list = ws.range(row_num, 1, row_num, len(new_row_data))
+            for i, val in enumerate(new_row_data):
+                cell_list[i].value = val
+            ws.update_cells(cell_list)
+            clear_cache()
+            return True
+        else:
+            st.error("Matching record not found in Google Sheet.")
+            return False
+    except Exception as e:
+        st.error(f"Error updating row in {worksheet_name}: {e}")
+        return False
 
-if 'system_notifications' not in st.session_state:
-    st.session_state['system_notifications'] = [
-        "Ny sak NSVG-103 tildelt Sara",
-        "Bankoppdatering mottatt for NSVG-102"
-    ]
+def generate_unique_id():
+    """Generate short unique transaction ID."""
+    return f"TXN-{uuid.uuid4().hex[:8].upper()}"
 
-# ==========================================
-# 4. NAVIGATION & SIDEBAR SYSTEM
-# ==========================================
-st.sidebar.title("🏢 NSVG CRM Pro")
-st.sidebar.caption(f"Bruker: **{st.session_state['user']['username']}** | Rolle: **{st.session_state['user']['role']}**")
+def get_current_timestamp():
+    """Return formatted timestamp."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-if st.sidebar.button("🔄 Synkroniser Data"):
-    force_data_refresh()
-    st.rerun()
+def initialize_session():
+    """Initialize necessary Streamlit session state variables."""
+    if "form_data" not in st.session_state:
+        st.session_state.form_data = {}
+    if "selected_record" not in st.session_state:
+        st.session_state.selected_record = None
 
-menu = st.sidebar.radio(
-    "Hovedmeny",
-    [
-        "📊 Dashboard", 
-        "💬 Bank Messaging Hub", 
-        "➕ Ny Registrering", 
-        "📂 Kunde Arkiv", 
-        "📋 Oversiktstavle", 
-        "🛠️ Master Kontroll", 
-        "📞 Support Center"
-    ]
+# Session setup initialize
+initialize_session()
+
+# ---------------------------------------------------------
+# 4. SIDEBAR NAVIGATION
+# ---------------------------------------------------------
+st.sidebar.title("📌 Navigation")
+page = st.sidebar.radio(
+    "Select Option:",
+    ["📝 New Entry Form", "📊 View & Search Records", "✏️ Edit / Update Record"]
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("System Status: 🟢 Tilkoblet (Fast-Cache Active)")
+st.sidebar.caption("System Status: 🟢 Connected")
 
+# Refresh Button in Sidebar
+if st.sidebar.button("🔄 Refresh Data"):
+    clear_cache()
+    st.sidebar.success("Cache cleared successfully!")
+    st.rerun()
 
-# ==========================================
-# 5. MODULE 1: DASHBOARD
-# ==========================================
-if menu == "📊 Dashboard":
-    st.title("📊 CRM Dashboard")
-    st.caption("Realtidsoversikt og nøkkeltall")
-    
-    # Notifications Expander
-    if st.session_state['system_notifications']:
-        with st.expander("🔔 Systemvarsler", expanded=True):
-            for note in st.session_state['system_notifications']:
-                st.write(f"• {note}")
-
+# ---------------------------------------------------------
+# 5. PAGE 1: NEW ENTRY FORM
+# ---------------------------------------------------------
+if page == "📝 New Entry Form":
+    st.title("📝 New Record Entry")
+    st.markdown("Fill out the details below to add a new record to Google Sheets.")
     st.markdown("---")
 
-    # Metrics Section
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f'<div class="metric-card"><h4>Totalt Saker</h4><h2>{len(df_master)}</h2></div>', unsafe_allow_html=True)
-    with col2:
-        tot_belop = df_master['Beløp'].sum()
-        st.markdown(f'<div class="metric-card"><h4>Totalt Volum</h4><h2>{tot_belop:,.0f} NOK</h2></div>', unsafe_allow_html=True)
-    with col3:
-        innvilget = len(df_master[df_master['Status'] == 'Innvilget'])
-        st.markdown(f'<div class="metric-card"><h4>Innvilget</h4><h2>{innvilget}</h2></div>', unsafe_allow_html=True)
-    with col4:
-        uleste = sum(1 for m in st.session_state['bank_messages'] if m['status'] == 'Ulest')
-        st.markdown(f'<div class="metric-card"><h4>Uleste Meldinger</h4><h2>{uleste}</h2></div>', unsafe_allow_html=True)
-
-    st.markdown("---")
-    
-    # Active Saker Expanders
-    st.subheader("🔥 Aktive Saker Oversikt")
-    for idx, row in df_master.iterrows():
-        with st.expander(f"📌 {row['Saks-ID']} - {row['Kunde']} ({row['Lånetype']}) - Status: {row['Status']}"):
-            c1, c2, c3, c4 = st.columns(4)
-            c1.write(f"**Søkt Beløp:** {row['Beløp']:,} NOK")
-            c2.write(f"**Egenkapital:** {row['Egenkapital']:,} NOK")
-            c3.write(f"**Saksbehandler:** {row['Agent']}")
-            c4.write(f"**Opprettet:** {row['Opprettet']}")
-            st.write(f"**Notater:** {row['Notater']}")
-
-# ==========================================
-# 6. MODULE 2: BANK MESSAGING HUB
-# ==========================================
-elif menu == "💬 Bank Messaging Hub":
-    st.title("💬 Bank Messaging Hub")
-    st.caption("Kommunikasjon og dokumentutveksling med banker")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.subheader("📬 Meldingshistorikk")
-        for msg in st.session_state['bank_messages']:
-            status_badge = "🟢 Lest" if msg['status'] == "Lest" else "🔴 Ulest"
-            with st.container():
-                st.markdown(f"""
-                **Saks-ID:** `{msg['id']}` | **Bank:** `{msg['bank']}` | **Status:** {status_badge}  
-                *Tidspunkt: {msg['timestamp']}*  
-                > {msg['msg']}
-                """)
-                st.markdown("---")
-            
-    with col2:
-        st.subheader("📤 Send Ny Melding")
-        with st.form("send_message_form"):
-            sak_id = st.selectbox("Velg Sak", df_master['Saks-ID'])
-            bank_name = st.selectbox("Velg Bank", ["DNB", "Nordea", "SpareBank 1", "Danske Bank", "Eika", "SANTANDER"])
-            message_text = st.text_area("Meldingstekst")
-            uploaded_file = st.file_uploader("Legg ved dokument (PDF, PNG, JPG)", type=['pdf', 'png', 'jpg'])
-            
-            btn_send = st.form_submit_button("Send Melding Til Bank")
-            if btn_send:
-                if message_text.strip():
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    st.session_state['bank_messages'].insert(0, {
-                        "id": sak_id,
-                        "bank": bank_name,
-                        "msg": message_text,
-                        "status": "Ulest",
-                        "timestamp": now
-                    })
-                    st.success("Melding sendt!")
-                    st.rerun()
-                else:
-                    st.error("Meldingstekst kan ikke være tom.")
-
-# ==========================================
-# 7. MODULE 3: NY REGISTRERING
-# ==========================================
-elif menu == "➕ Ny Registrering":
-    st.title("➕ Registrer Ny Søknad")
-    st.caption("Legg inn detaljer for ny kunde og finansieringssøknad")
-    
-    with st.form("new_registration_form", clear_on_submit=True):
-        st.subheader("📋 Kunde & Låneinformasjon")
+    with st.form(key="entry_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            navn = st.text_input("Kunde Fullt Navn *")
-            epost = st.text_input("E-postadresse *")
-            telefon = st.text_input("Telefonnummer *")
-            lanetype = st.selectbox("Lånetype", ["Boliglån", "Refinansiering", "Bedriftlån", "Billån", "Forbrukslån"])
-            
+            entry_date = st.date_input("Date", value=date.today())
+            name = st.text_input("Full Name*", placeholder="Enter name")
+            category = st.selectbox(
+                "Category*", 
+                ["Select Category", "Sales", "Purchase", "Expense", "Inventory", "Other"]
+            )
+            amount = st.number_input("Amount (₹)", min_value=0.0, step=10.0, format="%.2f")
+
         with col2:
-            belop = st.number_input("Søkt Lånebeløp (NOK)", min_value=10000, step=50000, value=2000000)
-            egenkapital = st.number_input("Egenkapital (NOK)", min_value=0, step=25000, value=300000)
-            agent = st.selectbox("Tildel Agent", ["Sara", "Ahmed", "Unassigned"])
-            notat = st.text_area("Saksnotater / Spesielle Betingelser")
-            
+            status = st.selectbox("Status", ["Pending", "Approved", "Completed", "Cancelled"])
+            assigned_to = st.text_input("Assigned To / Managed By", placeholder="Enter staff name")
+            remarks = st.text_area("Remarks / Description", placeholder="Additional notes...", height=108)
+
         st.markdown("---")
-        
-        # Dynamic Auto-Calculations
-        if belop > 0:
-            belaningsgrad = ((belop - egenkapital) / belop) * 100
-            st.info(f"📊 **Beregnet Belåningsgrad:** {belaningsgrad:.2f}%")
-            
-        submitted = st.form_submit_button("💾 Lagre og Registrer Sak")
-        if submitted:
-            if navn and epost:
-                st.success(f"Ny sak for **{navn}** er registrert i systemet!")
-                force_data_refresh()
-            else:
-                st.error("Vennligst fyll ut alle obligatoriske felt (*).")
+        submit_btn = st.form_submit_button(label="🚀 Save Record", use_container_width=True)
+
+    if submit_btn:
+        # Validation
+        if not name.strip():
+            st.error("⚠️ 'Full Name' is required!")
+        elif category == "Select Category":
+            st.error("⚠️ Please select a valid Category!")
+        else:
+            # Prepare row data
+            record_id = generate_unique_id()
+            timestamp = get_current_timestamp()
+            formatted_date = entry_date.strftime("%Y-%m-%d")
+
+            row_data = [
+                record_id,
+                formatted_date,
+                name.strip(),
+                category,
+                amount,
+                status,
+                assigned_to.strip(),
+                remarks.strip(),
+                timestamp
+            ]
+
+            with st.spinner("Saving data to Google Sheets..."):
+                success = append_to_sheet("MainDB", row_data)
+
+            if success:
+                st.success(f"✅ Record saved successfully! Generated ID: **{record_id}**")
+                st.balloons()
 
 
-
-# ==========================================
-# 8. MODULE 4: KUNDE ARKIV
-# ==========================================
-elif menu == "📂 Kunde Arkiv":
-    st.title("📂 Kunde Arkiv & Søk Engine")
-    st.caption("Søk, filtrer og administrer registrerte kundesaker")
-    
-    col_search, col_filter = st.columns([3, 1])
-    
-    with col_search:
-        search_query = st.text_input("🔍 Søk etter Kunde, Saks-ID, E-post eller Agent")
-    with col_filter:
-        status_filter = st.selectbox("Filtrer etter Status", ["Alle", "Nye Saker", "Under Behandling", "Innvilget", "Avslått"])
-        
-    filtered_df = df_master.copy()
-    
-    # Apply Status Filter
-    if status_filter != "Alle":
-        filtered_df = filtered_df[filtered_df['Status'] == status_filter]
-        
-    # Apply Text Search Filter
-    if search_query:
-        filtered_df = filtered_df[
-            filtered_df['Kunde'].str.contains(search_query, case=False, na=False) |
-            filtered_df['Saks-ID'].str.contains(search_query, case=False, na=False) |
-            filtered_df['Epost'].str.contains(search_query, case=False, na=False) |
-            filtered_df['Agent'].str.contains(search_query, case=False, na=False)
-        ]
-        
-    st.subheader(f"Viser {len(filtered_df)} Saker")
-    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
-    
-    # Case Status Management Engine
+# ---------------------------------------------------------
+# 6. PAGE 2: VIEW & SEARCH RECORDS
+# ---------------------------------------------------------
+elif page == "📊 View & Search Records":
+    st.title("📊 View & Search Records")
+    st.markdown("Analyze, filter, and search all logged data from Google Sheets.")
     st.markdown("---")
-    st.subheader("⚡ Hurtigoppdatering av Sak Status")
-    c_id, c_stat, c_btn = st.columns([2, 2, 1])
-    
-    with c_id:
-        selected_case = st.selectbox("Velg Sak ID for Endring", df_master['Saks-ID'])
-    with c_stat:
-        new_status = st.selectbox("Velg Ny Status", ["Nye Saker", "Under Behandling", "Innvilget", "Avslått"])
-    with c_btn:
-        st.write(" ")
-        st.write(" ")
-        if st.button("Oppdater Status"):
-            st.success(f"Sak {selected_case} oppdatert til status: {new_status}")
-            force_data_refresh()
 
-# ==========================================
-# 9. MODULE 5: OVERSIKTSTAVLE (KANBAN BOARD)
-# ==========================================
-elif menu == "📋 Oversiktstavle":
-    st.title("📋 Live Oversiktstavle")
-    st.caption("Kanban-visning for oversikt over alle saker per status")
-    
-    col_nye, col_behandling, col_innvilget = st.columns(3)
-    
-    with col_nye:
-        st.markdown("### 🆕 Nye Saker")
-        st.markdown("---")
-        sub_df = df_master[df_master['Status'] == 'Nye Saker']
-        for _, row in sub_df.iterrows():
-            with st.container():
-                st.info(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
-                
-    with col_behandling:
-        st.markdown("### ⚙️ Under Behandling")
-        st.markdown("---")
-        sub_df = df_master[df_master['Status'] == 'Under Behandling']
-        for _, row in sub_df.iterrows():
-            with st.container():
-                st.warning(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
+    df = fetch_sheet_data("MainDB")
 
-    with col_innvilget:
-        st.markdown("### ✅ Innvilget")
-        st.markdown("---")
-        sub_df = df_master[df_master['Status'] == 'Innvilget']
-        for _, row in sub_df.iterrows():
-            with st.container():
-                st.success(f"**ID:** `{row['Saks-ID']}`\n\n**Kunde:** {row['Kunde']}\n\n**Beløp:** {row['Beløp']:,} NOK\n\n**Agent:** {row['Agent']}")
-
-# ==========================================
-# 10. MODULE 6: MASTER KONTROLL & ANSATTE
-# ==========================================
-elif menu == "🛠️ Master Kontroll":
-    st.title("🛠️ Master Kontroll Panel")
-    st.caption("Systemadministrasjon og brukerstyring")
-    
-    tab1, tab2 = st.tabs(["👥 Ansatte Kontroll", "⚙️ Systeminnstillinger"])
-    
-    with tab1:
-        st.subheader("Oversikt over Ansatte")
-        ansatte_df = pd.DataFrame({
-            "Navn": ["Sara", "Ahmed", "Admin User"],
-            "E-post": ["sara@nsvg.no", "ahmed@nsvg.no", "admin@nsvg.no"],
-            "Rolle": ["Saksbehandler", "Saksbehandler", "System Administrator"],
-            "Aktive Saker": [2, 1, 0],
-            "Status": ["Aktiv", "Aktiv", "Aktiv"]
-        })
-        st.table(ansatte_df)
+    if df.empty:
+        st.info("ℹ️ No records found or database is empty.")
+    else:
+        # Metrics Display
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Records", len(df))
         
-        st.subheader("➕ Legg til ny ansatt")
-        with st.form("add_employee_form"):
-            c1, c2, c3 = st.columns(3)
-            c1.text_input("Fullt Navn")
-            c2.text_input("E-post")
-            c3.selectbox("Rolle", ["Saksbehandler", "Rådgiver", "Admin"])
-            st.form_submit_button("Opprett Bruker")
-
-    with tab2:
-        st.subheader("⚙️ System Ytelse & Cache Kontroll")
-        st.write("Aktiv Ytelsesmodus: **Fast-Memory Cache (TTL: 300s)**")
+        if "Amount" in df.columns:
+            total_amount = pd.to_numeric(df["Amount"], errors="coerce").sum()
+            m2.metric("Total Amount", f"₹ {total_amount:,.2f}")
         
-        if st.button("🗑️ Tøm System Cache (Force Reset)"):
-            force_data_refresh()
-            st.success("System Cache er tømt!")
-            st.rerun()
+        if "Status" in df.columns:
+            pending_cnt = len(df[df["Status"] == "Pending"])
+            completed_cnt = len(df[df["Status"] == "Completed"])
+            m3.metric("Pending Tasks", pending_cnt)
+            m4.metric("Completed Tasks", completed_cnt)
 
-# ==========================================
-# 11. MODULE 7: SUPPORT CENTER
-# ==========================================
-elif menu == "📞 Support Center":
-    st.title("📞 Support Center & Kontaktsenter")
-    st.caption("Teknisk assistanse og viktig kontaktinformasjon")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🏢 Intern Hjelp & Support")
-        st.markdown("""
-        * **IT-Support E-post:** support@nsvg.no
-        * **Telefon Hotline:** +47 800 00 000
-        * **Åpningstider:** Mandag - Fredag (08:00 - 16:00)
-        """)
+        st.markdown("---")
+
+        # Filters Area
+        with st.expander("🔍 Filters & Search Options", expanded=True):
+            f_col1, f_col2, f_col3 = st.columns(3)
+            
+            with f_col1:
+                search_term = st.text_input("Search (Name/ID/Remarks)", "")
+            
+            with f_col2:
+                categories = ["All"] + list(df["Category"].dropna().unique()) if "Category" in df.columns else ["All"]
+                selected_cat = st.selectbox("Filter by Category", categories)
+            
+            with f_col3:
+                statuses = ["All"] + list(df["Status"].dropna().unique()) if "Status" in df.columns else ["All"]
+                selected_status = st.selectbox("Filter by Status", statuses)
+
+        # Applying Filters
+        filtered_df = df.copy()
+
+        if search_term:
+            filtered_df = filtered_df[
+                filtered_df.astype(str).apply(lambda x: x.str.contains(search_term, case=False)).any(axis=1)
+            ]
+
+        if selected_cat != "All" and "Category" in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df["Category"] == selected_cat]
+
+        if selected_status != "All" and "Status" in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df["Status"] == selected_status]
+
+        # Display Data Table
+        st.subheader(f"Results ({len(filtered_df)} items found)")
+        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+
+        # Download Data Button
+        csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Data as CSV",
+            data=csv_data,
+            file_name=f"records_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+
+# ---------------------------------------------------------
+# 7. PAGE 3: EDIT / UPDATE RECORD
+# ---------------------------------------------------------
+elif page == "✏️ Edit / Update Record":
+    st.title("✏️ Edit & Update Existing Record")
+    st.markdown("Search for a record by Record ID or Name, select it, and update its details.")
+    st.markdown("---")
+
+    df = fetch_sheet_data("MainDB")
+
+    if df.empty:
+        st.warning("⚠️ Database is empty. No records to edit.")
+    else:
+        # Check if ID column exists
+        id_col = "ID" if "ID" in df.columns else df.columns[0]
         
-    with col2:
-        st.subheader("🏦 Bankenes Renteliste & Direkte Linjer")
-        st.markdown("""
-        * **DNB Bank:** +47 915 04800 | renter@dnb.no
-        * **Nordea:** +47 232 06001 | crm-partner@nordea.no
-        * **SpareBank 1:** +47 915 07000 | partner@sb1.no
-        """)
+        # Select Record to Edit
+        record_list = df[id_col].astype(str).tolist()
+        selected_id = st.selectbox("Select Record ID to Edit:", ["-- Select ID --"] + record_list)
+
+        if selected_id != "-- Select ID --":
+            # Fetch record details
+            record_row = df[df[id_col].astype(str) == str(selected_id)].iloc[0]
+
+            st.info(f"Editing Details for Record ID: **{selected_id}**")
+
+            with st.form(key="edit_form"):
+                col1, col2 = st.columns(2)
+
+                # Parse existing date safely
+                try:
+                    curr_date = datetime.strptime(str(record_row.get("Date", "")), "%Y-%m-%d").date()
+                except Exception:
+                    curr_date = date.today()
+
+                with col1:
+                    u_date = st.date_input("Date", value=curr_date)
+                    u_name = st.text_input("Full Name*", value=str(record_row.get("Name", "")))
+                    
+                    cat_options = ["Sales", "Purchase", "Expense", "Inventory", "Other"]
+                    curr_cat = str(record_row.get("Category", "Other"))
+                    cat_idx = cat_options.index(curr_cat) if curr_cat in cat_options else 4
+                    u_category = st.selectbox("Category*", cat_options, index=cat_idx)
+
+                    try:
+                        curr_amt = float(record_row.get("Amount", 0.0))
+                    except ValueError:
+                        curr_amt = 0.0
+                    u_amount = st.number_input("Amount (₹)", min_value=0.0, value=curr_amt, step=10.0, format="%.2f")
+
+                with col2:
+                    status_options = ["Pending", "Approved", "Completed", "Cancelled"]
+                    curr_status = str(record_row.get("Status", "Pending"))
+                    status_idx = status_options.index(curr_status) if curr_status in status_options else 0
+                    u_status = st.selectbox("Status", status_options, index=status_idx)
+
+                    u_assigned = st.text_input("Assigned To", value=str(record_row.get("Assigned To", "")))
+                    u_remarks = st.text_area("Remarks / Description", value=str(record_row.get("Remarks", "")), height=108)
+
+                st.markdown("---")
+                update_btn = st.form_submit_button(label="🔄 Update Record", use_container_width=True)
+
+            if update_btn:
+                if not u_name.strip():
+                    st.error("⚠️ 'Full Name' cannot be empty!")
+                else:
+                    updated_date_str = u_date.strftime("%Y-%m-%d")
+                    timestamp = str(record_row.get("Timestamp", get_current_timestamp()))
+
+                    new_row_data = [
+                        selected_id,
+                        updated_date_str,
+                        u_name.strip(),
+                        u_category,
+                        u_amount,
+                        u_status,
+                        u_assigned.strip(),
+                        u_remarks.strip(),
+                        timestamp
+                    ]
+
+                    with st.spinner("Updating record in Google Sheets..."):
+                        success = update_sheet_row("MainDB", 1, selected_id, new_row_data)
+
+                    if success:
+                        st.success(f"✅ Record **{selected_id}** updated successfully!")
+                        time.sleep(1)
+                        st.rerun()
+

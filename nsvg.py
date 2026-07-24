@@ -366,7 +366,7 @@ if not st.session_state['logged_in']:
     st.stop()
 
 # =================================================================
-# --- 5. GLOBAL DATA & SIDEBAR MENU (STRICT ROLE RESTRICTION) ---
+# --- 5. GLOBAL DATA & SIDEBAR MENU (ALL AGENTS HAVE SAKBEHANDLER PANEL) ---
 # =================================================================
 if st.session_state.get('logged_in'):
     raw_user = str(st.session_state.get('user_id', 'Guest')).lower().strip()
@@ -387,13 +387,11 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# Navigation Options with Restricted Finance Access
+# Navigation Options: Saksbehandler Panel Enabled for ALL Active Roles & Agents
 if role in ["Admin", "Director"]:
     options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Regnskap Control (Admin)", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
-elif role == "Saksbehandler":
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💼 Saksbehandler Panel", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 else:
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💼 Saksbehandler Panel", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
@@ -553,15 +551,14 @@ if valg == "📊 Dashbord":
             agent_navn = r.get('Saksbehandler', 'Agent')
 
             with st.expander(f"{st_icon} {hoved} | {belop:,.0f} kr | Ansvar: {assigned_to_header}"):
-                if role in ["Saksbehandler", "Admin", "Director"]:
-                    st.info("📋 **Portal Copy Tool**")
-                    fnr_val = r.get('Fødselsnummer', 'N/A')
-                    tlf_val = r.get('Telefon', 'N/A')
-                    copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {fnr_val}\nTLF: {tlf_val}"
-                    st.text_area("Klar til kopiering:", value=copy_text, height=100, key=f"cp_{sak_id}")
-                    if st.button("🚀 Marker som 'Sendt til Bank'", key=f"bsent_{sak_id}"):
-                        if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
-                            st.rerun()
+                st.info("📋 **Portal Copy Tool**")
+                fnr_val = r.get('Fødselsnummer', 'N/A')
+                tlf_val = r.get('Telefon', 'N/A')
+                copy_text = f"NAVN: {hoved}\nBELØP: {belop}\nFNR: {fnr_val}\nTLF: {tlf_val}"
+                st.text_area("Klar til kopiering:", value=copy_text, height=100, key=f"cp_{sak_id}")
+                if st.button("🚀 Marker som 'Sendt til Bank'", key=f"bsent_{sak_id}"):
+                    if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
+                        st.rerun()
 
                 display_bank_messaging_hub(sak_id, chat_h, role, current_user, agent_navn)
                 
@@ -755,24 +752,24 @@ elif valg == "➕ Ny Registrering":
         if user_role in ["Admin", "Director"]:
             final_status = st.selectbox("Sak Status (KUN ADMIN)", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"])
         else:
-            final_status = "Mottatt"
+            final_status = "Under Behandling"
 
-        submit = st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN", use_container_width=True)
+        submit = st.form_submit_button("🚀 SEND SØKNAD TIL BANKEN (Pushet til Saksbehandler Panel)", use_container_width=True)
         if submit:
             if not navn:
                 st.error("Vennligst skriv inn navnet på Hovedsøker!")
             else:
-                initial_chat = json.dumps([{"role": "Bank", "sender": "SYSTEM", "text": f"Søknad om {prod} mottatt.", "time": get_norway_time()}])
+                initial_chat = json.dumps([{"role": "Bank", "sender": "SYSTEM", "text": f"Søknad om {prod} mottatt og sendt til Saksbehandler Panel.", "time": get_norway_time()}])
                 new_row = [
                     len(df)+1, datetime.now().strftime("%d-%m-%Y"), prod, navn, fnr, epost, tlf, sivil,
                     "Bedrift" if is_bedrift else "Privat", "Active", f_navn if is_bedrift else "",
                     lonn, barn, h_sfo, (h_ek + m_ek), (h_gjeld + m_gjeld + h_boliglan), biler, belop,
                     f_org if is_bedrift else "", f_eier if is_bedrift else "", f_aksjer if is_bedrift else "",
                     m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater, f"P1: {pass_land} | P2: {m_pass}",
-                    current_user, final_status, "Ingen", initial_chat
+                    current_user, final_status, current_user, initial_chat
                 ]
                 if add_data("MainDB", new_row):
-                    st.success(f"✅ {prod} registrert! ID: {len(df)+1}")
+                    st.success(f"✅ {prod} registrert og pushet til Saksbehandler Panel! ID: {len(df)+1}")
                     if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
                     st.rerun()
@@ -840,7 +837,7 @@ elif valg == "📂 Kunde Arkiv":
                 v3.write(f"**👨‍💼 Ansvarlig:** {agent_navn}")
                 st.write(f"**📝 Kommentarer:** {r.get('Notater', 'Ingen kommentarer lagret.')}")
 
-                if role in ["Admin", "Director"]:
+                if role in ["Admin", "Director", "Saksbehandler"]:
                     st.divider()
                     st.subheader("👨‍💼 Tildel Saksbehandler")
                     saksbehandler_liste = ["-- Velg --", "Bedi", "Iqbal"] 
@@ -900,13 +897,10 @@ elif valg == "📂 Kunde Arkiv":
                     up_mangler = st.text_area("Mangler fra kunden", value=str(r.get('Mangler', '')))
                     up_notat = st.text_area("Bankens interne notater", value=str(r.get('Notater', '')))
 
-                    if role in ["Admin", "Director"]:
-                        status_valg = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
-                        try: s_idx = status_valg.index(gjeldende_status)
-                        except: s_idx = 0
-                        up_st = st.selectbox("Oppdater Endelig Saksstatus", status_valg, index=s_idx)
-                    else:
-                        up_st = gjeldende_status
+                    status_valg = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                    try: s_idx = status_valg.index(gjeldende_status)
+                    except: s_idx = 0
+                    up_st = st.selectbox("Oppdater Endelig Saksstatus", status_valg, index=s_idx)
 
                     if st.form_submit_button("💾 OPPDATER SØKNAD"):
                         data_til_oppdatering = {
@@ -1432,10 +1426,10 @@ elif valg == "💼 Saksbehandler Panel":
         p_rental_val, p_barn_val = 0.0, 1
 
         if raw_input_text:
-            m_inc = re.search(r'Bruttoinntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_inc = re.search(r'(?:Bruttoinntekt|Lønn|Inntekt):\s*(\d+)', raw_input_text, re.IGNORECASE)
             m_med = re.search(r'Medsøker Inntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
-            m_gjeld = re.search(r'Eksisterende Gjeld:\s*(\d+)', raw_input_text, re.IGNORECASE)
-            m_sokt = re.search(r'Søkt Lån:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_gjeld = re.search(r'(?:Eksisterende Gjeld|Gjeld):\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_sokt = re.search(r'(?:Søkt Lån|Lånebeløp):\s*(\d+)', raw_input_text, re.IGNORECASE)
             m_kjop = re.search(r'Kjøpesum:\s*(\d+)', raw_input_text, re.IGNORECASE)
             m_ek = re.search(r'Egenkapital:\s*(\d+)', raw_input_text, re.IGNORECASE)
 
@@ -1539,7 +1533,7 @@ elif valg == "💼 Saksbehandler Panel":
             sb_df = df.copy()
             if 'Saksbehandler' in sb_df.columns:
                 mine_mask = (sb_df['Saksbehandler'].fillna('').astype(str).str.lower() == str(current_user).lower()) | (sb_df.get('Assigned_To', '').fillna('').astype(str).str.lower() == str(current_user).lower())
-                mine_saker = sb_df[mine_mask]
+                mine_saker = sb_df if role in ["Admin", "Director"] else sb_df[mine_mask]
                 
                 if not mine_saker.empty:
                     for idx, row in mine_saker.iterrows():

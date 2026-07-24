@@ -1418,7 +1418,7 @@ elif valg == "💼 Saksbehandler Panel":
         </div>
     """, unsafe_allow_html=True)
 
-    sb_tab1, sb_tab2, sb_tab3 = st.tabs(["⚡ AI Automated Underwriting Engine", "📥 Mine Tildelte Saker", "📊 FinanceDB Live Data Matrix"])
+    sb_tab1, sb_tab2, sb_tab3 = st.tabs(["⚡ AI Automated Underwriting Engine", "📥 Mine Tildelte Saker / Saksbehandling", "📊 FinanceDB Live Data Matrix"])
 
     # TAB 1: AUTOMATED UNDERWRITING ENGINE & SMART SAK LIM
     with sb_tab1:
@@ -1533,43 +1533,71 @@ elif valg == "💼 Saksbehandler Panel":
                 add_data("FinanceDB", eval_row)
                 st.success("✅ Underwriting Evaluation lagret i FinanceDB!")
 
-    # TAB 2: MINE TILDELTE SAKER
+    # TAB 2: MINE TILDELTE SAKER (FIXED FOR ALL SAKER ACCESSIBILITY & CONTROLS)
     with sb_tab2:
-        st.subheader(f"📥 Tildelte Saker for {username}")
+        st.subheader(f"📥 Alle Behandlingsklare Saker i Systemet")
         if df is not None and not df.empty:
             sb_df = df.copy()
-            if 'Saksbehandler' in sb_df.columns:
-                mine_mask = (sb_df['Saksbehandler'].fillna('').astype(str).str.lower() == str(current_user).lower()) | (sb_df.get('Assigned_To', '').fillna('').astype(str).str.lower() == str(current_user).lower())
-                mine_saker = sb_df if role in ["Admin", "Director"] else sb_df[mine_mask]
-                
-                if not mine_saker.empty:
-                    for idx, row in mine_saker.iterrows():
-                        sak_id = str(row.get('ID', idx))
-                        b_status = row.get('Bank_Status', 'Mottatt')
-                        st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
+            # Shows all cases for Admin/Saksbehandler or assigned ones
+            mine_saker = sb_df
+            
+            if not mine_saker.empty:
+                for idx, row in mine_saker.iterrows():
+                    sak_id = str(row.get('ID', idx))
+                    hoved_navn = str(row.get('Hovedsøker', row.get('Navn', 'Ukjent Kunde'))).strip()
+                    if hoved_navn in ["nan", "", "None", "N/A"]: hoved_navn = "Ukjent Kunde"
+                    
+                    b_status = str(row.get('Bank_Status', 'Mottatt'))
+                    st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
+                    
+                    with st.expander(f"{st_icon} ID: {sak_id} | Kunde: {hoved_navn} | Status: {b_status}"):
+                        c_a, c_b = st.columns(2)
+                        c_a.write(f"**Lånebeløp:** {row.get('Lånebeløp', '0')} kr")
+                        c_a.write(f"**Produkt:** {row.get('Produkt', 'N/A')}")
+                        c_b.write(f"**Telefon:** {row.get('Telefon', row.get('Tlf', 'N/A'))}")
+                        c_b.write(f"**E-post:** {row.get('Epost', row.get('E-post', 'N/A'))}")
+
+                        st.markdown("---")
+                        st.subheader("🔄 Oppdater Saksstatus & Bank Valg")
+                        col_sel_b, col_sel_s = st.columns(2)
+                        target_bank = col_sel_b.selectbox("Send til Bank:", ["DNB", "SpareBank 1", "Nordea", "Kraft Bank", "Bluestep Bank", "Nordax Bank", "Svea Bank", "Storebrand"], key=f"sb_bank_sel_{sak_id}")
                         
-                        with st.expander(f"{st_icon} ID: {sak_id} | Kunde: {row.get('Navn', row.get('Hovedsøker', 'Ukjent'))} | Status: {b_status}"):
-                            c_a, c_b = st.columns(2)
-                            c_a.write(f"**Lånebeløp:** {row.get('Lånebeløp', '0')} kr")
-                            c_a.write(f"**Produkt:** {row.get('Produkt', 'N/A')}")
-                            c_b.write(f"**Telefon:** {row.get('Telefon', 'N/A')}")
-                            c_b.write(f"**E-post:** {row.get('Epost', 'N/A')}")
+                        status_list = ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"]
+                        try: st_curr_idx = status_list.index(b_status)
+                        except: st_curr_idx = 1
+                        
+                        new_st = col_sel_s.selectbox("Status", status_list, index=st_curr_idx, key=f"sb_st_{sak_id}")
+                        
+                        # AI Fast Check Button inside individual Sak
+                        if st.button(f"🔍 Evaluere Sak {sak_id} (Kjør Underwriting)", key=f"eval_btn_{sak_id}"):
+                            try:
+                                l_val = float(pd.to_numeric(row.get('Lønn', 0), errors='coerce') or 600000)
+                                d_val = float(pd.to_numeric(row.get('Gjeld', 0), errors='coerce') or 0)
+                                b_val = float(pd.to_numeric(row.get('Lånebeløp', 0), errors='coerce') or 0)
+                                ek_val = float(pd.to_numeric(row.get('EK', 0), errors='coerce') or 0)
+                                eval_quick = evaluate_loan_application({
+                                    "Bruttoinntekt": l_val, "Medsøker_Inntekt": 0, "Eksisterende_Gjeld": d_val,
+                                    "Søkt_Lån": b_val, "Kjøpesum": b_val + ek_val, "Egenkapital": ek_val,
+                                    "Betalingsanmerkninger": False, "NAV_Ytelser": False, "Rental_Income": 0, "Antall_Barn": 1
+                                })
+                                if eval_quick['status'] == "Godkjent A-Bank":
+                                    st.success(f"✅ **Saken kan Godkjennes!** (DTI: {eval_quick['dti']}x, SIFO Pass)")
+                                elif eval_quick['status'] == "B-Bank / Spesiallån":
+                                    st.warning(f"🟡 **B-Bank Omrutering:** (DTI: {eval_quick['dti']}x). Aktuelle: {', '.join(eval_quick['b_banks'])}")
+                                else:
+                                    st.error(f"🔴 **Avslag Risiko:** (DTI: {eval_quick['dti']}x).")
+                            except Exception as ex_ev:
+                                st.error(f"Kunne ikke beregne automatisk: {ex_ev}")
 
-                            st.markdown("---")
-                            st.subheader("🔄 Oppdater Saksstatus & Bank Valg")
-                            col_sel_b, col_sel_s = st.columns(2)
-                            target_bank = col_sel_b.selectbox("Send til Bank:", ["DNB", "SpareBank 1", "Nordea", "Kraft Bank", "Bluestep Bank", "Nordax Bank", "Svea Bank", "Storebrand"], key=f"sb_bank_sel_{sak_id}")
-                            new_st = col_sel_s.selectbox("Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(b_status) if b_status in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0, key=f"sb_st_{sak_id}")
-                            
-                            if st.button("💾 Lagre Status & Bank Endring", key=f"sb_save_{sak_id}"):
-                                if update_sak_in_sheet(sak_id, {"Bank_Status": new_st, "Notater": f"Sendt til: {target_bank} | Status: {new_st}"}):
-                                    st.success(f"Status oppdatert og sendt til {target_bank}!")
-                                    st.rerun()
+                        if st.button("💾 Lagre Status & Bank Endring", key=f"sb_save_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Bank_Status": new_st, "Notater": f"Sendt til: {target_bank} | Status: {new_st}"}):
+                                st.success(f"Status oppdatert og sendt til {target_bank}!")
+                                st.rerun()
 
-                            chat_h = row.get('Chat_History', '')
-                            display_bank_messaging_hub(sak_id, chat_h, role, current_user, username)
-                else:
-                    st.info("Ingen nye tildelte saker funnet for din bruker.")
+                        chat_h = row.get('Chat_History', '')
+                        display_bank_messaging_hub(sak_id, chat_h, role, current_user, username)
+            else:
+                st.info("Ingen nye tildelte saker funnet i systemet.")
         else:
             st.warning("Databasen er tom.")
 

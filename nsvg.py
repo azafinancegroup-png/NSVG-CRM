@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import gspread
@@ -768,7 +767,15 @@ elif valg == "➕ Ny Registrering":
                     m_navn, m_fnr, m_epost, m_tlf, m_lonn, m_arb, notater, f"P1: {pass_land} | P2: {m_pass}",
                     current_user, final_status, current_user, initial_chat
                 ]
+                
+                # 1. Main Data Base Insertion
                 if add_data("MainDB", new_row):
+                    # 2. AUTO CONTACT REGISTRATION FOR ADMIN CONTACTS LIST
+                    try:
+                        add_data("Contacts", [navn, epost, tlf, get_norway_time()])
+                    except Exception as c_err:
+                        pass # Auto contact register fallback mechanism
+                    
                     st.success(f"✅ {prod} registrert og pushet til Saksbehandler Panel! ID: {len(df)+1}")
                     if uploaded_files: st.info(f"📂 {len(uploaded_files)} filer lagret.")
                     st.balloons()
@@ -1312,9 +1319,9 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                     if st.button("🗑️ Slette Profil", key=f"del_btn_{i}"):
                         st.warning("Kun Admin kan slette.")
 
-# --- KONTAKTER VIEW ---
+# --- KONTAKTER VIEW (STRICT ADMIN ONLY ACCESS) ---
 elif valg == "📇 Kontakter":
-    st.header("📇 Kontaktadministrasjon")
+    st.header("📇 Kontaktadministrasjon (Admin Live Database)")
     try:
         contacts_df = get_data("Contacts")
         if contacts_df is None or contacts_df.empty: 

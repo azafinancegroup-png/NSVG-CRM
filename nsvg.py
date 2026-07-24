@@ -109,6 +109,32 @@ st.markdown("""
         color: #0F172A; 
         box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
+
+    /* Decision Engine Cards */
+    .decision-approved {
+        background-color: #ECFDF5;
+        border: 1px solid #10B981;
+        border-left: 6px solid #10B981;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+    .decision-rejected {
+        background-color: #FEF2F2;
+        border: 1px solid #EF4444;
+        border-left: 6px solid #EF4444;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
+    .decision-bbank {
+        background-color: #FFFBEB;
+        border: 1px solid #F59E0B;
+        border-left: 6px solid #F59E0B;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -220,6 +246,91 @@ def delete_sak_from_sheet(sak_id):
         return False
 
 # =================================================================
+# --- 3.5 FINANCEDB & AUTOMATED UNDERWRITING ENGINE ---
+# =================================================================
+def evaluate_loan_application(data):
+    """
+    Automated Underwriting Engine logic for Norwegian Mortgages & Refinancing.
+    Evaluates Utlånsforskriften (5x Debt, 15% EK, Stress Test) + Bank Matching.
+    """
+    inntekt = float(data.get('Bruttoinntekt', 0))
+    med_inntekt = float(data.get('Medsøker_Inntekt', 0))
+    total_inntekt = inntekt + med_inntekt
+
+    eksisterende_gjeld = float(data.get('Eksisterende_Gjeld', 0))
+    sokt_lan = float(data.get('Søkt_Lån', 0))
+    total_gjeld = eksisterende_gjeld + sokt_lan
+
+    kjopesum = float(data.get('Kjøpesum', 0))
+    egenkapital = float(data.get('Egenkapital', 0))
+
+    har_inkasso = data.get('Betalingsanmerkninger', False)
+    nav_ytelser = data.get('NAV_Ytelser', False)
+    har_utleie = float(data.get('Rental_Income', 0))
+
+    # Calculate Legal Rules
+    effektiv_inntekt = total_inntekt + (har_utleie * 0.80)
+    dti = total_gjeld / effektiv_inntekt if effektiv_inntekt > 0 else 999.0
+    
+    ek_pct = (egenkapital / kjopesum * 100) if kjopesum > 0 else 100.0
+    
+    # Base Stress Test Estimate (3% rate rise calculation)
+    sifo_base_cost = 12000 + (3000 * float(data.get('Antall_Barn', 0)))
+    estimated_monthly_pay = (total_gjeld * 0.08) / 12
+    monthly_net_income = (effektiv_inntekt * 0.68) / 12
+    sifo_stress_pass = (monthly_net_income - estimated_monthly_pay) >= sifo_base_cost
+
+    reasons = []
+    solutions = []
+    
+    # 1. Debt Limit Test (5x Rule)
+    if dti > 5.0:
+        reasons.append(f"Gjeldsgrad overstiger 5x inntekt (Nåværende: {dti:.2f}x).")
+        solutions.append("Medsøker: Legg til medsøker med fast inntekt.")
+        solutions.append("Realkausjonist: Bruk realkausjonist (foreldres bolig/realkausjon).")
+        solutions.append("Slett kredittkort: Kanseller ubenyttede kredittrammer i Gjeldsregisteret.")
+
+    # 2. Egenkapital Test (15% Rule)
+    if kjopesum > 0 and ek_pct < 15.0:
+        reasons.append(f"Egenkapital er under 15% kravet (Nåværende: {ek_pct:.1f}%).")
+        solutions.append("Tilleggssikkerhet: Pant i annen eiendom (f.eks. foreldres bolig).")
+        solutions.append("Startlån: Søk om Kommunalt Startlån via Husbanken.")
+
+    # 3. SIFO Stress Test (+3% Interest Hike)
+    if not sifo_stress_pass:
+        reasons.append("Består ikke SIFO-stresstest (+3% renteøkning gir underskudd i likviditetsbudsjett).")
+        solutions.append("Utleieinntekt: Kjøp bolig med godkjent utleiedel (tomannsbolig).")
+        solutions.append("Skattekort: Juster skattekort/forskuddstrekk for å øke netto utbetalt.")
+
+    # Bank Matching Rules
+    eligible_a_banks = []
+    eligible_b_banks = []
+
+    if not har_inkasso and not nav_ytelser and dti <= 5.0 and ek_pct >= 15.0 and sifo_stress_pass:
+        eligible_a_banks = ["SpareBank 1", "Sparebank Øst", "Nordea", "BN Bank", "Storebrand", "Sparebank 1 SMN", "Sparebank 1 Romerike"]
+    
+    # B-Bank Logic (Refinansiering / Betalingsanmerkninger / NAV)
+    if har_inkasso or nav_ytelser or dti > 5.0 or not sifo_stress_pass:
+        eligible_b_banks = ["Kraft Bank", "Bluestep Bank", "Nordax Bank", "Svea Bank", "Enito Bank / Balansebank", "Instabank"]
+        if har_inkasso:
+            solutions.append("Spesialrefinansiering: Søk Omstartslån med pant i bolig (LTV <= 85%) for å slette inkasso/anmerkninger.")
+
+    status = "Godkjent A-Bank" if eligible_a_banks else ("B-Bank / Spesiallån" if eligible_b_banks else "Avslag")
+
+    return {
+        "status": status,
+        "dti": round(dti, 2),
+        "ek_pct": round(ek_pct, 1),
+        "sifo_pass": sifo_stress_pass,
+        "reasons": reasons,
+        "solutions": solutions,
+        "a_banks": eligible_a_banks,
+        "b_banks": eligible_b_banks,
+        "total_inntekt": total_inntekt,
+        "total_gjeld": total_gjeld
+    }
+
+# =================================================================
 # --- 4. LOGIN SYSTEM (STABLE & REFRESH-PROOF) ---
 # =================================================================
 if not st.session_state['logged_in']:
@@ -280,7 +391,7 @@ except Exception as e:
 if role in ["Admin", "Director"]:
     options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Regnskap Control (Admin)", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
 elif role == "Saksbehandler":
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💼 Saksbehandler Panel", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 else:
     options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 
@@ -1297,26 +1408,166 @@ elif valg == "📜 Dokumentmaler":
         * **Firma:** Ny firmaattest fra Brønnøysund.
         """)
 
-# --- SAKSBEHANDLER PANEL VIEW ---
+# --- SAKSBEHANDLER PANEL VIEW (INTEGRATED WITH FINANCEDB AUTOMATED UNDERWRITING ENGINE) ---
 elif valg == "💼 Saksbehandler Panel":
-    st.header(f"💼 Saksbehandler: {current_user}")
-    if df is not None and not df.empty:
-        sb_df = df.copy()
-        if 'Saksbehandler' in sb_df.columns:
-            ny_mask = (sb_df['Saksbehandler'].fillna('').astype(str).str.lower() == str(current_user).lower()) & (sb_df.get('Status', '') == "Ny")
-            ny_saker = sb_df[ny_mask]
-            st.subheader("📥 Ny Oppgaver")
-            if not ny_saker.empty:
-                for idx, row in ny_saker.iterrows():
-                    sak_id = str(row.get('ID', idx))
-                    with st.expander(f"🆕 NY SAK: {row.get('Navn', row.get('Hovedsøker', 'Ukjent'))}"):
-                        st.write(f"**Beløp:** {row.get('Lånebeløp', '0')} kr")
-                        if st.button("✅ Start Behandling", key=f"start_{sak_id}"):
-                            if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
-                                st.success("Saken er flyttet!")
-                                st.rerun()
+    st.markdown(f"""
+        <div style='background: #1E293B; padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; border-left: 8px solid #10B981;'>
+            <h2 style='margin:0; color: #10B981;'>💼 Saksbehandler Panel & AI Underwriting Engine</h2>
+            <p style='opacity: 0.8; margin-bottom: 0;'>Senior Bank Rådgiver Mode | Utlånsforskriften Checks | FinanceDB Integration</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    sb_tab1, sb_tab2, sb_tab3 = st.tabs(["⚡ AI Automated Underwriting Engine", "📥 Mine Tildelte Saker", "📊 FinanceDB Live Data Matrix"])
+
+    # TAB 1: AUTOMATED UNDERWRITING ENGINE
+    with sb_tab1:
+        st.subheader("🤖 Raw Text / Data Fast Parsing & Decision Engine")
+        st.caption("Paste application raw text or json below to execute Instant Bank Matrix & Utlånsforskriften Checks.")
+
+        raw_input_text = st.text_area("Paste Raw Application Text / Notes", height=140, placeholder="Eks:\nBruttoinntekt: 650000\nMedsøker Inntekt: 400000\nEksisterende Gjeld: 1200000\nSøkt Lån: 3000000\nKjøpesum: 4000000\nEgenkapital: 600000\nBetalingsanmerkninger: Nei\nNAV Ytelser: Nei\nRental Income: 0\nAntall Barn: 2")
+
+        col_p1, col_p2 = st.columns(2)
+        p_brutto = col_p1.number_input("Bruttoinntekt Hovedsøker (kr)", value=650000, step=25000)
+        p_med_brutto = col_p2.number_input("Bruttoinntekt Medsøker (kr)", value=0, step=25000)
+        p_eks_gjeld = col_p1.number_input("Eksisterende Total Gjeld (kr)", value=500000, step=25000)
+        p_sokt_lan = col_p2.number_input("Ønsket / Søkt Lånebeløp (kr)", value=2500000, step=50000)
+        p_kjopesum = col_p1.number_input("Kjøpesum / Boligverdi (kr)", value=3500000, step=50000)
+        p_ek = col_p2.number_input("Egenkapital Tilgjengelig (kr)", value=600000, step=25000)
+        p_rental = col_p1.number_input("Månedlig Utleieinntekt (kr)", value=0, step=1000)
+        p_barn = col_p2.number_input("Antall Barn i Husstanden", value=1, step=1)
+
+        c_check1, c_check2 = st.columns(2)
+        p_inkasso = c_check1.checkbox("🚨 Har Betalingsanmerkning / Active Inkasso")
+        p_nav = c_check2.checkbox("💼 Hovedinntekt fra NAV (AAP / Uføretrygd)")
+
+        if raw_input_text:
+            # Simple Regex Extraction Helpers
+            m_inc = re.search(r'Bruttoinntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_sokt = re.search(r'Søkt Lån:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            if m_inc: p_brutto = float(m_inc.group(1))
+            if m_sokt: p_sokt_lan = float(m_sokt.group(1))
+
+        if st.button("🚀 Kjør Bank Policy & Decision Engine", use_container_width=True):
+            eval_payload = {
+                "Bruttoinntekt": p_brutto,
+                "Medsøker_Inntekt": p_med_brutto,
+                "Eksisterende_Gjeld": p_eks_gjeld,
+                "Søkt_Lån": p_sokt_lan,
+                "Kjøpesum": p_kjopesum,
+                "Egenkapital": p_ek,
+                "Betalingsanmerkninger": p_inkasso,
+                "NAV_Ytelser": p_nav,
+                "Rental_Income": p_rental * 12,
+                "Antall_Barn": p_barn
+            }
+
+            res = evaluate_loan_application(eval_payload)
+
+            st.divider()
+            st.markdown("### 📑 AI Decision & Underwriting Result")
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Gjeldsgrad (DTI)", f"{res['dti']}x", delta="Inkl. Utlånsforskriften" if res['dti'] <= 5.0 else "Över 5x Grense", delta_color="normal" if res['dti'] <= 5.0 else "inverse")
+            m2.metric("Egenkapital", f"{res['ek_pct']}%", delta="Min 15% Krav" if res['ek_pct'] >= 15.0 else "Under 15%", delta_color="normal" if res['ek_pct'] >= 15.0 else "inverse")
+            m3.metric("SIFO Stresstest (+3%)", "PASSED ✅" if res['sifo_pass'] else "FAILED ❌")
+            m4.metric("Saks-Status", res['status'])
+
+            if res['status'] == "Godkjent A-Bank":
+                st.markdown("""
+                <div class='decision-approved'>
+                    <h3 style='color:#065F46; margin:0;'>🟢 GODKJENT FOR STANDARD A-BANKER</h3>
+                    <p style='color:#047857;'>Søknaden oppfyller alle kravene i Utlånsforskriften!</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.subheader("🏛️ Anbefalte A-Banker:")
+                st.write(", ".join([f"**{b}**" for b in res['a_banks']]))
+
+            elif res['status'] == "B-Bank / Spesiallån":
+                st.markdown("""
+                <div class='decision-bbank'>
+                    <h3 style='color:#92400E; margin:0;'>🟡 OMRUTES TIL B-BANKER (SPESIALLÅN / REFINANSIERING)</h3>
+                    <p style='color:#B45309;'>Kunden kvalifiserer ikke for standard A-Banker, men kan innvilges hos spesialistbanker.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.subheader("🏦 Aktuelle B-Banker:")
+                st.write(", ".join([f"**{b}**" for b in res['b_banks']]))
+
             else:
-                st.info("Ingen nye oppgaver.")
+                st.markdown("""
+                <div class='decision-rejected'>
+                    <h3 style='color:#991B1B; margin:0;'>🔴 AVSLAG / MÅ STRUKTURERES PÅ NYTT</h3>
+                    <p style='color:#B91C1C;'>Søknaden avslås etter standard retningslinjer.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+            if res['reasons']:
+                st.markdown("#### ⚠️ Årsaker til Avslag/Omrutering:")
+                for r_msg in res['reasons']:
+                    st.write(f"- ❌ {r_msg}")
+
+            if res['solutions']:
+                st.markdown("#### 💡 Smart Alternative Solutions (Løsninger):")
+                for s_msg in res['solutions']:
+                    st.write(f"- 🛠️ {s_msg}")
+
+            st.divider()
+            if st.button("💾 Lagre Evaluering i FinanceDB & Sync"):
+                eval_row = [
+                    uuid.uuid4().hex[:8], get_norway_time(), "Inntekt Evaluering", "Underwriting Engine",
+                    f"DTI: {res['dti']}x | EK: {res['ek_pct']}% | Status: {res['status']}", p_sokt_lan, current_user, "Evaluert"
+                ]
+                add_data("FinanceDB", eval_row)
+                st.success("✅ Underwriting Evaluation lagret i FinanceDB!")
+
+    # TAB 2: MINE TILDELTE SAKER
+    with sb_tab2:
+        st.subheader(f"📥 Tildelte Saker for {username}")
+        if df is not None and not df.empty:
+            sb_df = df.copy()
+            if 'Saksbehandler' in sb_df.columns:
+                mine_mask = (sb_df['Saksbehandler'].fillna('').astype(str).str.lower() == str(current_user).lower()) | (sb_df.get('Assigned_To', '').fillna('').astype(str).str.lower() == str(current_user).lower())
+                mine_saker = sb_df[mine_mask]
+                
+                if not mine_saker.empty:
+                    for idx, row in mine_saker.iterrows():
+                        sak_id = str(row.get('ID', idx))
+                        b_status = row.get('Bank_Status', 'Mottatt')
+                        st_icon = "🔵" if b_status == "Mottatt" else "🟡" if b_status == "Under Behandling" else "🟢" if b_status == "Godkjent" else "🔴"
+                        
+                        with st.expander(f"{st_icon} ID: {sak_id} | Kunde: {row.get('Navn', row.get('Hovedsøker', 'Ukjent'))} | Status: {b_status}"):
+                            c_a, c_b = st.columns(2)
+                            c_a.write(f"**Lånebeløp:** {row.get('Lånebeløp', '0')} kr")
+                            c_a.write(f"**Produkt:** {row.get('Produkt', 'N/A')}")
+                            c_b.write(f"**Telefon:** {row.get('Telefon', 'N/A')}")
+                            c_b.write(f"**E-post:** {row.get('Epost', 'N/A')}")
+
+                            st.markdown("---")
+                            st.subheader("🔄 Oppdater Saksstatus")
+                            new_st = st.selectbox("Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(b_status) if b_status in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0, key=f"sb_st_{sak_id}")
+                            
+                            if st.button("💾 Lagre Status Endring", key=f"sb_save_{sak_id}"):
+                                if update_sak_in_sheet(sak_id, {"Bank_Status": new_st}):
+                                    st.success("Status oppdatert!")
+                                    st.rerun()
+
+                            chat_h = row.get('Chat_History', '')
+                            display_bank_messaging_hub(sak_id, chat_h, role, current_user, username)
+                else:
+                    st.info("Ingen nye tildelte saker funnet for din bruker.")
+        else:
+            st.warning("Databasen er tom.")
+
+    # TAB 3: FINANCEDB LIVE MATRIX
+    with sb_tab3:
+        st.subheader("📊 Live FinanceDB Overview")
+        try:
+            f_df = get_data("FinanceDB")
+            if not f_df.empty:
+                st.dataframe(f_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("FinanceDB er tom.")
+        except Exception as e:
+            st.error(f"Kunne ikke hente FinanceDB: {e}")
 
 # --- OVERSIKTSTAVLE VIEW ---
 elif valg == "📋 Oversiktstavle":

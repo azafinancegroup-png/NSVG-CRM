@@ -1419,33 +1419,46 @@ elif valg == "💼 Saksbehandler Panel":
 
     sb_tab1, sb_tab2, sb_tab3 = st.tabs(["⚡ AI Automated Underwriting Engine", "📥 Mine Tildelte Saker", "📊 FinanceDB Live Data Matrix"])
 
-    # TAB 1: AUTOMATED UNDERWRITING ENGINE
+    # TAB 1: AUTOMATED UNDERWRITING ENGINE & SMART SAK LIM
     with sb_tab1:
         st.subheader("🤖 Raw Text / Data Fast Parsing & Decision Engine")
         st.caption("Paste application raw text or json below to execute Instant Bank Matrix & Utlånsforskriften Checks.")
 
-        raw_input_text = st.text_area("Paste Raw Application Text / Notes", height=140, placeholder="Eks:\nBruttoinntekt: 650000\nMedsøker Inntekt: 400000\nEksisterende Gjeld: 1200000\nSøkt Lån: 3000000\nKjøpesum: 4000000\nEgenkapital: 600000\nBetalingsanmerkninger: Nei\nNAV Ytelser: Nei\nRental Income: 0\nAntall Barn: 2")
+        raw_input_text = st.text_area("Paste Raw Application Text / Notes (Lim sak her)", height=140, placeholder="Eks:\nBruttoinntekt: 650000\nMedsøker Inntekt: 400000\nEksisterende Gjeld: 1200000\nSøkt Lån: 3000000\nKjøpesum: 4000000\nEgenkapital: 600000\nBetalingsanmerkninger: Nei\nNAV Ytelser: Nei\nRental Income: 0\nAntall Barn: 2")
+
+        # Smart Parsing Regex Setup
+        p_brutto_val, p_med_brutto_val, p_eks_gjeld_val = 650000.0, 0.0, 500000.0
+        p_sokt_lan_val, p_kjopesum_val, p_ek_val = 2500000.0, 3500000.0, 600000.0
+        p_rental_val, p_barn_val = 0.0, 1
+
+        if raw_input_text:
+            m_inc = re.search(r'Bruttoinntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_med = re.search(r'Medsøker Inntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_gjeld = re.search(r'Eksisterende Gjeld:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_sokt = re.search(r'Søkt Lån:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_kjop = re.search(r'Kjøpesum:\s*(\d+)', raw_input_text, re.IGNORECASE)
+            m_ek = re.search(r'Egenkapital:\s*(\d+)', raw_input_text, re.IGNORECASE)
+
+            if m_inc: p_brutto_val = float(m_inc.group(1))
+            if m_med: p_med_brutto_val = float(m_med.group(1))
+            if m_gjeld: p_eks_gjeld_val = float(m_gjeld.group(1))
+            if m_sokt: p_sokt_lan_val = float(m_sokt.group(1))
+            if m_kjop: p_kjopesum_val = float(m_kjop.group(1))
+            if m_ek: p_ek_val = float(m_ek.group(1))
 
         col_p1, col_p2 = st.columns(2)
-        p_brutto = col_p1.number_input("Bruttoinntekt Hovedsøker (kr)", value=650000, step=25000)
-        p_med_brutto = col_p2.number_input("Bruttoinntekt Medsøker (kr)", value=0, step=25000)
-        p_eks_gjeld = col_p1.number_input("Eksisterende Total Gjeld (kr)", value=500000, step=25000)
-        p_sokt_lan = col_p2.number_input("Ønsket / Søkt Lånebeløp (kr)", value=2500000, step=50000)
-        p_kjopesum = col_p1.number_input("Kjøpesum / Boligverdi (kr)", value=3500000, step=50000)
-        p_ek = col_p2.number_input("Egenkapital Tilgjengelig (kr)", value=600000, step=25000)
-        p_rental = col_p1.number_input("Månedlig Utleieinntekt (kr)", value=0, step=1000)
-        p_barn = col_p2.number_input("Antall Barn i Husstanden", value=1, step=1)
+        p_brutto = col_p1.number_input("Bruttoinntekt Hovedsøker (kr)", value=p_brutto_val, step=25000.0)
+        p_med_brutto = col_p2.number_input("Bruttoinntekt Medsøker (kr)", value=p_med_brutto_val, step=25000.0)
+        p_eks_gjeld = col_p1.number_input("Eksisterende Total Gjeld (kr)", value=p_eks_gjeld_val, step=25000.0)
+        p_sokt_lan = col_p2.number_input("Ønsket / Søkt Lånebeløp (kr)", value=p_sokt_lan_val, step=50000.0)
+        p_kjopesum = col_p1.number_input("Kjøpesum / Boligverdi (kr)", value=p_kjopesum_val, step=50000.0)
+        p_ek = col_p2.number_input("Egenkapital Tilgjengelig (kr)", value=p_ek_val, step=25000.0)
+        p_rental = col_p1.number_input("Månedlig Utleieinntekt (kr)", value=p_rental_val, step=1000.0)
+        p_barn = col_p2.number_input("Antall Barn i Husstanden", value=p_barn_val, step=1)
 
         c_check1, c_check2 = st.columns(2)
         p_inkasso = c_check1.checkbox("🚨 Har Betalingsanmerkning / Active Inkasso")
         p_nav = c_check2.checkbox("💼 Hovedinntekt fra NAV (AAP / Uføretrygd)")
-
-        if raw_input_text:
-            # Simple Regex Extraction Helpers
-            m_inc = re.search(r'Bruttoinntekt:\s*(\d+)', raw_input_text, re.IGNORECASE)
-            m_sokt = re.search(r'Søkt Lån:\s*(\d+)', raw_input_text, re.IGNORECASE)
-            if m_inc: p_brutto = float(m_inc.group(1))
-            if m_sokt: p_sokt_lan = float(m_sokt.group(1))
 
         if st.button("🚀 Kjør Bank Policy & Decision Engine", use_container_width=True):
             eval_payload = {
@@ -1467,7 +1480,7 @@ elif valg == "💼 Saksbehandler Panel":
             st.markdown("### 📑 AI Decision & Underwriting Result")
 
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Gjeldsgrad (DTI)", f"{res['dti']}x", delta="Inkl. Utlånsforskriften" if res['dti'] <= 5.0 else "Över 5x Grense", delta_color="normal" if res['dti'] <= 5.0 else "inverse")
+            m1.metric("Gjeldsgrad (DTI)", f"{res['dti']}x", delta="Inkl. Utlånsforskriften" if res['dti'] <= 5.0 else "Over 5x Grense", delta_color="normal" if res['dti'] <= 5.0 else "inverse")
             m2.metric("Egenkapital", f"{res['ek_pct']}%", delta="Min 15% Krav" if res['ek_pct'] >= 15.0 else "Under 15%", delta_color="normal" if res['ek_pct'] >= 15.0 else "inverse")
             m3.metric("SIFO Stresstest (+3%)", "PASSED ✅" if res['sifo_pass'] else "FAILED ❌")
             m4.metric("Saks-Status", res['status'])
@@ -1542,12 +1555,14 @@ elif valg == "💼 Saksbehandler Panel":
                             c_b.write(f"**E-post:** {row.get('Epost', 'N/A')}")
 
                             st.markdown("---")
-                            st.subheader("🔄 Oppdater Saksstatus")
-                            new_st = st.selectbox("Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(b_status) if b_status in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0, key=f"sb_st_{sak_id}")
+                            st.subheader("🔄 Oppdater Saksstatus & Bank Valg")
+                            col_sel_b, col_sel_s = st.columns(2)
+                            target_bank = col_sel_b.selectbox("Send til Bank:", ["DNB", "SpareBank 1", "Nordea", "Kraft Bank", "Bluestep Bank", "Nordax Bank", "Svea Bank", "Storebrand"], key=f"sb_bank_sel_{sak_id}")
+                            new_st = col_sel_s.selectbox("Status", ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"], index=["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"].index(b_status) if b_status in ["Mottatt", "Under Behandling", "Godkjent", "Avslått", "Utbetalt"] else 0, key=f"sb_st_{sak_id}")
                             
-                            if st.button("💾 Lagre Status Endring", key=f"sb_save_{sak_id}"):
-                                if update_sak_in_sheet(sak_id, {"Bank_Status": new_st}):
-                                    st.success("Status oppdatert!")
+                            if st.button("💾 Lagre Status & Bank Endring", key=f"sb_save_{sak_id}"):
+                                if update_sak_in_sheet(sak_id, {"Bank_Status": new_st, "Notater": f"Sendt til: {target_bank} | Status: {new_st}"}):
+                                    st.success(f"Status oppdatert og sendt til {target_bank}!")
                                     st.rerun()
 
                             chat_h = row.get('Chat_History', '')

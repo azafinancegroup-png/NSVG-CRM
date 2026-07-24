@@ -260,8 +260,12 @@ def evaluate_loan_application(data):
     sokt_lan = float(data.get('Søkt_Lån', 0))
     total_gjeld = eksisterende_gjeld + sokt_lan
 
-    kjopesum = float(data.get('Kjøpesum', 0))
     egenkapital = float(data.get('Egenkapital', 0))
+    kjopesum = float(data.get('Kjøpesum', 0))
+    
+    # Standardize Kjøpesum if missing or 0
+    if kjopesum <= 0:
+        kjopesum = sokt_lan + egenkapital
 
     har_inkasso = data.get('Betalingsanmerkninger', False)
     nav_ytelser = data.get('NAV_Ytelser', False)
@@ -271,7 +275,7 @@ def evaluate_loan_application(data):
     effektiv_inntekt = total_inntekt + (har_utleie * 0.80)
     dti = total_gjeld / effektiv_inntekt if effektiv_inntekt > 0 else 999.0
     
-    ek_pct = (egenkapital / kjopesum * 100) if kjopesum > 0 else 100.0
+    ek_pct = (egenkapital / kjopesum * 100) if kjopesum > 0 else (100.0 if egenkapital > 0 else 0.0)
     
     # Base Stress Test Estimate (3% rate rise calculation)
     sifo_base_cost = 12000 + (3000 * float(data.get('Antall_Barn', 0)))
@@ -290,7 +294,7 @@ def evaluate_loan_application(data):
         solutions.append("Slett kredittkort: Kanseller ubenyttede kredittrammer i Gjeldsregisteret.")
 
     # 2. Egenkapital Test (15% Rule)
-    if kjopesum > 0 and ek_pct < 15.0:
+    if ek_pct < 15.0:
         reasons.append(f"Egenkapital er under 15% kravet (Nåværende: {ek_pct:.1f}%).")
         solutions.append("Tilleggssikkerhet: Pant i annen eiendom (f.eks. foreldres bolig).")
         solutions.append("Startlån: Søk om Kommunalt Startlån via Husbanken.")
@@ -309,7 +313,7 @@ def evaluate_loan_application(data):
         eligible_a_banks = ["SpareBank 1", "Sparebank Øst", "Nordea", "BN Bank", "Storebrand", "Sparebank 1 SMN", "Sparebank 1 Romerike"]
     
     # B-Bank Logic (Refinansiering / Betalingsanmerkninger / NAV)
-    if har_inkasso or nav_ytelser or dti > 5.0 or not sifo_stress_pass:
+    if har_inkasso or nav_ytelser or dti > 5.0 or ek_pct < 15.0 or not sifo_stress_pass:
         eligible_b_banks = ["Kraft Bank", "Bluestep Bank", "Nordax Bank", "Svea Bank", "Enito Bank / Balansebank", "Instabank"]
         if har_inkasso:
             solutions.append("Spesialrefinansiering: Søk Omstartslån med pant i bolig (LTV <= 85%) for å slette inkasso/anmerkninger.")
@@ -328,6 +332,55 @@ def evaluate_loan_application(data):
         "total_inntekt": total_inntekt,
         "total_gjeld": total_gjeld
     }
+
+# Function to render full decision card UI
+def render_underwriting_card(res):
+    st.markdown("---")
+    st.markdown("### 📑 AI Decision & Underwriting Result")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Gjeldsgrad (DTI)", f"{res['dti']}x", delta="Inkl. Utlånsforskriften" if res['dti'] <= 5.0 else "Over 5x Grense", delta_color="normal" if res['dti'] <= 5.0 else "inverse")
+    m2.metric("Egenkapital", f"{res['ek_pct']}%", delta="Min 15% Krav" if res['ek_pct'] >= 15.0 else "Under 15%", delta_color="normal" if res['ek_pct'] >= 15.0 else "inverse")
+    m3.metric("SIFO Stresstest (+3%)", "PASSED ✅" if res['sifo_pass'] else "FAILED ❌")
+    m4.metric("Saks-Status", res['status'])
+
+    if res['status'] == "Godkjent A-Bank":
+        st.markdown("""
+        <div class='decision-approved'>
+            <h3 style='color:#065F46; margin:0;'>🟢 GODKJENT FOR STANDARD A-BANKER</h3>
+            <p style='color:#047857;'>Søknaden oppfyller alle kravene i Utlånsforskriften!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.subheader("🏛️ Anbefalte A-Banker:")
+        st.write(", ".join([f"**{b}**" for b in res['a_banks']]))
+
+    elif res['status'] == "B-Bank / Spesiallån":
+        st.markdown("""
+        <div class='decision-bbank'>
+            <h3 style='color:#92400E; margin:0;'>🟡 OMRUTES TIL B-BANKER (SPESIALLÅN / REFINANSIERING)</h3>
+            <p style='color:#B45309;'>Kunden kvalifiserer ikke for standard A-Banker, men kan innvilges hos spesialistbanker.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        st.subheader("🏦 Aktuelle B-Banker:")
+        st.write(", ".join([f"**{b}**" for b in res['b_banks']]))
+
+    else:
+        st.markdown("""
+        <div class='decision-rejected'>
+            <h3 style='color:#991B1B; margin:0;'>🔴 AVSLAG / MÅ STRUKTURERES PÅ NYTT</h3>
+            <p style='color:#B91C1C;'>Søknaden avslås etter standard retningslinjer.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if res['reasons']:
+        st.markdown("#### ⚠️ Årsaker til Avslag/Omrutering:")
+        for r_msg in res['reasons']:
+            st.write(f"❌ {r_msg}")
+
+    if res['solutions']:
+        st.markdown("#### 💡 Smart Alternative Solutions (Løsninger):")
+        for s_msg in res['solutions']:
+            st.write(f"🛠️ {s_msg}")
 
 # =================================================================
 # --- 4. LOGIN SYSTEM (STABLE & REFRESH-PROOF) ---
@@ -1476,53 +1529,7 @@ elif valg == "💼 Saksbehandler Panel":
             }
 
             res = evaluate_loan_application(eval_payload)
-
-            st.divider()
-            st.markdown("### 📑 AI Decision & Underwriting Result")
-
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Gjeldsgrad (DTI)", f"{res['dti']}x", delta="Inkl. Utlånsforskriften" if res['dti'] <= 5.0 else "Over 5x Grense", delta_color="normal" if res['dti'] <= 5.0 else "inverse")
-            m2.metric("Egenkapital", f"{res['ek_pct']}%", delta="Min 15% Krav" if res['ek_pct'] >= 15.0 else "Under 15%", delta_color="normal" if res['ek_pct'] >= 15.0 else "inverse")
-            m3.metric("SIFO Stresstest (+3%)", "PASSED ✅" if res['sifo_pass'] else "FAILED ❌")
-            m4.metric("Saks-Status", res['status'])
-
-            if res['status'] == "Godkjent A-Bank":
-                st.markdown("""
-                <div class='decision-approved'>
-                    <h3 style='color:#065F46; margin:0;'>🟢 GODKJENT FOR STANDARD A-BANKER</h3>
-                    <p style='color:#047857;'>Søknaden oppfyller alle kravene i Utlånsforskriften!</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.subheader("🏛️ Anbefalte A-Banker:")
-                st.write(", ".join([f"**{b}**" for b in res['a_banks']]))
-
-            elif res['status'] == "B-Bank / Spesiallån":
-                st.markdown("""
-                <div class='decision-bbank'>
-                    <h3 style='color:#92400E; margin:0;'>🟡 OMRUTES TIL B-BANKER (SPESIALLÅN / REFINANSIERING)</h3>
-                    <p style='color:#B45309;'>Kunden kvalifiserer ikke for standard A-Banker, men kan innvilges hos spesialistbanker.</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.subheader("🏦 Aktuelle B-Banker:")
-                st.write(", ".join([f"**{b}**" for b in res['b_banks']]))
-
-            else:
-                st.markdown("""
-                <div class='decision-rejected'>
-                    <h3 style='color:#991B1B; margin:0;'>🔴 AVSLAG / MÅ STRUKTURERES PÅ NYTT</h3>
-                    <p style='color:#B91C1C;'>Søknaden avslås etter standard retningslinjer.</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            if res['reasons']:
-                st.markdown("#### ⚠️ Årsaker til Avslag/Omrutering:")
-                for r_msg in res['reasons']:
-                    st.write(f"- ❌ {r_msg}")
-
-            if res['solutions']:
-                st.markdown("#### 💡 Smart Alternative Solutions (Løsninger):")
-                for s_msg in res['solutions']:
-                    st.write(f"- 🛠️ {s_msg}")
+            render_underwriting_card(res)
 
             st.divider()
             if st.button("💾 Lagre Evaluering i FinanceDB & Sync"):
@@ -1533,12 +1540,11 @@ elif valg == "💼 Saksbehandler Panel":
                 add_data("FinanceDB", eval_row)
                 st.success("✅ Underwriting Evaluation lagret i FinanceDB!")
 
-    # TAB 2: MINE TILDELTE SAKER (FIXED FOR ALL SAKER ACCESSIBILITY & CONTROLS)
+    # TAB 2: MINE TILDELTE SAKER (FULL VISNING AV UNDERWRITING RESULTAT FOR SAKER)
     with sb_tab2:
         st.subheader(f"📥 Alle Behandlingsklare Saker i Systemet")
         if df is not None and not df.empty:
             sb_df = df.copy()
-            # Shows all cases for Admin/Saksbehandler or assigned ones
             mine_saker = sb_df
             
             if not mine_saker.empty:
@@ -1568,24 +1574,32 @@ elif valg == "💼 Saksbehandler Panel":
                         
                         new_st = col_sel_s.selectbox("Status", status_list, index=st_curr_idx, key=f"sb_st_{sak_id}")
                         
-                        # AI Fast Check Button inside individual Sak
+                        # Full AI Fast Check Button inside individual Sak
                         if st.button(f"🔍 Evaluere Sak {sak_id} (Kjør Underwriting)", key=f"eval_btn_{sak_id}"):
                             try:
-                                l_val = float(pd.to_numeric(row.get('Lønn', 0), errors='coerce') or 600000)
+                                l_val = float(pd.to_numeric(row.get('Lønn', 0), errors='coerce') or 0)
+                                m_l_val = float(pd.to_numeric(row.get('Medsøker_Lønn', 0), errors='coerce') or 0)
                                 d_val = float(pd.to_numeric(row.get('Gjeld', 0), errors='coerce') or 0)
                                 b_val = float(pd.to_numeric(row.get('Lånebeløp', 0), errors='coerce') or 0)
                                 ek_val = float(pd.to_numeric(row.get('EK', 0), errors='coerce') or 0)
+                                barn_count = int(pd.to_numeric(row.get('Barn', 1), errors='coerce') or 1)
+
                                 eval_quick = evaluate_loan_application({
-                                    "Bruttoinntekt": l_val, "Medsøker_Inntekt": 0, "Eksisterende_Gjeld": d_val,
-                                    "Søkt_Lån": b_val, "Kjøpesum": b_val + ek_val, "Egenkapital": ek_val,
-                                    "Betalingsanmerkninger": False, "NAV_Ytelser": False, "Rental_Income": 0, "Antall_Barn": 1
+                                    "Bruttoinntekt": l_val, 
+                                    "Medsøker_Inntekt": m_l_val, 
+                                    "Eksisterende_Gjeld": d_val,
+                                    "Søkt_Lån": b_val, 
+                                    "Kjøpesum": b_val + ek_val, 
+                                    "Egenkapital": ek_val,
+                                    "Betalingsanmerkninger": False, 
+                                    "NAV_Ytelser": False, 
+                                    "Rental_Income": 0, 
+                                    "Antall_Barn": barn_count
                                 })
-                                if eval_quick['status'] == "Godkjent A-Bank":
-                                    st.success(f"✅ **Saken kan Godkjennes!** (DTI: {eval_quick['dti']}x, SIFO Pass)")
-                                elif eval_quick['status'] == "B-Bank / Spesiallån":
-                                    st.warning(f"🟡 **B-Bank Omrutering:** (DTI: {eval_quick['dti']}x). Aktuelle: {', '.join(eval_quick['b_banks'])}")
-                                else:
-                                    st.error(f"🔴 **Avslag Risiko:** (DTI: {eval_quick['dti']}x).")
+                                
+                                # Render Full Underwriting Card Result
+                                render_underwriting_card(eval_quick)
+
                             except Exception as ex_ev:
                                 st.error(f"Kunne ikke beregne automatisk: {ex_ev}")
 

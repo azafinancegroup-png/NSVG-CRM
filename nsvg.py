@@ -275,13 +275,13 @@ except Exception as e:
     st.error(f"Data loading error: {e}")
     df = pd.DataFrame()
 
-# Dynamic Navigation Options
+# Dynamic Navigation Options with Finance Integration
 if role in ["Admin", "Director"]:
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
 elif role == "Saksbehandler":
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📥 Nye Oppgaver", "📂 Kunde Arkiv", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📥 Nye Oppgaver", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 else:
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
@@ -867,6 +867,129 @@ elif valg == "📂 Kunde Arkiv":
                                 st.cache_data.clear()
                                 st.error(f"✅ Sak {sak_id} er fjernet.")
                                 st.rerun()
+
+# =================================================================
+# --- NEW MODULE: FINANCE & ACCOUNTING SYSTEM (FINANS & REGNSKAP) ---
+# =================================================================
+elif valg == "💰 Finans & Regnskap":
+    st.markdown("""
+        <div style='background: #1E293B; padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; border-left: 8px solid #10B981;'>
+            <h2 style='margin:0; color: #10B981;'>💰 Finans & Regnskap Control Hub</h2>
+            <p style='opacity: 0.8; margin-bottom: 0;'>Inntekt, Utgifter, Provisjon & Profit Calculator</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    fin_tab1, fin_tab2, fin_tab3, fin_tab4 = st.tabs(["📊 Økonomisk Oversikt", "🏦 Provisjonsberegning", "💸 Driftsutgifter (Expenses)", "📜 Agent Payout Ledger"])
+
+    try:
+        finance_df = get_data("FinanceDB")
+        if finance_df is None or finance_df.empty:
+            finance_df = pd.DataFrame(columns=["ID", "Dato", "Type", "Kategori", "Beskrivelse", "Belop", "Agent", "Status"])
+    except:
+        finance_df = pd.DataFrame(columns=["ID", "Dato", "Type", "Kategori", "Beskrivelse", "Belop", "Agent", "Status"])
+
+    # TAB 1: OVERVIEW & KPIs
+    with fin_tab1:
+        st.subheader("📈 Total Finansiell Status")
+        
+        income_df = finance_df[finance_df['Type'] == 'Inntekt'] if not finance_df.empty else pd.DataFrame()
+        expense_df = finance_df[finance_df['Type'] == 'Utgift'] if not finance_df.empty else pd.DataFrame()
+
+        total_inc = pd.to_numeric(income_df['Belop'], errors='coerce').sum() if not income_df.empty else 0.0
+        total_exp = pd.to_numeric(expense_df['Belop'], errors='coerce').sum() if not expense_df.empty else 0.0
+        net_profit = total_inc - total_exp
+
+        fc1, fc2, fc3 = st.columns(3)
+        fc1.metric("💰 Total Brutto Inntekt", f"{total_inc:,.2f} kr")
+        fc2.metric("💸 Total Driftsutgifter", f"{total_exp:,.2f} kr")
+        fc3.metric("📈 Netto Fortjeneste (Profit)", f"{net_profit:,.2f} kr", delta=f"{net_profit:,.2f} kr")
+
+        st.divider()
+        st.subheader("📋 Siste Transaksjoner")
+        if not finance_df.empty:
+            st.dataframe(finance_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen registrerte transaksjoner i FinanceDB.")
+
+    # TAB 2: REVENUE & COMMISSION TRACKER
+    with fin_tab2:
+        st.subheader("🏦 Registrer Innbetaling / Bank Provisjon")
+        with st.form("add_income_form", clear_on_submit=True):
+            ic1, ic2 = st.columns(2)
+            inc_sak_id = ic1.text_input("Sak ID / Kunde Navn", placeholder="Eks: Sak #123 - Ola Nordmann")
+            inc_bank = ic2.selectbox("Utbetalende Bank", ["DNB", "SpareBank 1", "Nordea", "BN Bank", "Storebrand", "Annet"])
+            
+            ic3, ic4 = st.columns(2)
+            bank_commission = ic3.number_input("Provisjon Mottatt fra Bank (kr)", min_value=0.0, step=1000.0)
+            agent_cut_pct = ic4.slider("Agent Provisjon Deling (%)", 0, 100, 10)
+
+            inc_agent = st.selectbox("Ansvarlig Agent", ["Bedi", "Iqbal", "Umer", "Direkte / Hoved"])
+            inc_desc = st.text_area("Beskrivelse / Notat", placeholder="Bankutbetaling for godkjent boliglån")
+
+            agent_payout = (bank_commission * agent_cut_pct) / 100.0
+            company_net = bank_commission - agent_payout
+
+            st.info(f"📊 **Beregning:** Agent Får: `{agent_payout:,.2f} kr` | Selskap Beholder: `{company_net:,.2f} kr`")
+
+            if st.form_submit_button("🚀 Registrer Inntekt"):
+                if bank_commission > 0:
+                    new_fin_row = [
+                        uuid.uuid4().hex[:8], get_norway_time(), "Inntekt", inc_bank,
+                        f"Sak: {inc_sak_id} - {inc_desc} (Company Net)", company_net, inc_agent, "Fullført"
+                    ]
+                    add_data("FinanceDB", new_fin_row)
+                    
+                    if agent_payout > 0:
+                        agent_fin_row = [
+                            uuid.uuid4().hex[:8], get_norway_time(), "Utgift", "Agent Provisjon",
+                            f"Provisjon til {inc_agent} for Sak: {inc_sak_id}", agent_payout, inc_agent, "Pending Payout"
+                        ]
+                        add_data("FinanceDB", agent_fin_row)
+
+                    st.success("✅ Inntekt og agent-provisjon er ført i regnskapet!")
+                    st.rerun()
+
+    # TAB 3: EXPENSE TRACKER
+    with fin_tab3:
+        st.subheader("💸 Registrer Ny Driftsutgift (Expense)")
+        with st.form("add_expense_form", clear_on_submit=True):
+            ec1, ec2 = st.columns(2)
+            exp_cat = ec1.selectbox("Kategori", ["Kontor / Leie", "Programvare / Software", "Markedsføring / Ads", "Lønn / Agent Payout", "Juridisk / Revisor", "Diverse"])
+            exp_amount = ec2.number_input("Beløp (kr)", min_value=0.0, step=500.0)
+            exp_desc = st.text_input("Beskrivelse", placeholder="F.eks: Google Ads lisens / Husleie")
+            
+            if st.form_submit_button("➕ Lagre Utgift"):
+                if exp_amount > 0 and exp_desc:
+                    new_exp_row = [
+                        uuid.uuid4().hex[:8], get_norway_time(), "Utgift", exp_cat,
+                        exp_desc, exp_amount, current_user, "Betalt"
+                    ]
+                    if add_data("FinanceDB", new_exp_row):
+                        st.success("✅ Utgift registrert!")
+                        st.rerun()
+
+    # TAB 4: AGENT PAYOUT LEDGER
+    with fin_tab4:
+        st.subheader("📜 Agent Commission & Payout Status")
+        if not finance_df.empty:
+            agent_payouts = finance_df[(finance_df['Kategori'] == "Agent Provisjon") | (finance_df['Type'] == "Utgift")]
+            if not agent_payouts.empty:
+                for idx, prow in agent_payouts.iterrows():
+                    p_id = prow.get('ID')
+                    p_stat = prow.get('Status', 'Pending Payout')
+                    st_col = "🟢" if p_stat == "Betalt" else "🔴"
+                    
+                    with st.expander(f"{st_col} {prow.get('Agent')} | {prow.get('Belop')} kr | {prow.get('Beskrivelse')}"):
+                        st.write(f"**Dato:** {prow.get('Dato')}")
+                        st.write(f"**Status:** {p_stat}")
+                        if role in ["Admin", "Director"] and p_stat != "Betalt":
+                            if st.button(f"✅ Marker som Utbetalt (Paid)", key=f"pay_agent_{p_id}"):
+                                finance_df.loc[finance_df['ID'] == p_id, 'Status'] = "Betalt"
+                                if update_sheet_data_internal("FinanceDB", finance_df):
+                                    st.success("Utbetaling registrert!")
+                                    st.rerun()
+            else:
+                st.info("Ingen registrerte agent-utbetalinger ennå.")
 
 # --- BANKENS RENTERS VIEW ---
 elif valg == "🏦 Bankens Renters":

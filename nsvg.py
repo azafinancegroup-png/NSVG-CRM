@@ -250,7 +250,7 @@ if not st.session_state['logged_in']:
                 st.success(f"Velkommen, {st.session_state['navn']}!")
                 st.rerun()
             else: 
-                st.error("Feil brukernavn ya passord!")
+                st.error("Feil brukernavn eller passord!")
     st.stop()
 
 # =================================================================
@@ -279,7 +279,7 @@ except Exception as e:
 if role in ["Admin", "Director"]:
     options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
 elif role == "Saksbehandler":
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📥 Nye Oppgaver", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 else:
     options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Finans & Regnskap", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 
@@ -333,7 +333,7 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
 
     st.divider()
     col_msg, col_file = st.columns([3, 1])
-    msg_input = col_msg.text_input(f"Skriv melding...", key=f"input_{sak_id}")
+    msg_input = col_msg.text_input("Skriv melding...", key=f"input_{sak_id}")
     u_file = col_file.file_uploader("📎", key=f"file_{sak_id}")
 
     if st.button("🚀 Send Melding", key=f"send_{sak_id}"):
@@ -350,17 +350,6 @@ def display_bank_messaging_hub(sak_id, chat_data, role, username, agent_name="Ag
             messages.append(new_msg)
             if update_sak_in_sheet(sak_id, {"Chat_History": json.dumps(messages)}):
                 st.rerun()
-
-def display_bank_checklist(selected_bank):
-    st.markdown(f"#### 📋 {selected_bank} Checklist")
-    requirements = {
-        "Lendo": ["Siste 3 mnd lønnsslipp", "Siste skattemelding", "ID-kopi"],
-        "Axo Finans": ["Gjeldsbrev signering", "Bekreftelse på arbeidsforhold", "E-skatt tilgang"],
-        "Motty": ["BankID verifisering", "Oversikt over refinansiering", "Bilde av gyldig pass"]
-    }
-    selected_reqs = requirements.get(selected_bank, ["Standard dokumentasjon"])
-    for req in selected_reqs:
-        st.checkbox(req, key=f"check_{selected_bank}_{req}")
 
 # =================================================================
 # --- 7. MAIN VIEWS & PAGES IMPLEMENTATION ---
@@ -420,8 +409,8 @@ if valg == "📊 Dashbord":
                     st.rerun()
 
         c1, c2, c3 = st.columns(3)
-        loan_vals = pd.to_numeric(view_data['Lånebeløp'], errors='coerce').fillna(0)
-        percent_vals = pd.to_numeric(view_data['Provisjon_Prosent'], errors='coerce').fillna(0) if 'Provisjon_Prosent' in view_data.columns else 0
+        loan_vals = pd.to_numeric(view_data.get('Lånebeløp', 0), errors='coerce').fillna(0)
+        percent_vals = pd.to_numeric(view_data.get('Provisjon_Prosent', 0), errors='coerce').fillna(0) if 'Provisjon_Prosent' in view_data.columns else 0
         total_v = loan_vals.sum()
         total_p = (loan_vals * percent_vals / 100).sum()
         
@@ -494,45 +483,6 @@ if valg == "📊 Dashbord":
     else:
         st.warning("Ingen data tilgjengelig.")
 
-    # --- ADMIN SUPPORT MANAGEMENT BLOCK ---
-    if role in ["Admin", "Director"]:
-        st.divider()
-        st.header("📥 Support Management (Admin)")
-        try:
-            support_df = get_data("Support")
-            if support_df is not None and not support_df.empty:
-                for i, row in support_df.sort_index(ascending=False).iterrows():
-                    priority_tag = "⚠️ HASTE" if row['Tema'] == "Prioritert utbetaling" else ""
-                    color = "🔴" if row['Status'] == "Åpen" else "🟢"
-                    with st.expander(f"{color} {priority_tag} Fra: {row['Fra_Bruker']} | Tema: {row['Tema']} | Tid: {row['Tidspunkt']}"):
-                        st.write(f"**Melding:** {row['Beskrivelse']}")
-                        st.info(f"**Nåværende Svar:** {row['Svar_Fra_Admin']}")
-                        new_reply = st.text_area("Skriv svar til ansatt", value=row['Svar_Fra_Admin'], key=f"ans_{i}")
-                        status_options = ["Åpen", "Behandles", "Løst / Ferdig"]
-                        current_status = row['Status'] if row['Status'] in status_options else "Åpen"
-                        new_status = st.selectbox("Oppdater Status", status_options, index=status_options.index(current_status), key=f"stat_{i}")
-                        
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("💾 Lagre Svar & Oppdater", key=f"save_{i}"):
-                                support_df.at[i, 'Svar_Fra_Admin'] = new_reply
-                                support_df.at[i, 'Status'] = new_status
-                                if update_sheet_data_internal("Support", support_df):
-                                    st.cache_data.clear()
-                                    st.success("✅ Svar er lagret!")
-                                    st.rerun() 
-                        with col2:
-                            if st.button("🗑️ Slett Melding", key=f"del_msg_{i}"):
-                                new_df = support_df.drop(i)
-                                if update_sheet_data_internal("Support", new_df):
-                                    st.cache_data.clear()
-                                    st.warning("Melding slettet!")
-                                    st.rerun()
-            else:
-                st.info("Ingen aktive support-forespørsler.")
-        except Exception as e:
-            st.error(f"Feil ved henting av support: {e}")
-
 # --- NY REGISTRERING VIEW ---
 elif valg == "➕ Ny Registrering":
     steps = 0
@@ -578,7 +528,7 @@ elif valg == "➕ Ny Registrering":
         andre_lan_info, andre_bolig_info = "", ""
 
         if is_refin_mellom:
-            st.markdown(f"<h3 style='color: #E67E22;'>🏠 Eiendomsdetaljer ({prod})</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #E67E22;'>🏠 Eiendomsdetaljer</h3>", unsafe_allow_html=True)
             r1, r2 = st.columns(2)
             eks_bank = r1.text_input("Hvilken bank har de i dag?", placeholder="Eks: DNB, SpareBank 1")
             eks_lan = r2.number_input("Eksisterende boliglån totalt (kr)", min_value=0, step=50000, format="%d")
@@ -758,7 +708,7 @@ elif valg == "📂 Kunde Arkiv":
         varsel = "🔴 NY MELDING | " if har_ulest else ""
         skal_utvides = True if (sok and str(sak_id) == str(sok)) else False
 
-        with st.expander(f"{varsel}{status_ikon} **{r.get('Navn', 'Ukjent')}** | ID: {sak_id} | STATUS: {gjeldende_status}", expanded=skal_utvides):
+        with st.expander(f"{varsel}{status_ikon} **{r.get('Navn', r.get('Hovedsøker', 'Ukjent'))}** | ID: {sak_id} | STATUS: {gjeldende_status}", expanded=skal_utvides):
             if gjeldende_status == "Godkjent": st.success("✅ **Saken er Godkjent av Banken**")
             elif gjeldende_status == "Avslått": st.error("❌ **Saken er Avslått av Banken**")
             elif gjeldende_status == "Under Behandling": st.warning("⏳ **Saken er til vurdering hos Banken**")
@@ -770,24 +720,24 @@ elif valg == "📂 Kunde Arkiv":
             if not vis_redigering:
                 st.markdown("#### 📄 Søknadsdetaljer")
                 v1, v2, v3 = st.columns(3)
-                v1.write(f"**👤 Navn:** {r.get('Navn')}")
-                v1.write(f"**📞 Tlf:** {r.get('Tlf')}")
-                v2.write(f"**🏠 Produkt:** {r.get('Produkt')}")
-                v2.write(f"**💰 Lånebeløp:** {r.get('Lånebeløp')} kr")
-                v3.write(f"**📅 Dato:** {r.get('Dato')}")
+                v1.write(f"**👤 Navn:** {r.get('Navn', r.get('Hovedsøker', 'N/A'))}")
+                v1.write(f"**📞 Tlf:** {r.get('Tlf', r.get('Telefon', 'N/A'))}")
+                v2.write(f"**🏠 Produkt:** {r.get('Produkt', 'N/A')}")
+                v2.write(f"**💰 Lånebeløp:** {r.get('Lånebeløp', '0')} kr")
+                v3.write(f"**📅 Dato:** {r.get('Dato', 'N/A')}")
                 v3.write(f"**👨‍💼 Ansvarlig:** {agent_navn}")
                 st.write(f"**📝 Kommentarer:** {r.get('Notater', 'Ingen kommentarer lagret.')}")
 
                 if role in ["Admin", "Director"]:
                     st.divider()
                     st.subheader("👨‍💼 Tildel Saksbehandler")
-                    saksbehandler_liste = ["-- Velg --", "Bedi"] 
+                    saksbehandler_liste = ["-- Velg --", "Bedi", "Iqbal"] 
                     current_sb = r.get('Saksbehandler', "-- Velg --")
                     if current_sb not in saksbehandler_liste: current_sb = "-- Velg --"
                     selected_sb = st.selectbox("Send saken til:", saksbehandler_liste, index=saksbehandler_liste.index(current_sb), key=f"sb_assign_{sak_id}")
                     if st.button("🚀 Send sak nå", key=f"btn_sb_{sak_id}"):
                         if selected_sb != "-- Velg --":
-                            if update_sak_in_sheet(sak_id, {"Saksbehandler": selected_sb, "Status": "Ny"}):
+                            if update_sak_in_sheet(sak_id, {"Saksbehandler": selected_sb, "Bank_Status": "Under Behandling"}):
                                 st.toast(f"✅ Sak sendt til {selected_sb}!", icon="🚀")
                                 st.cache_data.clear()
                                 st.rerun()
@@ -797,7 +747,9 @@ elif valg == "📂 Kunde Arkiv":
             else:
                 with st.form(key=f"full_edit_form_{sak_id}"):
                     st.subheader("📝 Oppdater Søknadsinformasjon")
-                    prod = st.selectbox("Velg Produkt", ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"], index=["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"].index(r.get('Produkt', 'Boliglån')))
+                    prod_options = ["Boliglån", "Refinansiering", "Mellomfinansiering", "Investlån / Bedriftlån", "Byggelån", "Forbrukslån", "Billån"]
+                    p_idx = prod_options.index(r.get('Produkt')) if r.get('Produkt') in prod_options else 0
+                    prod = st.selectbox("Velg Produkt", prod_options, index=p_idx)
                     is_bedrift = "Bedriftlån" in prod or "Investlån" in prod
                     
                     if is_bedrift:
@@ -811,28 +763,28 @@ elif valg == "📂 Kunde Arkiv":
 
                     st.markdown("#### 👤 Hovedsøker")
                     h1, h2 = st.columns(2)
-                    up_navn = h1.text_input("Fullt Navn *", value=str(r.get('Navn', '')))
-                    up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', '')))
-                    up_epost = h2.text_input("E-post", value=str(r.get('Epost', '')))
-                    up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', '')))
+                    up_navn = h1.text_input("Fullt Navn *", value=str(r.get('Navn', r.get('Hovedsøker', ''))))
+                    up_fnr = h1.text_input("Fødselsnummer", value=str(r.get('Fnr', r.get('Fødselsnummer', ''))))
+                    up_epost = h2.text_input("E-post", value=str(r.get('Epost', r.get('E-post', ''))))
+                    up_tlf = h2.text_input("Telefon", value=str(r.get('Tlf', r.get('Telefon', ''))))
                     
                     st.markdown("#### 💼 Økonomisk Profil")
                     l1, l2, l3 = st.columns(3)
-                    up_lonn = l1.number_input("Årslønn Brutto (kr)", value=int(r.get('Lønn', 0)), step=1000)
-                    up_ek = l2.number_input("Egenkapital (kr)", value=int(r.get('EK', 0)), step=1000)
-                    up_gjeld = l3.number_input("Total Gjeld (kr)", value=int(r.get('Gjeld', 0)), step=1000)
+                    up_lonn = l1.number_input("Årslønn Brutto (kr)", value=int(pd.to_numeric(r.get('Lønn', 0), errors='coerce') or 0), step=1000)
+                    up_ek = l2.number_input("Egenkapital (kr)", value=int(pd.to_numeric(r.get('EK', 0), errors='coerce') or 0), step=1000)
+                    up_gjeld = l3.number_input("Total Gjeld (kr)", value=int(pd.to_numeric(r.get('Gjeld', 0), errors='coerce') or 0), step=1000)
 
                     st.divider()
                     st.markdown("#### 👥 Medsøker")
                     m1, m2 = st.columns(2)
                     up_m_navn = m1.text_input("Medsøker Fullt Navn", value=str(r.get('Medsøker_Navn', '')))
                     up_m_fnr = m1.text_input("Medsøker Fødselsnummer", value=str(r.get('Medsøker_Fnr', '')))
-                    up_m_lonn = m2.number_input("Medsøker Årslønn", value=int(r.get('Medsøker_Lønn', 0)), step=1000)
+                    up_m_lonn = m2.number_input("Medsøker Årslønn", value=int(pd.to_numeric(r.get('Medsøker_Lønn', 0), errors='coerce') or 0), step=1000)
                     up_m_tlf = m2.text_input("Medsøker Telefon", value=str(r.get('Medsøker_Tlf', '')))
 
                     st.divider()
                     st.markdown("#### 🏦 Bankbehandling & Godkjenning")
-                    up_belop = st.number_input("Søkt Lånebeløp (kr)", value=int(r.get('Lånebeløp', 0)), step=10000)
+                    up_belop = st.number_input("Søkt Lånebeløp (kr)", value=int(pd.to_numeric(r.get('Lånebeløp', 0), errors='coerce') or 0), step=10000)
                     up_mangler = st.text_area("Mangler fra kunden", value=str(r.get('Mangler', '')))
                     up_notat = st.text_area("Bankens interne notater", value=str(r.get('Notater', '')))
 
@@ -846,9 +798,8 @@ elif valg == "📂 Kunde Arkiv":
 
                     if st.form_submit_button("💾 OPPDATER SØKNAD"):
                         data_til_oppdatering = {
-                            "Produkt": prod, "Navn": up_navn, "Fnr": up_fnr, "Epost": up_epost, "Tlf": up_tlf,
-                            "Lønn": up_lonn, "EK": up_ek, "Gjeld": up_gjeld, "Bank_Status": up_st,
-                            "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr, "Medsøker_Lønn": up_m_lonn,
+                            "Produkt": prod, "Hovedsøker": up_navn, "Fødselsnummer": up_fnr, "E-post": up_epost, "Telefon": up_tlf,
+                            "Bank_Status": up_st, "Medsøker_Navn": up_m_navn, "Medsøker_Fnr": up_m_fnr,
                             "Medsøker_Tlf": up_m_tlf, "Lånebeløp": up_belop, "Notater": up_notat, "Mangler": up_mangler
                         }
                         if is_bedrift:
@@ -868,9 +819,7 @@ elif valg == "📂 Kunde Arkiv":
                                 st.error(f"✅ Sak {sak_id} er fjernet.")
                                 st.rerun()
 
-# =================================================================
-# --- NEW MODULE: FINANCE & ACCOUNTING SYSTEM (FINANS & REGNSKAP) ---
-# =================================================================
+# --- FINANCE & ACCOUNTING SYSTEM (FINANS & REGNSKAP) ---
 elif valg == "💰 Finans & Regnskap":
     st.markdown("""
         <div style='background: #1E293B; padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; border-left: 8px solid #10B981;'>
@@ -895,8 +844,8 @@ elif valg == "💰 Finans & Regnskap":
         income_df = finance_df[finance_df['Type'] == 'Inntekt'] if not finance_df.empty else pd.DataFrame()
         expense_df = finance_df[finance_df['Type'] == 'Utgift'] if not finance_df.empty else pd.DataFrame()
 
-        total_inc = pd.to_numeric(income_df['Belop'], errors='coerce').sum() if not income_df.empty else 0.0
-        total_exp = pd.to_numeric(expense_df['Belop'], errors='coerce').sum() if not expense_df.empty else 0.0
+        total_inc = pd.to_numeric(income_df.get('Belop', 0), errors='coerce').sum() if not income_df.empty else 0.0
+        total_exp = pd.to_numeric(expense_df.get('Belop', 0), errors='coerce').sum() if not expense_df.empty else 0.0
         net_profit = total_inc - total_exp
 
         fc1, fc2, fc3 = st.columns(3)
@@ -983,7 +932,7 @@ elif valg == "💰 Finans & Regnskap":
                         st.write(f"**Dato:** {prow.get('Dato')}")
                         st.write(f"**Status:** {p_stat}")
                         if role in ["Admin", "Director"] and p_stat != "Betalt":
-                            if st.button(f"✅ Marker som Utbetalt (Paid)", key=f"pay_agent_{p_id}"):
+                            if st.button("✅ Marker som Utbetalt (Paid)", key=f"pay_agent_{p_id}"):
                                 finance_df.loc[finance_df['ID'] == p_id, 'Status'] = "Betalt"
                                 if update_sheet_data_internal("FinanceDB", finance_df):
                                     st.success("Utbetaling registrert!")
@@ -1179,7 +1128,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                 act1, act2, act3 = st.columns(3)
                 
                 with act1:
-                    if st.button(f"📂 Se Saker", key=f"v_saker_{i}"):
+                    if st.button("📂 Se Saker", key=f"v_saker_{i}"):
                         if not agent_saker.empty:
                             for idx, s_row in agent_saker.iterrows():
                                 sak_id = s_row.get('ID', idx)
@@ -1198,7 +1147,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                                     
                                     mangler_msg_val = s_row.get('Mangler', '')
                                     mangler_msg = st.text_area("Mangler dokumenter", value=str(mangler_msg_val) if str(mangler_msg_val).lower() != 'nan' else "", key=f"msg_edit_{idx}_{i}")
-                                    if st.button(f"🚀 Lagre Sak & Send Live", key=f"sv_edit_{idx}_{i}"):
+                                    if st.button("🚀 Lagre Sak & Send Live", key=f"sv_edit_{idx}_{i}"):
                                         if update_sak_in_sheet(sak_id, {"Bank_Status": new_bank_st, "Mangler": mangler_msg, "Admin_Provisjon": new_admin_p}):
                                             st.success("Oppdatert!")
                                             st.rerun()
@@ -1212,7 +1161,7 @@ elif valg == "👥 Ansatte Kontroll" and role in ["Admin", "Director"]:
                         st.success(f"Agent status oppdatert til {n_st}")
 
                 with act3:
-                    if st.button(f"🗑️ Slette Profil", key=f"del_btn_{i}"):
+                    if st.button("🗑️ Slette Profil", key=f"del_btn_{i}"):
                         st.warning("Kun Admin kan slette.")
 
 # --- KONTAKTER VIEW ---
@@ -1317,10 +1266,10 @@ elif valg == "💼 Saksbehandler Panel":
             if not ny_saker.empty:
                 for idx, row in ny_saker.iterrows():
                     sak_id = str(row.get('ID', idx))
-                    with st.expander(f"🆕 NY SAK: {row.get('Navn', 'Ukjent')}"):
+                    with st.expander(f"🆕 NY SAK: {row.get('Navn', row.get('Hovedsøker', 'Ukjent'))}"):
                         st.write(f"**Beløp:** {row.get('Lånebeløp', '0')} kr")
-                        if st.button(f"✅ Start Behandling", key=f"start_{sak_id}"):
-                            if update_sak_in_sheet(sak_id, {"Status": "Under Behandling"}):
+                        if st.button("✅ Start Behandling", key=f"start_{sak_id}"):
+                            if update_sak_in_sheet(sak_id, {"Bank_Status": "Under Behandling"}):
                                 st.success("Saken er flyttet!")
                                 st.rerun()
             else:
@@ -1391,9 +1340,6 @@ elif valg == "📋 Oversiktstavle":
             st.success("Synkronisert!")
             st.rerun()
 
-    agent_options = ["Bedi", "Umer", "Direkte"]
-    bank_options = ["Ingen / Ikke sendt", "Sparebank Øst", "BN Bank", "Storebrand", "Nordea"]
-
     def rens_belop(tekst):
         try:
             tall = "".join([c for c in str(tekst) if c.isdigit() or c == "."])
@@ -1408,7 +1354,7 @@ elif valg == "📋 Oversiktstavle":
     fin_c1, fin_c2, fin_c3 = st.columns(3)
     fin_c1.metric("💰 Totalt Innbetalinger", f"{total_inn:,.2f} kr")
     fin_c2.metric("💸 Totalt Utbetalinger", f"{total_ut:,.2f} kr")
-    fin_c3.metric("📈 Netto Balanse", f"{netto:,.2f} kr", delta=netto)
+    fin_c3.metric("📈 Netto Balanse", f"{netto:,.2f} kr", delta=f"{netto:,.2f} kr")
     st.divider()
 
     ui_cols = st.columns(4)

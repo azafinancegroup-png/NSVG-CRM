@@ -441,15 +441,104 @@ except Exception as e:
 
 # Navigation Options: Saksbehandler Panel Enabled for ALL Active Roles & Agents
 if role in ["Admin", "Director"]:
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Regnskap Control (Admin)", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💰 Regnskap Control (Admin)", "👥 Ansatte Kontroll", "📇 Kontakter", "💼 Saksbehandler Panel", "🌐 Nettskjema Leads", "📋 Oversiktstavle", "🛠️ Master Kontroll"]
 else:
-    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💼 Saksbehandler Panel", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
+    options = ["📊 Dashbord", "➕ Ny Registrering", "📂 Kunde Arkiv", "💼 Saksbehandler Panel", "🌐 Nettskjema Leads", "💵 Min Provisjon", "🏦 Bankens Renters", "📜 Dokumentmaler", "📋 Oversiktstavle", "📞 Support Center"]
 
 valg = st.sidebar.selectbox("Hovedmeny", options)
 
 if st.sidebar.button("🔴 Logg ut"):
     st.session_state.clear()
     st.rerun()
+
+# =================================================================
+# --- PAGE RENDERING (VALG BLOCKS) ---
+# =================================================================
+
+# Yahan par aapka baaki purana code hoga jo doosre pages ko handle karta hai (jaise Dashbord, Ny Registrering, etc.)
+
+# Aur yeh raha naya "🌐 Nettskjema Leads" page ka block jo yahan add kar diya gaya hai:
+elif valg == "🌐 Nettskjema Leads":
+    st.header("🌐 Nye Henvendelser fra Nettside")
+    st.caption("Automatisk mottatt fra Wix skjema — Rente, Inkasso, Tvangsalg")
+    st.divider()
+    
+    leads_df = get_data("WebLeads")
+    
+    if leads_df.empty:
+        st.info("Ingen nye henvendelser mottatt ennå.")
+    else:
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            options_skjema = ["Alle"] + sorted(leads_df['Skjema_Type'].dropna().unique().tolist()) if 'Skjema_Type' in leads_df.columns else ["Alle"]
+            skjema_filter = st.selectbox("Filtrer skjematype:", options_skjema)
+        with col_f2:
+            options_status = ["Alle"] + sorted(leads_df['Status'].dropna().unique().tolist()) if 'Status' in leads_df.columns else ["Alle"]
+            status_filter = st.selectbox("Filtrer status:", options_status)
+            
+        filtered = leads_df.copy()
+        if skjema_filter != "Alle" and 'Skjema_Type' in filtered.columns:
+            filtered = filtered[filtered['Skjema_Type'] == skjema_filter]
+        if status_filter != "Alle" and 'Status' in filtered.columns:
+            filtered = filtered[filtered['Status'] == status_filter]
+            
+        search = st.text_input("🔍 Søk (navn, e-post, telefon...)")
+        if search:
+            filtered = filtered[filtered.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
+            
+        st.write(f"**{len(filtered)}** henvendelser funnet")
+        
+        agents_list_df = get_data("Agents")
+        agent_names = ["Ingen"] + agents_list_df['navn'].tolist() if not agents_list_df.empty else ["Ingen"]
+        
+        for i, r in filtered.iterrows():
+            lead_id = str(r.get('Lead_ID', i))
+            skjema = r.get('Skjema_Type', 'Ukjent Skjema')
+            status_disp = r.get('Status', 'Ny')
+            
+            with st.expander(f"🆔 {lead_id} | 📋 {skjema} | 🟢 {status_disp}"):
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    st.markdown("#### 👤 Tildel Saksbehandler")
+                    try:
+                        idx = agent_names.index(str(r.get('Tildelt_Til', 'Ingen')))
+                    except:
+                        idx = 0
+                    new_assign = st.selectbox("Velg:", agent_names, index=idx, key=f"lead_as_{lead_id}")
+                    
+                    if st.button("Oppdater Tildeling", key=f"lead_asb_{lead_id}"):
+                        sh = connect_to_sheet("WebLeads")
+                        data = sh.get_all_records()
+                        headers_row = sh.row_values(1)
+                        for idx2, row2 in enumerate(data):
+                            if str(row2.get('Lead_ID')) == lead_id:
+                                col_idx = headers_row.index("Tildelt_Til") + 1
+                                sh.update_cell(idx2 + 2, col_idx, new_assign)
+                        st.cache_data.clear()
+                        st.success("Oppdatert!")
+                        st.rerun()
+                        
+                with col_b:
+                    st.markdown("#### 📌 Endre Status")
+                    new_status = st.selectbox("Status:", ["Ny", "Kontaktet", "Under Behandling", "Konvertert", "Avvist"], key=f"lead_st_{lead_id}")
+                    
+                    if st.button("Lagre Status", key=f"lead_stb_{lead_id}"):
+                        sh = connect_to_sheet("WebLeads")
+                        data = sh.get_all_records()
+                        headers_row = sh.row_values(1)
+                        for idx2, row2 in enumerate(data):
+                            if str(row2.get('Lead_ID')) == lead_id:
+                                col_idx = headers_row.index("Status") + 1
+                                sh.update_cell(idx2 + 2, col_idx, new_status)
+                        st.cache_data.clear()
+                        st.success("Status oppdatert!")
+                        st.rerun()
+                        
+                st.markdown("---")
+                st.markdown("#### 📄 Full Informasjon")
+                st.json(r.to_dict())
+
 
 # =================================================================
 # --- 6. BANK MESSAGING HUB & CHECKLIST ---
